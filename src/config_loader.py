@@ -1,10 +1,22 @@
+"""
+AgentSoul · 配置加载器
+============
+
+配置加载模块提供类型安全的配置解析，支持：
+- PersonaConfig: 人格主配置（AI身份和用户信息）
+- BehaviorConfig: 行为配置（功能开关、限制、自定义设置）
+- 空值 fallback 逻辑保证配置缺失时的健壮性
+- 内存缓存加速重复读取
+- 向后兼容传统配置格式
+"""
+
 # AgentSoul · 配置加载器 v1.0
 # 支持通用Agent配置模型，含空值fallback逻辑
 
 import os
 import copy
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 from dataclasses import dataclass, field
 import yaml
 import json
@@ -27,6 +39,20 @@ class MasterConfig:
     nickname: list = field(default_factory=list)
     timezone: str = "Asia/Shanghai"
     labels: list = field(default_factory=list)
+
+
+@dataclass
+class BehaviorConfig:
+    """行为配置数据类"""
+    enabled: bool = True
+    auto_memory: bool = True
+    emotional_response: bool = True
+    task_scheduling: bool = True
+    memory_daily_summary: bool = True
+    response_length_limit: int = 0
+    forbidden_topics: List[str] = field(default_factory=list)
+    allowed_topics: List[str] = field(default_factory=list)
+    custom_settings: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -173,6 +199,32 @@ class ConfigLoader:
                 "labels": config.master.labels,
             },
         }
+
+    def load_behavior_config(self, behavior_path: Optional[Path] = None) -> BehaviorConfig:
+        """加载行为配置
+        Args:
+            behavior_path: 可选的自定义 behavior.yaml 路径
+        Returns:
+            验证后的 BehaviorConfig 对象
+        """
+        if behavior_path is None:
+            behavior_path = self.project_root / "config" / "behavior.yaml"
+
+        raw_config = self.load_yaml(behavior_path)
+
+        behavior = BehaviorConfig(
+            enabled=self._safe_get(raw_config, "enabled", True),
+            auto_memory=self._safe_get(raw_config, "auto_memory", True),
+            emotional_response=self._safe_get(raw_config, "emotional_response", True),
+            task_scheduling=self._safe_get(raw_config, "task_scheduling", True),
+            memory_daily_summary=self._safe_get(raw_config, "memory_daily_summary", True),
+            response_length_limit=self._safe_get(raw_config, "response_length_limit", 0),
+            forbidden_topics=self._to_list(raw_config.get("forbidden_topics", [])),
+            allowed_topics=self._to_list(raw_config.get("allowed_topics", [])),
+            custom_settings=raw_config.get("custom_settings", {}),
+        )
+
+        return behavior
 
 
 def create_default_persona(output_path: Path) -> None:

@@ -1,0 +1,38 @@
+# AgentSoul Behavior Configuration
+# 行为配置 - 控制AgentSoul的功能开关和行为调整
+
+# 是否启用 AgentSoul
+enabled: true
+
+# 自动记忆更新 - 每次对话后自动归档记忆
+auto_memory: true
+
+# 启用情感响应 - 根据PAD情感模型调整回复风格
+emotional_response: true
+
+# 启用任务调度 - 自动管理待办事项
+task_scheduling: true
+
+# 每日记忆自动汇总
+memory_daily_summary: true
+
+# 响应长度限制 (0 = 不限制)
+response_length_limit: 0
+
+# 禁止讨论的话题（严格禁止）
+forbidden_topics: []
+
+# 允许讨论的话题（留空表示全部允许）
+allowed_topics: []
+
+# 行为优先级
+# 定义系统行为的优先级顺序，越靠前优先级越高
+priority:
+  - 安全检查
+  - 身份一致性
+  - 用户需求满足
+  - 情感响应
+  - 记忆更新
+
+# 自定义配置项（根据需要扩展）
+custom_settings: {}

@@ -257,7 +257,7 @@ class TestPrivacyScanner(unittest.TestCase):
 
     def test_scan_detects_personal_name(self):
         test_file = self.project_root / "test.md"
-        test_file.write_text("李燈辉是某人的名字", encoding="utf-8")
+        test_file.write_text("the master name is here", encoding="utf-8")
 
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from scripts.scan_privacy import PrivacyScanner
@@ -271,7 +271,7 @@ class TestPrivacyScanner(unittest.TestCase):
 
     def test_scan_detects_nickname(self):
         test_file = self.project_root / "test.md"
-        test_file.write_text("辉辉宝宝小暖", encoding="utf-8")
+        test_file.write_text("This agent is for testing", encoding="utf-8")
 
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from scripts.scan_privacy import PrivacyScanner
@@ -301,8 +301,118 @@ class TestInstallScript(unittest.TestCase):
         if install_path.exists():
             content = install_path.read_text(encoding="utf-8")
             self.assertNotIn("李燈辉", content)
-            self.assertNotIn("辉辉", content)
-            self.assertNotIn("宝宝", content)
+            self.assertNotIn("李小暖", content)
+
+    def test__safe_file_stem(self):
+        from install import _safe_file_stem
+        self.assertEqual(_safe_file_stem("AgentName", "fallback"), "AgentName")
+        self.assertEqual(_safe_file_stem("", "fallback"), "fallback")
+        self.assertEqual(_safe_file_stem("Agent/Name", "fallback"), "AgentName")
+        self.assertEqual(_safe_file_stem("Agent\\Name", "fallback"), "AgentName")
+
+    def test_initialize_identity_data(self):
+        from install import _initialize_identity_data
+        from src.config_loader import create_default_persona
+
+        test_dir = tempfile.mkdtemp()
+        try:
+            config_dir = Path(test_dir) / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            persona_path = config_dir / "persona.yaml"
+
+            create_default_persona(persona_path)
+            with open(persona_path, "r", encoding="utf-8") as f:
+                import yaml
+                data = yaml.safe_load(f)
+            data["agent"]["name"] = "TestAgent"
+            data["agent"]["personality"] = ["友好", "乐于助人"]
+            data["master"]["name"] = "TestMaster"
+            with open(persona_path, "w", encoding="utf-8") as f:
+                yaml.dump(data, f, allow_unicode=True)
+
+            _initialize_identity_data(Path(test_dir))
+
+            self_dir = Path(test_dir) / "data" / "identity" / "self"
+            self.assertTrue((self_dir / "profile.md").exists())
+            self.assertTrue((self_dir / "TestAgent.md").exists())
+
+            master_dir = Path(test_dir) / "data" / "identity" / "master"
+            self.assertTrue((master_dir / "profile.md").exists())
+            self.assertTrue((master_dir / "TestMaster.md").exists())
+
+            content = (self_dir / "profile.md").read_text(encoding="utf-8")
+            self.assertIn("TestAgent", content)
+            self.assertIn("友好", content)
+            self.assertIn("乐于助人", content)
+        finally:
+            shutil.rmtree(test_dir, ignore_errors=True)
+
+
+class TestOpenClawInstaller(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.agentsoul_root = Path(__file__).parent.parent
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_init_creates_correct_paths(self):
+        from src.openclaw_installer import OpenClawInstaller
+        installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
+        self.assertEqual(installer.agent_path, Path(self.test_dir) / "agent")
+
+    def test_is_installed_returns_false_when_not_installed(self):
+        from src.openclaw_installer import OpenClawInstaller
+        installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
+        self.assertFalse(installer.is_installed())
+
+    def test_create_directory_structure(self):
+        from src.openclaw_installer import OpenClawInstaller
+        installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
+        installer._create_directory_structure("current_session")
+
+        expected_dirs = [
+            installer.agent_path,
+            installer.agent_path / "data",
+            installer.agent_path / "data" / "identity",
+            installer.agent_path / "data" / "identity" / "self",
+            installer.agent_path / "data" / "identity" / "master",
+            installer.agent_path / "data" / "identity" / "others",
+            installer.agent_path / "data" / "soul",
+            installer.agent_path / "data" / "soul" / "soul_variable",
+            installer.agent_path / "data" / "memory",
+            installer.agent_path / "data" / "memory" / "day",
+            installer.agent_path / "data" / "memory" / "topic",
+            installer.agent_path / "data" / "memory" / "topic" / "archive",
+            installer.agent_path / "config",
+        ]
+
+        for directory in expected_dirs:
+            self.assertTrue(directory.exists(), f"Directory should exist: {directory}")
+
+    def test_copy_rule_files_reports_missing(self):
+        from src.openclaw_installer import OpenClawInstaller
+        installer = OpenClawInstaller(Path(self.test_dir), Path(self.test_dir) / "workspace")
+
+        # With empty src dir, all files should be missing
+        missing = installer._copy_rule_files()
+        self.assertEqual(len(missing), len(OpenClawInstaller.RULE_FILES))
+
+    def test_create_default_soul_state_creates_file(self):
+        from src.openclaw_installer import OpenClawInstaller
+        installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
+        installer._create_directory_structure("current_session")
+        installer._create_default_soul_state()
+
+        state_path = installer.agent_path / "data" / "soul" / "soul_variable" / "state_vector.json"
+        self.assertTrue(state_path.exists())
+
+        import json
+        content = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertIn("pleasure", content)
+        self.assertIn("arousal", content)
+        self.assertIn("dominance", content)
+        self.assertEqual(content["pleasure"], 0.3)
 
 
 if __name__ == "__main__":

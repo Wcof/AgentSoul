@@ -119,9 +119,9 @@ class XiaonuanMigrator:
             old_ai = old_persona.get("ai", old_persona)
             if old_ai:
                 agent_name = old_ai.get("name", "")
-                if agent_name and agent_name not in ["李小暖", "小暖"]:
+                if agent_name and not any(char in agent_name for char in ["暖"]):
                     converted["agent"]["name"] = agent_name
-                elif agent_name in ["李小暖", "小暖"]:
+                elif any(char in agent_name for char in ["暖"]):
                     warnings.append(f"AI名称 '{agent_name}' 已重置为 'Agent'（通用化）")
 
                 converted["agent"]["nickname"] = old_ai.get("nickname", "")
@@ -132,10 +132,10 @@ class XiaonuanMigrator:
             old_master = old_persona.get("master", {})
             if old_master:
                 master_name = old_master.get("name", "")
-                if master_name and master_name not in ["李燈辉"]:
+                if master_name and not any(char in master_name for char in ["辉"]):
                     converted["master"]["name"] = master_name
-                elif master_name == "李燈辉":
-                    warnings.append("主人姓名 '李燈辉' 已脱敏（通用化）")
+                elif any(char in master_name for char in ["辉"]):
+                    warnings.append(f"主人姓名 '{master_name}' 已脱敏（通用化）")
 
                 converted["master"]["nickname"] = old_master.get("nickname", [])
                 converted["master"]["timezone"] = old_master.get("timezone", "Asia/Shanghai")

@@ -20,20 +20,16 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DEFAULT_SCAN_TARGET = Path("/Users/ldh/Downloads/project/xiaonuan")
+DEFAULT_SCAN_TARGET = PROJECT_ROOT
 
 SENSITIVE_PATTERNS = {
     "个人姓名": [
-        r"李燈辉", r"李燈輝", r"LiDenghui", r"lidenghui",
-        r"邓辉", r"燈辉", r"燈輝"
+        r"\bmaster\b", r"\buser\b", r"\bowner\b"
     ],
     "昵称/称呼": [
-        r"辉辉", r"宝宝", r"小暖", r"xiaonuan", r"XiaoNuan",
-        r"小暖人", r"暖宝宝"
+        r"\bAgent\b", r"\bassistant\b", r"\bai\b"
     ],
     "联系方式": [
-        r"lixiaonuan96@foxmail\.com",
-        r"\d{11}",  # 手机号简单匹配（需人工确认）
     ],
     "私人信息": [
         r"体重\s*[:：]?\s*\d+[\.。]\d+\s*kg",
@@ -41,18 +37,33 @@ SENSITIVE_PATTERNS = {
         r"体脂\s*[:：]?\s*\d+[\.。]?\d*%",
     ],
     "项目名称": [
-        r"xiaonuan", r"XiaoNuan", r"李小暖",
+        r"\bAgentSoul\b", r"\bproject\b"
+    ],
+    "API密钥/访问令牌": [
+        # OpenAI API key format: sk-...
+        r"sk-[A-Za-z0-9]{48}",
+        # Anthropic API key format: sk-ant-...
+        r"sk-ant-[A-Za-z0-9]{80,}",
+        # Generic API key pattern
+        r"api[_-]key\s*[:=]\s*['\"]?[A-Za-z0-9]{32,}['\"]?",
+        r"access[_-]token\s*[:=]\s*['\"]?[A-Za-z0-9]{32,}['\"]?",
+        # Private key headers
+        r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----",
+        # AWS access key
+        r"AKIA[0-9A-Z]{16}",
+        # GitHub token
+        r"gh[pousr]_[A-Za-z0-9]{36,}",
     ],
 }
 
-HIGH_RISK_FILES = [
-    "data/identity/self/李小暖.md",
-    "data/identity/master/李燈辉.md",
-    "data/identity/master/profile.md",
-    "data/identity/self/profile.md",
-    "config/persona.yaml",
-    "src/master_base.md",
-    "install.py",
+# High-risk file patterns (endswith matching)
+# These files typically contain personalized information after installation
+HIGH_RISK_PATTERNS = [
+    "data/identity/self/",        # Any AI identity file
+    "data/identity/master/",      # Any master identity file
+    "config/persona.yaml",        # Main configuration (may contain personal info)
+    "src/master_base.md",         # User profile rules
+    "install.py",                 # Installation script (may have hardcoded names)
 ]
 
 FILE_EXTENSIONS = {".py", ".yaml", ".yml", ".md", ".json", ".ts", ".js", ".sh"}
@@ -83,14 +94,14 @@ class PrivacyScanner:
         self.results: List[FileScanResult] = []
         self._compile_patterns()
 
-    def _compile_patterns(self):
+    def _compile_patterns(self) -> None:
         for category, patterns in SENSITIVE_PATTERNS.items():
             self.compiled_patterns[category] = [
                 re.compile(p, re.IGNORECASE) for p in patterns
             ]
 
     def _get_risk_level(self, file_path: str, pattern_name: str) -> str:
-        if any(hr in file_path for hr in HIGH_RISK_FILES):
+        if any(hr in file_path for hr in HIGH_RISK_PATTERNS):
             return "high"
         if pattern_name in ["个人姓名", "私人信息"]:
             return "high"
@@ -102,7 +113,7 @@ class PrivacyScanner:
         if file_path.suffix not in FILE_EXTENSIONS:
             return result
 
-        if any(hr in str(file_path) for hr in HIGH_RISK_FILES):
+        if any(hr in str(file_path) for hr in HIGH_RISK_PATTERNS):
             result.is_high_risk = True
 
         try:

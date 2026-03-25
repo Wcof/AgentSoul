@@ -128,6 +128,7 @@ class PathResolver:
                 is_legacy=is_legacy_path,
                 fallback_used=False
             )
+            # Don't cache negative results - file may be created later
         else:
             if Path(new_path).is_absolute():
                 resolved_path = Path(new_path)
@@ -142,7 +143,11 @@ class PathResolver:
                 fallback_used=False
             )
 
-        self._cache[path] = result
+        # Only cache positive results (found=True)
+        # Negative results (found=False) are not cached because file may be created later
+        if result.found:
+            self._cache[path] = result
+
         return result
 
     def resolve_many(self, paths: List[str]) -> Dict[str, ResolveResult]:
