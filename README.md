@@ -126,6 +126,9 @@ OpenClaw 安装器会：
 - 在 `agent/` 根目录创建官方要求的入口文件：
   - `Agent.md` - 人格入口
   - `soul.md` - 灵魂状态入口
+- **自动从 `config/persona.yaml` 初始化身份档案** ✨
+  - Agent 身份写入 `agent/data/identity/self/`
+  - Master (用户) 身份写入 `agent/data/identity/master/`
 - 创建完整的 `data/` 子目录结构（identity、soul、memory）
 - 初始化默认 PAD 情感状态
 

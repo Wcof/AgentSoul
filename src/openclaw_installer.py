@@ -9,9 +9,13 @@ AgentSoul · OpenClaw 安装器 v1.0
 - 支持 current_session（临时）和 global_session（永久）安装
 """
 
+import json
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from common import safe_file_stem, initialize_identity
+from src.config_loader import ConfigLoader
 
 
 class OpenClawInstaller:
@@ -68,34 +72,6 @@ class OpenClawInstaller:
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
 
-    def _copy_rule_files(self) -> list[str]:
-        """复制基础规则文件
-        遵循 OpenClaw 官方规范：
-        - 所有规则放在 agent/base_rules/
-        - 在 agent/ 根目录创建入口文件 Agent.md 和 soul.md
-        Returns:
-            缺失的文件名列表
-        """
-        src_dir = self.agentsoul_root / "src"
-        dest_dir = self.agent_path / "base_rules"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-
-        copied = []
-        missing = []
-        for filename in self.RULE_FILES:
-            src_path = src_dir / filename
-            if src_path.exists():
-                dest_path = dest_dir / filename
-                shutil.copy2(src_path, dest_path)
-                copied.append(filename)
-            else:
-                missing.append(filename)
-
-        # 创建 OpenClaw 官方要求的入口文件
-        self._create_entry_files()
-
-        return missing
-
     def _create_entry_files(self) -> None:
         """创建 OpenClaw 官方要求的入口文件 Agent.md 和 soul.md"""
         # Agent.md - 人格入口，指向完整规则
@@ -134,10 +110,33 @@ class OpenClawInstaller:
 """
         soul_md.write_text(soul_content, encoding="utf-8")
 
+    def _copy_rule_files(self) -> list[str]:
+        """复制基础规则文件
+        Returns:
+            缺失的文件名列表
+        """
+        src_dir = self.agentsoul_root / "src"
+        dest_dir = self.agent_path / "base_rules"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        copied = []
+        missing = []
+        for filename in self.RULE_FILES:
+            src_path = src_dir / filename
+            if src_path.exists():
+                dest_path = dest_dir / filename
+                shutil.copy2(src_path, dest_path)
+                copied.append(filename)
+            else:
+                missing.append(filename)
+
+        # 创建 OpenClaw 官方要求的入口文件
+        self._create_entry_files()
+
+        return missing
 
     def _write_marker(self, scope: str) -> None:
         """写入安装标记"""
-        from datetime import datetime
         marker_path = self.openclaw_workspace / self.INSTALL_MARKER
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         content = f"""AgentSoul Installation Marker
@@ -145,6 +144,32 @@ Installed at: {timestamp}
 Scope: {scope}
 """
         marker_path.write_text(content, encoding="utf-8")
+
+    def _initialize_identity(self) -> None:
+        """从 AgentSoul config/persona.yaml 初始化身份档案到 OpenClaw"""
+        initialize_identity(
+            agentsoul_root=self.agentsoul_root,
+            output_root=self.agent_path,
+            verbose=False
+        )
+
+    def _create_default_soul_state(self) -> None:
+        """创建默认 PAD 情感状态向量"""
+        state_dir = self.agent_path / "data" / "soul" / "soul_variable"
+        state_path = state_dir / "state_vector.json"
+
+        # 默认 baseline PAD 值: Pleasure=0.3, Arousal=0.2, Dominance=0.3
+        default_state = {
+            "pleasure": 0.3,
+            "arousal": 0.2,
+            "dominance": 0.3,
+            "last_updated": None,
+            "history": [],
+        }
+
+        # Only write if not exists to avoid overwriting user modifications
+        if not state_path.exists():
+            state_path.write_text(json.dumps(default_state, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def install(self, scope: str) -> None:
         """
@@ -166,6 +191,10 @@ Scope: {scope}
         else:
             print("✅ 基础规则文件复制完成")
 
+        # 从 AgentSoul config/persona.yaml 初始化身份档案到 OpenClaw
+        self._initialize_identity()
+        print("✅ 身份档案初始化完成")
+
         # 写入安装标记
         self._write_marker(scope)
         print("✅ 安装标记写入完成")
@@ -182,21 +211,3 @@ Scope: {scope}
         else:
             print("   - 全局安装完成，下次启动自动加载")
             print("   - 切换新 Session 后需要进行身份唤醒")
-
-    def _create_default_soul_state(self) -> None:
-        """创建默认 PAD 情感状态向量"""
-        import json
-        state_dir = self.agent_path / "data" / "soul" / "soul_variable"
-        state_path = state_dir / "state_vector.json"
-
-        # 默认 baseline PAD 值: Pleasure=0.3, Arousal=0.2, Dominance=0.3
-        default_state = {
-            "pleasure": 0.3,
-            "arousal": 0.2,
-            "dominance": 0.3,
-            "last_updated": None,
-            "history": [],
-        }
-
-        if not state_path.exists():
-            state_path.write_text(json.dumps(default_state, indent=2, ensure_ascii=False), encoding="utf-8")

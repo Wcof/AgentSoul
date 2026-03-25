@@ -304,14 +304,14 @@ class TestInstallScript(unittest.TestCase):
             self.assertNotIn("李小暖", content)
 
     def test__safe_file_stem(self):
-        from install import _safe_file_stem
-        self.assertEqual(_safe_file_stem("AgentName", "fallback"), "AgentName")
-        self.assertEqual(_safe_file_stem("", "fallback"), "fallback")
-        self.assertEqual(_safe_file_stem("Agent/Name", "fallback"), "AgentName")
-        self.assertEqual(_safe_file_stem("Agent\\Name", "fallback"), "AgentName")
+        from common import safe_file_stem
+        self.assertEqual(safe_file_stem("AgentName", "fallback"), "AgentName")
+        self.assertEqual(safe_file_stem("", "fallback"), "fallback")
+        self.assertEqual(safe_file_stem("Agent/Name", "fallback"), "AgentName")
+        self.assertEqual(safe_file_stem("Agent\\Name", "fallback"), "AgentName")
 
     def test_initialize_identity_data(self):
-        from install import _initialize_identity_data
+        from common import initialize_identity
         from src.config_loader import create_default_persona
 
         test_dir = tempfile.mkdtemp()
@@ -319,6 +319,7 @@ class TestInstallScript(unittest.TestCase):
             config_dir = Path(test_dir) / "config"
             config_dir.mkdir(parents=True, exist_ok=True)
             persona_path = config_dir / "persona.yaml"
+            project_root = Path(__file__).parent.parent
 
             create_default_persona(persona_path)
             with open(persona_path, "r", encoding="utf-8") as f:
@@ -330,7 +331,7 @@ class TestInstallScript(unittest.TestCase):
             with open(persona_path, "w", encoding="utf-8") as f:
                 yaml.dump(data, f, allow_unicode=True)
 
-            _initialize_identity_data(Path(test_dir))
+            initialize_identity(Path(test_dir), Path(test_dir), verbose=False)
 
             self_dir = Path(test_dir) / "data" / "identity" / "self"
             self.assertTrue((self_dir / "profile.md").exists())

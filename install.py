@@ -23,6 +23,7 @@ AgentSoul · 人格插件安装脚本 v1.0
 
 import sys
 import argparse
+import subprocess
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -30,92 +31,36 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent
 
 try:
+    from common import log, safe_file_stem, initialize_identity
     from src.config_loader import ConfigLoader, create_default_persona
 except ImportError:
     sys.path.insert(0, str(PROJECT_ROOT))
+    from common import log, safe_file_stem, initialize_identity
     from src.config_loader import ConfigLoader, create_default_persona
 
 
-def log(message: str, level: str = "INFO") -> None:
-    symbols = {"INFO": "ℹ️", "OK": "✅", "WARN": "⚠️", "ERROR": "❌", "STEP": "🔧"}
-    symbol = symbols.get(level, "")
-    print(f"{symbol} {message}")
+def open_file_in_editor(file_path: Path) -> bool:
+    """使用系统默认编辑器打开文件
 
-
-def _safe_file_stem(value: str, fallback: str) -> str:
-    """生成安全的文件名，去除路径分隔符"""
-    normalized = value.replace("/", "").replace("\\", "").strip()
-    return normalized or fallback
-
-
-def _initialize_identity_data(project_root: Path) -> None:
-    """使用 ConfigLoader 初始化身份档案数据
-    从 config/persona.yaml 加载配置并生成 profile 文件
+    Returns:
+        True if opened successfully, False otherwise
     """
-    from src.config_loader import ConfigLoader
+    try:
+        if sys.platform == "darwin":  # macOS
+            subprocess.run(["open", str(file_path)], check=True)
+            return True
+        elif sys.platform == "linux":  # Linux
+            subprocess.run(["xdg-open", str(file_path)], check=True)
+            return True
+        elif sys.platform == "win32":  # Windows
+            subprocess.run(["start", str(file_path)], shell=True, check=True)
+            return True
+    except Exception:
+        pass
+    return False
 
-    loader = ConfigLoader(project_root)
-    config = loader.load_persona_config()
 
-    ai = config.ai
-    master = config.master
-
-    ai_name = ai.name or "Agent"
-    ai_nickname = ai.nickname or ""
-    ai_role = ai.role or "AI Assistant"
-    ai_traits = ai.personality or []
-    ai_core_values = ai.core_values or []
-
-    master_name = master.name or ""
-    master_nicknames = master.nickname or []
-    master_timezone = master.timezone or "Asia/Shanghai"
-    master_labels = master.labels or []
-
-    identity_root = project_root / "data" / "identity"
-    self_dir = identity_root / "self"
-    master_dir = identity_root / "master"
-    others_dir = identity_root / "others"
-
-    for directory in [self_dir, master_dir, others_dir]:
-        directory.mkdir(parents=True, exist_ok=True)
-
-    ai_profile = f"""# AI Identity Profile
-
-- **Name**: {ai_name}
-- **Nickname**: {ai_nickname or '（未设置）'}
-- **Role**: {ai_role}
-
-## Personality Traits
-{chr(10).join(f'- {item}' for item in ai_traits) if ai_traits else '- （未配置）'}
-
-## Core Values
-{chr(10).join(f'- {item}' for item in ai_core_values) if ai_core_values else '- （未配置）'}
-"""
-
-    master_profile = f"""# Master Identity Profile
-
-- **Name**: {master_name or '（未设置）'}
-- **Nicknames**: {', '.join(master_nicknames) if master_nicknames else '（未设置）'}
-- **Timezone**: {master_timezone}
-
-## Labels
-{chr(10).join(f'- {item}' for item in master_labels) if master_labels else '- （未配置）'}
-"""
-
-    files_to_write: list[tuple[Path, str]] = [
-        (self_dir / "profile.md", ai_profile),
-        (self_dir / f"{_safe_file_stem(ai_name, 'agent')}.md", ai_profile),
-    ]
-
-    if master_name:
-        files_to_write.extend([
-            (master_dir / "profile.md", master_profile),
-            (master_dir / f"{_safe_file_stem(master_name, 'master')}.md", master_profile),
-        ])
-
-    for file_path, content in files_to_write:
-        file_path.write_text(content, encoding="utf-8")
-        log(f"已注入身份档案: {file_path.relative_to(project_root)}", "OK")
+# log and safe_file_stem imported from common
 
 
 def generate_persona_package(name: Optional[str] = None) -> None:
@@ -256,6 +201,23 @@ Windsurf 会自动加载项目根目录的 `.windsurfrules` 文件，无需手�
     print("- Windsurf: 自动加载 .windsurfrules")
     print(f"- Claude/Trae/Antigravity: 上传 {persona_file.name}\n")
 
+    # 询问是否打开配置文件编辑 Agent 和 Master 信息
+    persona_config_path = PROJECT_ROOT / "config" / "persona.yaml"
+    if persona_config_path.exists():
+        while True:
+            answer = input("是否现在打开配置文件编辑 Agent 和 Master 信息？[Y/n]: ").strip().lower()
+            if answer in ["", "y", "yes"]:
+                if open_file_in_editor(persona_config_path):
+                    log(f"已在默认编辑器中打开 {persona_config_path}", "OK")
+                else:
+                    log(f"无法自动打开，请手动编辑: {persona_config_path}", "WARN")
+                break
+            elif answer in ["n", "no"]:
+                log(f"配置文件位置: {persona_config_path}，你可以稍后编辑", "INFO")
+                break
+            else:
+                print("❌ 无效选项，请输入 y 或 n")
+
 
 def show_menu():
     print("\n╔══════════════════════════════════════════════════════════════════╗")
@@ -351,7 +313,7 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
         return False
 
     try:
-        _initialize_identity_data(PROJECT_ROOT)
+        initialize_identity(PROJECT_ROOT, PROJECT_ROOT)
 
         # 创建默认 PAD 情感状态文件
         soul_state_dir = PROJECT_ROOT / "data" / "soul" / "soul_variable"
