@@ -19,10 +19,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
 import yaml
 
-PROJECT_ROOT = Path(__file__).parent.parent
+# Add project root to path
+import sys
+sys.path.insert(0, str(PROJECT_ROOT := Path(__file__).parent.parent))
+
+from src.config_loader import ConfigLoader, create_default_persona
+from src.path_compat import PathResolver, convert_legacy_path
+
 DEFAULT_XIAONUAN_PATHS = [
     Path.home() / ".xiaonuan",
     Path.home() / ".openclaw" / "workspace" / "xiaonuan",
@@ -54,26 +59,13 @@ class MigrationReport:
 
 
 class XiaonuanMigrator:
-    PATH_MAPPING = {
-        "xiaonuan": "agent",
-        "data/identity/self": "data/identity/self",
-        "data/identity/master": "data/identity/master",
-        "data/memory_bank": "data/memory_bank",
-        "data/soul": "data/soul",
-        "data/task": "data/task",
-        "data/skills": "data/skills",
-        "data/secure": "data/secure",
-        "data/secure_bank": "data/secure_bank",
-        "config/persona.yaml": "config/persona.yaml",
-        "config/behavior.yaml": "config/behavior.yaml",
-    }
-
     def __init__(self, source_root: Path, dry_run: bool = False):
         self.source_root = source_root
         self.target_root = PROJECT_ROOT
         self.dry_run = dry_run
         self.report = MigrationReport()
-        self.config_cache: Dict = {}
+        self.config_loader = ConfigLoader(PROJECT_ROOT)
+        self.path_resolver = PathResolver(PROJECT_ROOT)
 
     def detect_source(self) -> Optional[Path]:
         for path in DEFAULT_XIAONUAN_PATHS:
@@ -84,6 +76,7 @@ class XiaonuanMigrator:
         return None
 
     def convert_persona_config(self, source_path: Path) -> Tuple[Dict, List[str]]:
+        # Start with default template from create_default_persona
         converted = {
             "agent": {
                 "name": "Agent",
@@ -115,8 +108,8 @@ class XiaonuanMigrator:
                 source_config = yaml.safe_load(f) or {}
 
             old_persona = source_config.get("persona", source_config.get("ai", {}))
-
             old_ai = old_persona.get("ai", old_persona)
+
             if old_ai:
                 agent_name = old_ai.get("name", "")
                 if agent_name and not any(char in agent_name for char in ["暖"]):
@@ -125,9 +118,16 @@ class XiaonuanMigrator:
                     warnings.append(f"AI名称 '{agent_name}' 已重置为 'Agent'（通用化）")
 
                 converted["agent"]["nickname"] = old_ai.get("nickname", "")
+                converted["agent"]["naming_mode"] = old_ai.get("naming_mode", "default")
                 converted["agent"]["role"] = old_ai.get("role", "AI Assistant")
-                converted["agent"]["personality"] = old_ai.get("personality", [])
-                converted["agent"]["core_values"] = old_ai.get("core_values", [])
+                converted["agent"]["personality"] = self.config_loader._to_list(
+                    old_ai.get("personality", [])
+                )
+                converted["agent"]["core_values"] = self.config_loader._to_list(
+                    old_ai.get("core_values", [])
+                )
+                if "interaction_style" in old_ai:
+                    converted["agent"]["interaction_style"].update(old_ai["interaction_style"])
 
             old_master = old_persona.get("master", {})
             if old_master:
@@ -137,8 +137,15 @@ class XiaonuanMigrator:
                 elif any(char in master_name for char in ["辉"]):
                     warnings.append(f"主人姓名 '{master_name}' 已脱敏（通用化）")
 
-                converted["master"]["nickname"] = old_master.get("nickname", [])
-                converted["master"]["timezone"] = old_master.get("timezone", "Asia/Shanghai")
+                converted["master"]["nickname"] = self.config_loader._to_list(
+                    old_master.get("nickname", old_master.get("nicknames", []))
+                )
+                converted["master"]["timezone"] = old_master.get(
+                    "timezone", "Asia/Shanghai"
+                )
+                converted["master"]["labels"] = self.config_loader._to_list(
+                    old_master.get("labels", [])
+                )
 
         except Exception as e:
             warnings.append(f"配置转换失败: {e}")

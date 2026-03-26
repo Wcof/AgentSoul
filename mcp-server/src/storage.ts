@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
 import { SoulState, PersonaConfig } from './types.js';
 
@@ -9,7 +10,13 @@ export class StorageManager {
   private projectRoot: string;
 
   constructor(projectRoot?: string) {
-    this.projectRoot = projectRoot || path.resolve(__dirname, '../../..');
+    if (projectRoot) {
+      this.projectRoot = projectRoot;
+    } else {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      this.projectRoot = path.resolve(__dirname, '../../..');
+    }
   }
 
   /**
