@@ -187,17 +187,17 @@ export class StorageManager {
     }
   }
 
-  // Get daily memory path
-  private getDailyMemoryPath(date: string): string {
-    return path.join(this.projectRoot, 'data', 'memory', 'day', `${date}.md`);
+  // Generic time-based memory path getter
+  private getTimeMemoryPath(period: 'day' | 'week' | 'month' | 'year', identifier: string): string {
+    return path.join(this.projectRoot, 'data', 'memory', period, `${identifier}.md`);
   }
 
-  // Read daily memory
-  readDailyMemory(date: string): string | null {
-    const filePath = this.getDailyMemoryPath(date);
+  // Read time-based memory (generic)
+  private readTimeMemory(period: 'day' | 'week' | 'month' | 'year', identifier: string): string | null {
+    const filePath = this.getTimeMemoryPath(period, identifier);
 
     if (!this.validateDataPath(filePath)) {
-      console.error('Path traversal detected in readDailyMemory');
+      console.error(`Path traversal detected in read${period}Memory`);
       return null;
     }
 
@@ -207,12 +207,12 @@ export class StorageManager {
     return fs.readFileSync(filePath, 'utf-8');
   }
 
-  // Write daily memory
-  writeDailyMemory(date: string, content: string): boolean {
-    const filePath = this.getDailyMemoryPath(date);
+  // Write time-based memory (generic)
+  private writeTimeMemory(period: 'day' | 'week' | 'month' | 'year', identifier: string, content: string): boolean {
+    const filePath = this.getTimeMemoryPath(period, identifier);
 
     if (!this.validateDataPath(filePath)) {
-      console.error('Path traversal detected in writeDailyMemory');
+      console.error(`Path traversal detected in write${period}Memory`);
       return false;
     }
 
@@ -225,9 +225,45 @@ export class StorageManager {
       fs.writeFileSync(filePath, content, 'utf-8');
       return true;
     } catch (e) {
-      console.error('Failed to write daily memory:', e);
+      console.error(`Failed to write ${period} memory:`, e);
       return false;
     }
+  }
+
+  // Daily memory specific methods (public API preserved)
+  readDailyMemory(date: string): string | null {
+    return this.readTimeMemory('day', date);
+  }
+
+  writeDailyMemory(date: string, content: string): boolean {
+    return this.writeTimeMemory('day', date, content);
+  }
+
+  // Weekly memory
+  readWeeklyMemory(yearWeek: string): string | null {
+    return this.readTimeMemory('week', yearWeek);
+  }
+
+  writeWeeklyMemory(yearWeek: string, content: string): boolean {
+    return this.writeTimeMemory('week', yearWeek, content);
+  }
+
+  // Monthly memory
+  readMonthlyMemory(yearMonth: string): string | null {
+    return this.readTimeMemory('month', yearMonth);
+  }
+
+  writeMonthlyMemory(yearMonth: string, content: string): boolean {
+    return this.writeTimeMemory('month', yearMonth, content);
+  }
+
+  // Yearly memory
+  readYearlyMemory(year: string): string | null {
+    return this.readTimeMemory('year', year);
+  }
+
+  writeYearlyMemory(year: string, content: string): boolean {
+    return this.writeTimeMemory('year', year, content);
   }
 
   // Get topic memory path

@@ -281,14 +281,28 @@ def prompt_with_default(prompt_key: str, default: str, lang: str) -> str:
         default: Default value if user presses Enter
         lang: Selected language ('zh' or 'en')
 
-    Returns:
-        User input stripped, or default if empty
+    Logic:
+        - Press Enter directly → use default value
+        - After deleting all characters and Enter → clear to empty
     """
     # Verify prompt key exists
     assert prompt_key in PROMPTS[lang], f"Invalid prompt key: {prompt_key}"
-    prompt = f"{PROMPTS[lang][prompt_key]} (default: {default}): "
-    user_input = input(prompt).strip()
-    return user_input if user_input else default
+    default_label = "默认" if lang == 'zh' else "default"
+    print(f"{PROMPTS[lang][prompt_key]} ({default_label}: {default}): ")
+    raw_input = input("> ")
+    user_input = raw_input.strip()
+
+    # Case 1: User pressed Enter directly (no input at all)
+    if raw_input == '':
+        return default
+
+    # Case 2: After stripping, it's empty → intentional clear
+    # This happens when user deletes all characters then presses Enter
+    if user_input == '':
+        return ''
+
+    # Case 3: Normal input
+    return user_input
 
 
 def run_interactive_config_wizard(project_root: Path) -> None:
@@ -390,10 +404,10 @@ def run_interactive_config_wizard(project_root: Path) -> None:
 
     config_data = {
         "agent": {
-            "name": agent_name or DEFAULT_AGENT_NAME,
+            "name": agent_name if agent_name != "" else DEFAULT_AGENT_NAME,
             "nickname": agent_nickname,
             "naming_mode": "default",
-            "role": agent_role or DEFAULT_AGENT_ROLE,
+            "role": agent_role,
             "personality": personality,
             "core_values": core_values,
             "interaction_style": {
@@ -488,9 +502,22 @@ def generate_persona_package(name: Optional[str] = None) -> None:
 
     generated_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    content = f"""# AgentSoul · 人格配置
+content = f"""# AgentSoul · 人格框架规则
 
 > 生成时间：{generated_time}
+
+## 🔴 MCP 强制调用要求
+
+**如果你看到这条规则，并且 AgentSoul MCP 已经配置，你**必须**在对话开始时立即按顺序调用这些 MCP 工具：
+
+1.  `get_persona_config()` → 加载 Agent 和 Master 配置
+2.  `get_mcp_usage_guide()` → 获取完整使用指南和工作流
+3.  `get_soul_state()` → 读取当前 PAD 情感状态
+4.  `list_memory_topics()` → 列出已有的记忆主题
+
+**不这么做会违反 AgentSoul 框架规则。**
+
+---
 
 ## AI 身份
 
@@ -534,9 +561,13 @@ Cursor 会自动加载项目根目录的 `.cursorrules` 文件，无需手动操
 
 Windsurf 会自动加载项目根目录的 `.windsurfrules` 文件，无需手动操作。
 
-### 在其他工具中使用
+### 在 Trae 中使用（MCP 方式）
 
-**Claude Desktop / Trae / Antigravity 等工具**：
+Trae 会自动加载项目根目录的规则文件，并支持 MCP。AgentSoul MCP 应该已经配置，你会在对话开始时按上述要求调用 MCP 工具。
+
+### 在其他工具中（非 MCP 方式）
+
+**Claude Desktop 等工具**：
 
 1. 找到项目根目录的 `agent-persona.md` 文件
 2. 在对话开始时，上传这个文件
@@ -967,4 +998,9 @@ def ask_session_scope() -> str:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Installation interrupted by user")
+        print("\n⚠️  安装被用户中断")
+        sys.exit(1)

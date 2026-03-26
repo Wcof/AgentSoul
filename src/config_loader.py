@@ -123,11 +123,13 @@ class ConfigLoader:
     def _safe_get(self, data: Dict, key: str, default: Any) -> Any:
         if not isinstance(data, dict):
             return default
-        value = data.get(key, default)
+        if key not in data:
+            return default
+        value = data[key]
         if value is None:
             return default
-        if isinstance(value, str) and not value.strip():
-            return default
+        # If key exists and is explicitly set to empty string, preserve it
+        # This allows users to intentionally clear the default value
         return value
 
     def _to_list(self, value: Union[str, list, tuple]) -> list:

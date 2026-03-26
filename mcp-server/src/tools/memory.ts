@@ -1,11 +1,61 @@
 // AgentSoul MCP - Memory storage tools
-// Handles non-working memory: daily notes and topic-based memory
+// Handles hierarchical memory: daily/weekly/monthly/yearly time slices and topic-based memory
 
 import { z } from 'zod';
 import { StorageManager } from '../storage.js';
 import { ToolResponse } from '../types.js';
 
 const storage = new StorageManager();
+
+// Generic response helpers to eliminate duplication
+function makeReadResponse<T>(found: boolean, key: string, value: string, content: string | null): ToolResponse {
+  const data = found
+    ? { found, [key]: value, content }
+    : { found: false, content: null };
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(data, null, 2),
+      },
+    ],
+  };
+}
+
+function makeWriteResponse(success: boolean, key: string, value: string, append: boolean): ToolResponse {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(
+          {
+            success,
+            [key]: value,
+            mode: append ? 'append' : 'overwrite',
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  };
+}
+
+function handleAppendRead(
+  identifier: string,
+  content: string,
+  append: boolean,
+  readFn: (id: string) => string | null
+): string {
+  let fullContent = content;
+  if (append) {
+    const existing = readFn(identifier);
+    if (existing !== null) {
+      fullContent = existing + '\n\n' + content;
+    }
+  }
+  return fullContent;
+}
 
 // Read daily memory for a specific date
 export const ReadMemoryDaySchema = z.object({
@@ -16,41 +66,7 @@ export async function handleReadMemoryDay(
   params: z.infer<typeof ReadMemoryDaySchema>
 ): Promise<ToolResponse> {
   const content = storage.readDailyMemory(params.date);
-
-  if (content === null) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              found: false,
-              content: null,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            found: true,
-            date: params.date,
-            content: content,
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
+  return makeReadResponse(content !== null, 'date', params.date, content);
 }
 
 // Write daily memory
@@ -64,33 +80,93 @@ export async function handleWriteMemoryDay(
   params: z.infer<typeof WriteMemoryDaySchema>
 ): Promise<ToolResponse> {
   const { date, content, append } = params;
-
-  let fullContent = content;
-  if (append) {
-    const existing = storage.readDailyMemory(date);
-    if (existing !== null) {
-      fullContent = existing + '\n\n' + content;
-    }
-  }
-
+  const fullContent = handleAppendRead(date, content, append, storage.readDailyMemory.bind(storage));
   const success = storage.writeDailyMemory(date, fullContent);
+  return makeWriteResponse(success, 'date', date, append);
+}
 
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success,
-            date,
-            mode: append ? 'append' : 'overwrite',
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
+// Read weekly memory for a specific week
+export const ReadMemoryWeekSchema = z.object({
+  year_week: z.string().describe('Week in YYYY-WW format (e.g. 2024-12)'),
+});
+
+export async function handleReadMemoryWeek(
+  params: z.infer<typeof ReadMemoryWeekSchema>
+): Promise<ToolResponse> {
+  const content = storage.readWeeklyMemory(params.year_week);
+  return makeReadResponse(content !== null, 'year_week', params.year_week, content);
+}
+
+// Write weekly memory
+export const WriteMemoryWeekSchema = z.object({
+  year_week: z.string().describe('Week in YYYY-WW format (e.g. 2024-12)'),
+  content: z.string().describe('Content to write'),
+  append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
+});
+
+export async function handleWriteMemoryWeek(
+  params: z.infer<typeof WriteMemoryWeekSchema>
+): Promise<ToolResponse> {
+  const { year_week, content, append } = params;
+  const fullContent = handleAppendRead(year_week, content, append, storage.readWeeklyMemory.bind(storage));
+  const success = storage.writeWeeklyMemory(year_week, fullContent);
+  return makeWriteResponse(success, 'year_week', year_week, append);
+}
+
+// Read monthly memory for a specific month
+export const ReadMemoryMonthSchema = z.object({
+  year_month: z.string().describe('Month in YYYY-MM format (e.g. 2024-03)'),
+});
+
+export async function handleReadMemoryMonth(
+  params: z.infer<typeof ReadMemoryMonthSchema>
+): Promise<ToolResponse> {
+  const content = storage.readMonthlyMemory(params.year_month);
+  return makeReadResponse(content !== null, 'year_month', params.year_month, content);
+}
+
+// Write monthly memory
+export const WriteMemoryMonthSchema = z.object({
+  year_month: z.string().describe('Month in YYYY-MM format (e.g. 2024-03)'),
+  content: z.string().describe('Content to write'),
+  append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
+});
+
+export async function handleWriteMemoryMonth(
+  params: z.infer<typeof WriteMemoryMonthSchema>
+): Promise<ToolResponse> {
+  const { year_month, content, append } = params;
+  const fullContent = handleAppendRead(year_month, content, append, storage.readMonthlyMemory.bind(storage));
+  const success = storage.writeMonthlyMemory(year_month, fullContent);
+  return makeWriteResponse(success, 'year_month', year_month, append);
+}
+
+// Read yearly memory for a specific year
+export const ReadMemoryYearSchema = z.object({
+  year: z.string().describe('Year in YYYY format (e.g. 2024)'),
+});
+
+export async function handleReadMemoryYear(
+  params: z.infer<typeof ReadMemoryYearSchema>
+): Promise<ToolResponse> {
+  const content = storage.readYearlyMemory(params.year);
+  return makeReadResponse(content !== null, 'year', params.year, content);
+}
+
+// Write yearly memory
+export const WriteMemoryYearSchema = z.object({
+  year: z.string().describe('Year in YYYY format (e.g. 2024)'),
+  content: z.string().describe('Content to write'),
+  append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
+});
+
+export async function handleWriteMemoryYear(
+  params: z.infer<typeof WriteMemoryYearSchema>
+): Promise<ToolResponse> {
+  const { year, content, append } = params;
+  const fullContent = handleAppendRead(year, content, append, storage.readYearlyMemory.bind(storage));
+  const success = storage.writeYearlyMemory(year, fullContent);
+  return makeWriteResponse(success, 'year', year, append);
 }
 
 // Read topic memory

@@ -111,9 +111,9 @@ def initialize_identity(
     ai = config.ai
     master = config.master
 
-    ai_name = ai.name or "Agent"
-    ai_nickname = ai.nickname or ""
-    ai_role = ai.role or "AI Assistant"
+    ai_name = ai.name if ai.name != "" else "Agent"
+    ai_nickname = ai.nickname
+    ai_role = ai.role  # Allow empty role if user intentionally cleared it
     ai_traits = ai.personality or []
     ai_core_values = ai.core_values or []
 
