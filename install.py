@@ -22,6 +22,8 @@ AgentSoul · 人格插件安装脚本 v1.0
 """
 
 import sys
+import json
+import yaml
 import argparse
 import subprocess
 from pathlib import Path
@@ -58,6 +60,383 @@ def open_file_in_editor(file_path: Path) -> bool:
     except Exception:
         pass
     return False
+
+
+# Default constants
+DEFAULT_AGENT_NAME = "Agent"
+DEFAULT_AGENT_ROLE = "AI Assistant"
+DEFAULT_TIMEZONE = "Asia/Shanghai"
+DEFAULT_TONE = "neutral"
+DEFAULT_LANGUAGE = "chinese"
+DEFAULT_EMOJI_USAGE = "minimal"
+DEFAULT_PAD_PLEASURE = 0.3
+DEFAULT_PAD_AROUSAL = 0.2
+DEFAULT_PAD_DOMINANCE = 0.3
+
+ALLOWED_TONES = ["neutral", "friendly", "professional", "casual"]
+ALLOWED_LANGUAGES = ["chinese", "english"]
+ALLOWED_EMOJI_FREQS = ["minimal", "moderate", "frequent"]
+
+# Display name mapping for bilingual
+DISPLAY_NAMES = {
+    'zh': {
+        'tone': {
+            'neutral': '中立',
+            'friendly': '友好',
+            'professional': '专业',
+            'casual': '随意',
+        },
+        'language': {
+            'chinese': '中文',
+            'english': '英文',
+        },
+        'emoji_usage': {
+            'minimal': '少量',
+            'moderate': '适中',
+            'frequent': '较多',
+        },
+    },
+    'en': {
+        'tone': {
+            'neutral': 'Neutral',
+            'friendly': 'Friendly',
+            'professional': 'Professional',
+            'casual': 'Casual',
+        },
+        'language': {
+            'chinese': 'Chinese',
+            'english': 'English',
+        },
+        'emoji_usage': {
+            'minimal': 'Minimal',
+            'moderate': 'Moderate',
+            'frequent': 'Frequent',
+        },
+    },
+}
+
+
+def select_from_list(prompt_key: str, allowed_values: List[str], default: str, lang: str) -> str:
+    """Display options as numbered list and let user select by number.
+
+    Args:
+        prompt_key: Prompt key in PROMPTS
+        allowed_values: List of allowed values
+        default: Default value if user presses Enter
+        lang: Selected language
+
+    Returns:
+        Selected value from allowed_values
+    """
+    p = lambda k: PROMPTS[lang][k]
+    print(p(prompt_key))
+    for i, value in enumerate(allowed_values, 1):
+        display_name = DISPLAY_NAMES[lang][prompt_key][value]
+        print(f"  {i}. {display_name}")
+
+    default_index = allowed_values.index(default) + 1
+    while True:
+        user_input = input(f"请选择 (默认: {default_index}): ").strip()
+        if not user_input:
+            return default
+        try:
+            idx = int(user_input) - 1
+            if 0 <= idx < len(allowed_values):
+                return allowed_values[idx]
+            else:
+                print(f"❌ {PROMPTS[lang]['invalid_selection']} 1-{len(allowed_values)}")
+        except ValueError:
+            print(f"❌ {PROMPTS[lang]['invalid_number']}")
+
+
+def get_default_pad_state() -> Dict[str, Any]:
+    """Get default PAD emotional state vector."""
+    return {
+        "pleasure": DEFAULT_PAD_PLEASURE,
+        "arousal": DEFAULT_PAD_AROUSAL,
+        "dominance": DEFAULT_PAD_DOMINANCE,
+        "last_updated": None,
+        "history": [],
+    }
+
+
+# Bilingual prompts for interactive configuration wizard
+PROMPTS = {
+    'zh': {
+        'select_language': '请选择语言 / Select language:',
+        'language_option_zh': '1. 中文',
+        'language_option_en': '2. English',
+        'invalid_language': '❌ 无效选项，请输入 1 或 2',
+        'invalid_choice': '❌ 无效选项，请输入 y 或 n',
+        'invalid_selection': '请输入范围内的数字',
+        'invalid_number': '请输入有效的数字',
+        'welcome': '欢迎使用 AgentSoul 交互式配置向导！',
+        'section_agent': '=== Agent (灵魂) 配置 ===',
+        'agent_name': 'Agent 名称',
+        'agent_nickname': 'Agent 昵称',
+        'agent_role': 'Agent 角色描述',
+        'personality': '性格特征（多个用逗号分隔）',
+        'core_values': '核心价值观（多个用逗号分隔）',
+        'section_interaction': '--- 交互风格 ---',
+        'tone': '请选择回复语气:',
+        'language': '请选择默认语言:',
+        'emoji_usage': '请选择 Emoji 使用频率:',
+        'section_master': '=== Master (用户) 配置 ===',
+        'master_name': '你的名字',
+        'master_nicknames': '你的昵称（多个用逗号分隔）',
+        'timezone': '时区',
+        'timezone_hint': '(示例: Asia/Shanghai, America/New_York, Europe/London)',
+        'labels': '你的标签/爱好（多个用逗号分隔）',
+        'summary_header': '=== 配置预览 ===',
+        'summary_agent_name': 'Agent 名称: {name}',
+        'summary_agent_nickname': 'Agent 昵称: {nickname}',
+        'summary_agent_role': 'Agent 角色: {role}',
+        'summary_personality': '性格特征: {personality}',
+        'summary_core_values': '核心价值观: {values}',
+        'summary_tone': '回复语气: {tone}',
+        'summary_language': '默认语言: {lang}',
+        'summary_emoji': 'Emoji 频率: {emoji}',
+        'summary_master_name': '你的名字: {name}',
+        'summary_master_nicknames': '你的昵称: {nicknames}',
+        'summary_timezone': '时区: {tz}',
+        'summary_labels': '标签/爱好: {labels}',
+        'confirm_write': '确认写入配置文件？[Y/n]: ',
+        'confirm_no': '已取消，没有写入任何内容',
+        'writing': '正在写入配置...',
+        'config_written': '配置已写入: {path}',
+        'initializing_soul': '初始化灵魂 PAD 情感状态...',
+        'soul_initialized': '已初始化默认 PAD 情感状态向量',
+        'updating_identity': '更新身份档案...',
+        'complete': '✅ 交互式配置完成！',
+        'use_interactive_wizard': '是否使用交互式配置向导填写所有配置项？[Y/n]: ',
+    },
+    'en': {
+        'select_language': '请选择语言 / Select language:',
+        'language_option_zh': '1. 中文',
+        'language_option_en': '2. English',
+        'invalid_language': '❌ Invalid selection, please enter 1 or 2',
+        'invalid_choice': '❌ Invalid option, please enter y or n',
+        'invalid_selection': 'Please enter a number within range',
+        'invalid_number': 'Please enter a valid number',
+        'welcome': 'Welcome to AgentSoul Interactive Configuration Wizard!',
+        'section_agent': '=== Agent (Soul) Configuration ===',
+        'agent_name': 'Agent name',
+        'agent_nickname': 'Agent nickname',
+        'agent_role': 'Agent role description',
+        'personality': 'Personality traits (separate with commas)',
+        'core_values': 'Core values (separate with commas)',
+        'section_interaction': '--- Interaction Style ---',
+        'tone': 'Select response tone:',
+        'language': 'Select default language:',
+        'emoji_usage': 'Select emoji usage frequency:',
+        'section_master': '=== Master (User) Configuration ===',
+        'master_name': 'Your name',
+        'master_nicknames': 'Your nicknames (separate with commas)',
+        'timezone': 'Timezone',
+        'timezone_hint': '(examples: Asia/Shanghai, America/New_York, Europe/London)',
+        'labels': 'Your labels/interests (separate with commas)',
+        'summary_header': '=== Configuration Summary ===',
+        'summary_agent_name': 'Agent name: {name}',
+        'summary_agent_nickname': 'Agent nickname: {nickname}',
+        'summary_agent_role': 'Agent role: {role}',
+        'summary_personality': 'Personality: {personality}',
+        'summary_core_values': 'Core values: {values}',
+        'summary_tone': 'Response tone: {tone}',
+        'summary_language': 'Default language: {lang}',
+        'summary_emoji': 'Emoji frequency: {emoji}',
+        'summary_master_name': 'Your name: {name}',
+        'summary_master_nicknames': 'Your nicknames: {nicknames}',
+        'summary_timezone': 'Timezone: {tz}',
+        'summary_labels': 'Labels/interests: {labels}',
+        'confirm_write': 'Confirm and write to configuration file? [Y/n]: ',
+        'confirm_no': 'Cancelled, no changes written',
+        'writing': 'Writing configuration...',
+        'config_written': 'Configuration written to: {path}',
+        'initializing_soul': 'Initializing soul PAD emotional state...',
+        'soul_initialized': 'Default PAD emotional state initialized',
+        'updating_identity': 'Updating identity profiles...',
+        'complete': '✅ Interactive configuration complete!',
+        'use_interactive_wizard': 'Use interactive configuration wizard to fill all fields? [Y/n]: ',
+    }
+}
+
+
+def parse_comma_separated(text: str) -> List[str]:
+    """Convert comma-separated input to list of stripped strings.
+
+    - Returns empty list if input is empty
+    - Skips empty items caused by trailing commas
+    - Strips whitespace from each item
+    """
+    if not text.strip():
+        return []
+    return [item.strip() for item in text.split(',') if item.strip()]
+
+
+def prompt_with_default(prompt_key: str, default: str, lang: str) -> str:
+    """Display prompt with default value and handle empty input.
+
+    Args:
+        prompt_key: Key in PROMPTS[lang] dictionary
+        default: Default value if user presses Enter
+        lang: Selected language ('zh' or 'en')
+
+    Returns:
+        User input stripped, or default if empty
+    """
+    # Verify prompt key exists
+    assert prompt_key in PROMPTS[lang], f"Invalid prompt key: {prompt_key}"
+    prompt = f"{PROMPTS[lang][prompt_key]} (default: {default}): "
+    user_input = input(prompt).strip()
+    return user_input if user_input else default
+
+
+def run_interactive_config_wizard(project_root: Path) -> None:
+    """Run bilingual interactive configuration wizard.
+
+    Guides user through filling all configuration fields for both agent and master,
+    then writes directly to config/persona.yaml and initializes soul state.
+    """
+    # Step 1: Language selection
+    log("\n" + PROMPTS['zh']['select_language'], "INFO")
+    log(f"  {PROMPTS['zh']['language_option_zh']}", "INFO")
+    log(f"  {PROMPTS['zh']['language_option_en']}", "INFO")
+
+    while True:
+        choice = input("Please enter choice [1/2]: ").strip()
+        if choice == '1':
+            lang = 'zh'
+            break
+        elif choice == '2':
+            lang = 'en'
+            break
+        else:
+            print(PROMPTS[lang if 'zh' in locals() else 'zh']['invalid_language'])
+
+    p = lambda key: PROMPTS[lang][key]
+
+    print()
+    print(p('welcome'))
+    print()
+
+    # Step 2: Agent (Soul) Configuration
+    print(p('section_agent'))
+
+    agent_name = prompt_with_default('agent_name', DEFAULT_AGENT_NAME, lang)
+    agent_nickname = prompt_with_default('agent_nickname', '', lang)
+    agent_role = prompt_with_default('agent_role', DEFAULT_AGENT_ROLE, lang)
+    personality_input = input(p('personality') + ": ").strip()
+    personality = parse_comma_separated(personality_input)
+    core_values_input = input(p('core_values') + ": ").strip()
+    core_values = parse_comma_separated(core_values_input)
+
+    print(p('section_interaction'))
+    tone = select_from_list('tone', ALLOWED_TONES, DEFAULT_TONE, lang)
+    interaction_lang = select_from_list('language', ALLOWED_LANGUAGES, DEFAULT_LANGUAGE, lang)
+    emoji_usage = select_from_list('emoji_usage', ALLOWED_EMOJI_FREQS, DEFAULT_EMOJI_USAGE, lang)
+
+    print()
+
+    # Step 3: Master (User) Configuration
+    print(p('section_master'))
+
+    master_name = prompt_with_default('master_name', '', lang)
+    master_nicknames_input = input(p('master_nicknames') + ": ").strip()
+    master_nicknames = parse_comma_separated(master_nicknames_input)
+    print(p('timezone') + " " + p('timezone_hint'))
+    timezone = prompt_with_default('timezone', DEFAULT_TIMEZONE, lang)
+    labels_input = input(p('labels') + ": ").strip()
+    labels = parse_comma_separated(labels_input)
+
+    print()
+
+    # Step 4: Summary
+    print(p('summary_header'))
+    print()
+    print(p('summary_agent_name').format(name=agent_name or DEFAULT_AGENT_NAME))
+    print(p('summary_agent_nickname').format(nickname=agent_nickname or '(empty)'))
+    print(p('summary_agent_role').format(role=agent_role or DEFAULT_AGENT_ROLE))
+    print(p('summary_personality').format(personality=', '.join(personality) if personality else '(empty)'))
+    print(p('summary_core_values').format(values=', '.join(core_values) if core_values else '(empty)'))
+    print(p('summary_tone').format(tone=tone))
+    print(p('summary_language').format(lang=interaction_lang))
+    print(p('summary_emoji').format(emoji=emoji_usage))
+    print()
+    print(p('summary_master_name').format(name=master_name or '(empty)'))
+    print(p('summary_master_nicknames').format(nicknames=', '.join(master_nicknames) if master_nicknames else '(empty)'))
+    print(p('summary_timezone').format(tz=timezone))
+    print(p('summary_labels').format(labels=', '.join(labels) if labels else '(empty)'))
+    print()
+
+    # Step 5: Confirm
+    while True:
+        answer = input(p('confirm_write')).strip().lower()
+        if answer in ['', 'y', 'yes']:
+            do_write = True
+            break
+        elif answer in ['n', 'no']:
+            do_write = False
+            break
+        else:
+            print("❌ " + p('invalid_choice'))
+
+    if not do_write:
+        print()
+        log(p('confirm_no'), "INFO")
+        return
+
+    # Step 6: Write configuration to persona.yaml
+    log(p('writing'), "STEP")
+
+    config_data = {
+        "agent": {
+            "name": agent_name or DEFAULT_AGENT_NAME,
+            "nickname": agent_nickname,
+            "naming_mode": "default",
+            "role": agent_role or DEFAULT_AGENT_ROLE,
+            "personality": personality,
+            "core_values": core_values,
+            "interaction_style": {
+                "tone": tone,
+                "language": interaction_lang,
+                "emoji_usage": emoji_usage,
+            },
+        },
+        "master": {
+            "name": master_name,
+            "nickname": master_nicknames,
+            "timezone": timezone,
+            "labels": labels,
+        },
+    }
+
+    persona_path = project_root / "config" / "persona.yaml"
+    persona_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(persona_path, "w", encoding="utf-8") as f:
+        yaml.dump(config_data, f, allow_unicode=True, sort_keys=False)
+
+    log(p('config_written').format(path=str(persona_path)), "OK")
+
+    # Step 7: Initialize soul PAD state
+    log(p('initializing_soul'), "STEP")
+    soul_state_path = project_root / "data" / "soul" / "soul_variable" / "state_vector.json"
+    soul_state_dir = soul_state_path.parent
+    soul_state_dir.mkdir(parents=True, exist_ok=True)
+
+    default_state = get_default_pad_state()
+    soul_state_path.write_text(
+        json.dumps(default_state, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+    log(p('soul_initialized'), "OK")
+
+    # Step 8: Update identity files
+    log(p('updating_identity'), "STEP")
+    initialize_identity(project_root, project_root, verbose=True)
+
+    log(p('complete'), "OK")
+    print()
 
 
 # log and safe_file_stem imported from common
@@ -417,6 +796,105 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
     return True
 
 
+def check_and_initialize_configs(project_root: Path) -> None:
+    """Check for existing soul and master configs and prompt for initialization.
+
+    - First-time install: force initialization
+    - Existing configs: ask user if they want to reset
+    - Always re-creates defaults if user agrees
+    """
+    config_loader = ConfigLoader(project_root)
+    persona_path = project_root / "config" / "persona.yaml"
+    soul_state_path = project_root / "data" / "soul" / "soul_variable" / "state_vector.json"
+
+    # Check existence
+    has_master_config = persona_path.exists() and config_loader.is_config_valid()
+    has_soul_state = soul_state_path.exists()
+
+    if not has_master_config and not has_soul_state:
+        log("检测到首次安装，开始初始化配置...", "STEP")
+        do_initialize = True
+    else:
+        # Build dynamic prompt based on what exists
+        if has_master_config and has_soul_state:
+            prompt = "检测到已存在的灵魂状态和用户配置，是否要重新初始化？[y/N]: "
+        elif not has_soul_state:
+            prompt = "检测到已存在用户配置，但缺少灵魂状态，是否初始化灵魂状态？[y/N]: "
+        else:
+            prompt = "检测到已存在灵魂状态，但缺少用户配置，是否重新初始化？[y/N]: "
+
+        while True:
+            answer = input(prompt).strip().lower()
+            if answer in ["y", "yes"]:
+                do_initialize = True
+                break
+            elif answer in ["n", "no", ""]:
+                do_initialize = False
+                break
+            else:
+                print("❌ 无效选项，请输入 y 或 n")
+
+    if not do_initialize:
+        if has_master_config and has_soul_state:
+            log("保留现有配置，继续安装", "INFO")
+        elif not has_soul_state:
+            log("跳过灵魂状态初始化，继续安装\n提示：后续可重新运行安装脚本初始化", "INFO")
+        else:
+            log("跳过用户配置初始化，继续安装\n提示：后续可重新运行安装脚本初始化", "INFO")
+        return
+
+    # Ask whether to use interactive configuration wizard
+    while True:
+        answer = input(PROMPTS['zh']['use_interactive_wizard']).strip().lower()
+        if answer in ["", "y", "yes"]:
+            # Run interactive wizard
+            run_interactive_config_wizard(project_root)
+            return
+        elif answer in ["n", "no"]:
+            # Use traditional method: create default and open editor
+            break
+        else:
+            print("❌ 无效选项，请输入 y 或 n")
+
+    # Step 1: Initialize master configuration (traditional method)
+    log("初始化用户配置 (master)...", "STEP")
+    create_default_persona(persona_path)
+
+    # Ask to open editor
+    while True:
+        answer = input("是否现在打开编辑器配置用户信息？[Y/n]: ").strip().lower()
+        if answer in ["", "y", "yes"]:
+            if open_file_in_editor(persona_path):
+                log(f"已在默认编辑器中打开 {persona_path}", "OK")
+            else:
+                log(f"无法自动打开，请手动编辑: {persona_path}", "WARN")
+            break
+        elif answer in ["n", "no"]:
+            log(f"配置文件位置: {persona_path}，你可以稍后编辑", "INFO")
+            break
+        else:
+            print("❌ 无效选项，请输入 y 或 n")
+
+    # Step 2: Initialize soul PAD state
+    log("初始化灵魂 PAD 情感状态...", "STEP")
+    soul_state_dir = soul_state_path.parent
+    soul_state_dir.mkdir(parents=True, exist_ok=True)
+
+    default_state = get_default_pad_state()
+    soul_state_path.write_text(
+        json.dumps(default_state, indent=2, ensure_ascii=False),
+        encoding="utf-8"
+    )
+    log("已初始化默认 PAD 情感状态向量", "OK")
+
+    # Step 3: Re-initialize identity files
+    log("更新身份档案...", "STEP")
+    initialize_identity(project_root, project_root, verbose=True)
+
+    log("配置初始化完成", "OK")
+    print()
+
+
 def main():
     epilog = """
 示例用法:
@@ -442,6 +920,9 @@ def main():
     parser.add_argument("--scope", type=str, choices=["current", "global"], help="OpenClaw 装载范围")
 
     args = parser.parse_args()
+
+    # Check and initialize soul and master configurations
+    check_and_initialize_configs(PROJECT_ROOT)
 
     if args.persona:
         generate_persona_package(name=args.name)

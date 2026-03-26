@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-AgentSoul is a general-purpose AI Agent personality framework. It provides a configurable personality system for AI assistants with:
+AgentSoul is a general-purpose AI Agent personality framework. It provides:
 - Configurable AI identity and user profile
 - PAD (Pleasure-Arousal-Dominance) emotion model for affective computing
 - Hierarchical memory management system
-- **MCP Service** exposes personality and memory capabilities via Model Context Protocol
-- **OpenClaw** deep integration support
+- MCP Service exposing personality and memory capabilities via Model Context Protocol
+- OpenClaw deep integration support
 
 ## Common Commands
 
@@ -39,7 +39,7 @@ python3 install.py --openclaw --scope global
 
 ### Development
 ```bash
-# Run all tests with pytest
+# Run all tests
 python3 -m pytest tests/ -v
 
 # Run a single test file
@@ -69,20 +69,27 @@ AgentSoul/
 │   ├── path_compat.py            # Path compatibility utilities
 │   ├── openclaw_installer.py     # OpenClaw integration installer
 │   ├── SKILL.md                  # Top-level personality rules & security policy
-│   ├── soul_base.md              # PAD affective computing engine
+│   ├── soul_base.md              # PAD affective computing engine rules
 │   ├── memory_base.md            # Memory system rules
 │   ├── master_base.md            # User profile rules
-│   ├── secure_base.md            # Security protocol (PROTECTED)
+│   ├── secure_base.md            # Security protocol (PROTECTED level)
 │   ├── skills_base.md            # Skill system rules
 │   └── tasks_base.md             # Task scheduling rules
 ├── mcp-server/                   # MCP service implementation (TypeScript)
+│   ├── src/
+│   │   ├── index.ts              # MCP service entry
+│   │   ├── types.ts              # Type definitions
+│   │   ├── storage.ts            # Storage utilities
+│   │   └── tools/
+│   │       ├── soul.ts           # Soul/personality tools
+│   │       └── memory.ts         # Memory tools
 ├── scripts/
 │   ├── scan_privacy.py           # Privacy scanning tool
-│   └── migrate_from_xiaonuan.py  # Migration tool from old projects
+│   └── migrate_from_xiaonuan.py  # Migration tool
 ├── tests/
 │   └── test_agent_soul.py        # Unit tests
-├── common/                       # Common utilities (logging, etc)
-├── README.md                     # Project README
+├── common/
+│   └── __init__.py               # Common utilities (logging, etc)
 └── install.py                    # Main installation script
 ```
 
@@ -103,12 +110,23 @@ AgentSoul/
 
 3. **Installation Script** (`install.py`):
    - Creates identity profile files in `data/identity/`
+   - Interactive bilingual configuration wizard for guided setup
    - Automates MCP server installation (Node.js/TypeScript)
    - Supports OpenClaw workspace integration
+   - Bilingual (Chinese/English) interactive selection for all configurable fields
 
 4. **MCP Server** (`mcp-server/`):
    - Exposes personality and memory tools via Model Context Protocol
-   - Available tools: `get_persona_config`, `get_soul_state`, `update_soul_state`, `read_memory_day`, `write_memory_day`, `read_memory_topic`, `write_memory_topic`, etc.
+   - Available tools:
+     - `get_persona_config`: Get current persona configuration
+     - `get_soul_state`: Read current PAD emotion state
+     - `update_soul_state`: Update emotion state
+     - `read_memory_day`: Read daily memory by date
+     - `write_memory_day`: Write daily memory
+     - `read_memory_topic`: Read topic memory
+     - `write_memory_topic`: Write topic memory
+     - `list_memory_topics`: List memory topics
+     - `archive_memory_topic`: Archive a memory topic
 
 ### Security Model
 
@@ -122,29 +140,62 @@ The framework enforces a strict 3-level security model:
 ## Configuration
 
 ### Persona Configuration (`config/persona.yaml`)
-Edit to customize AI and user identity:
-- `agent.name`: Agent name
-- `agent.nickname`: Agent nickname
-- `agent.role`: Agent role description
-- `agent.personality`: List of personality traits
-- `agent.core_values`: List of core values
-- `master.name`: User name (optional)
-- `master.nickname`: User nicknames (optional)
-- `master.timezone`: User timezone (default: Asia/Shanghai)
+```yaml
+agent:
+  name: AgentName                # Agent's name
+  nickname: ''                   # Agent's nickname
+  role: AI Assistant             # Role description
+  personality:                   # List of personality traits
+    - friendly
+    - professional
+  core_values:                   # List of core values
+    - user_privacy_protection
+  interaction_style:
+    tone: neutral                # neutral/friendly/professional/casual
+    language: chinese            # chinese/english
+    emoji_usage: minimal         # minimal/moderate/frequent
+
+master:
+  name: ''                       # User's name (optional)
+  nickname: []                   # List of user nicknames (optional)
+  timezone: Asia/Shanghai        # User's timezone
+  labels: []                     # User's labels/interests
+```
 
 ### Behavior Configuration (`config/behavior.yaml`)
-Controls feature toggles and runtime behavior:
-- `enabled`: Enable/disable AgentSoul
-- `auto_memory`: Automatic memory updates
-- `emotional_response`: Enable emotional responses
-- `task_scheduling`: Enable task scheduling
-- `memory_daily_summary`: Automatic daily memory summary
-- `forbidden_topics`: List of forbidden discussion topics
-- `allowed_topics`: List of allowed discussion topics (empty = all allowed)
+```yaml
+enabled: true                    # Enable/disable AgentSoul
+auto_memory: true               # Automatic memory updates
+emotional_response: true        # Enable emotional responses
+task_scheduling: true           # Enable task scheduling
+memory_daily_summary: true      # Automatic daily memory summary
+response_length_limit: 0        # Response length limit (0 = unlimited)
+forbidden_topics: []            # List of forbidden topics
+allowed_topics: []              # List of allowed topics (empty = all allowed)
+priority:                       # Behavior priority (top = higher priority)
+  - privacy_protection
+  - task_completion
+  - emotional_support
+  - professional_assistance
+```
 
-## Output Generation
+## Installation Flow
 
-After installation, the script generates:
-- `agent-persona.md`: Portable persona file for Claude Desktop/Trae/etc
-- `.cursorrules`: Auto-loaded by Cursor editor
-- `.windsurfrules`: Auto-loaded by Windsurf editor
+1. When `install.py` starts, it first runs `check_and_initialize_configs()`:
+   - Detects if existing soul and master configurations exist
+   - If neither exists (first-time install): forces initialization
+   - If some exist: asks user whether to re-initialize
+   - If initialization is confirmed: offers choice of interactive configuration wizard
+
+2. Interactive configuration wizard (`run_interactive_config_wizard()`):
+   - Language selection (Chinese/English)
+   - Guides through all agent configuration fields
+   - Uses numbered selection for enum-style choices (no free text input, avoids errors)
+   - Bilingual display names for all options
+   - Guides through all master configuration fields
+   - Shows summary before writing
+   - Writes directly to `config/persona.yaml`
+   - Initializes default PAD soul state
+   - Updates identity profiles via `initialize_identity()`
+
+3. Proceeds with selected installation mode (generate persona, install MCP, or install OpenClaw)
