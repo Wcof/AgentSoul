@@ -288,8 +288,8 @@ def prompt_with_default(prompt_key: str, default: str, lang: str) -> str:
     # Verify prompt key exists
     assert prompt_key in PROMPTS[lang], f"Invalid prompt key: {prompt_key}"
     default_label = "默认" if lang == 'zh' else "default"
-    print(f"{PROMPTS[lang][prompt_key]} ({default_label}: {default}): ")
-    raw_input = input("> ")
+    prompt_text = f"{PROMPTS[lang][prompt_key]} ({default_label}: {default})\n> "
+    raw_input = input(prompt_text)
     user_input = raw_input.strip()
 
     # Case 1: User pressed Enter directly (no input at all)
@@ -500,11 +500,9 @@ def generate_persona_package(name: Optional[str] = None) -> None:
     ai = persona.get("ai", {})
     master = persona.get("master", {})
 
-    generated_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    content = f"""# AgentSoul · 人格框架规则
 
-content = f"""# AgentSoul · 人格框架规则
-
-> 生成时间：{generated_time}
+> 生成时间：{datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 ## 🔴 MCP 强制调用要求
 

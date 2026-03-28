@@ -1,39 +1,52 @@
-// AgentSoul MCP - Storage utilities
+/**
+ * @fileoverview AgentSoul MCP - 存储工具模块
+ * @description 提供数据持久化功能，包括人格配置读取、灵魂状态管理、时间记忆和主题记忆的读写操作
+ */
 
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import yaml from 'js-yaml';
+import { safePath, readFile } from './lib/utils.js';
+import { PROJECT_ROOT } from './lib/paths.js';
 import { SoulState, PersonaConfig } from './types.js';
 
-export class StorageManager {
-  private projectRoot: string;
+/** 原始人格配置接口，用于向后兼容不同版本的配置格式 */
+interface RawPersonaConfig {
+  agent?: Record<string, unknown>;
+  ai?: Record<string, unknown>;
+  persona?: {
+    ai?: Record<string, unknown>;
+    master?: Record<string, unknown>;
+  };
+  master?: Record<string, unknown>;
+}
 
+/** 数据根目录路径 */
+const DATA_ROOT = path.join(PROJECT_ROOT, 'data');
+
+/**
+ * 存储管理器类
+ * 负责 AgentSoul 所有数据的持久化操作，包括人格配置、灵魂状态和各种记忆
+ */
+export class StorageManager {
+  /**
+   * 构造函数
+   * @param projectRoot - 可选的项目根目录，用于向后兼容
+   */
   constructor(projectRoot?: string) {
-    if (projectRoot) {
-      this.projectRoot = projectRoot;
-    } else {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
-      this.projectRoot = path.resolve(__dirname, '../../..');
-    }
+    // 保留构造函数用于向后兼容性 - 如果提供则覆盖，否则使用 paths 中的 PROJECT_ROOT
   }
 
   /**
-   * Validate that the resolved path stays within project data directory
-   * to prevent path traversal attacks
+   * 读取人格配置文件
+   * 支持多种配置格式，从 YAML 文件中解析并标准化为 PersonaConfig 格式
+   * @returns 标准化后的人格配置对象
    */
-  private validateDataPath(requestedPath: string): boolean {
-    const dataRoot = path.join(this.projectRoot, 'data');
-    const resolved = path.resolve(requestedPath);
-    return resolved.startsWith(dataRoot);
-  }
-
-  // Read persona configuration
   readPersonaConfig(): PersonaConfig {
-    const configPath = path.join(this.projectRoot, 'config', 'persona.yaml');
+    const configPath = path.join(PROJECT_ROOT, 'config', 'persona.yaml');
 
-    if (!fs.existsSync(configPath)) {
+    const content = readFile(configPath);
+    if (content === null) {
       return {
         ai: {
           name: 'Agent',
@@ -53,29 +66,34 @@ export class StorageManager {
       };
     }
 
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const raw = yaml.load(content) as Record<string, any>;
+    const raw = yaml.load(content) as RawPersonaConfig;
 
-    // Handle different config formats
-    let aiData: any;
-    let masterData: any;
+    let aiData: Record<string, unknown>;
+    let masterData: Record<string, unknown>;
 
-    if (raw.agent) {
-      aiData = raw.agent;
-      masterData = raw.master || {};
-    } else if (raw.persona && raw.persona.ai) {
-      aiData = raw.persona.ai;
-      masterData = raw.persona.master || {};
-    } else if (raw.ai) {
-      aiData = raw.ai;
-      masterData = raw.master || {};
+    // 检测并处理不同版本的配置格式
+    if ('agent' in raw && raw.agent) {
+      aiData = raw.agent as Record<string, unknown>;
+      masterData = (raw as { master?: Record<string, unknown> }).master || {};
+    } else if ('persona' in raw && raw.persona && 'ai' in raw.persona) {
+      aiData = raw.persona.ai as Record<string, unknown>;
+      masterData = (raw.persona as { master?: Record<string, unknown> }).master || {};
+    } else if ('ai' in raw) {
+      aiData = raw.ai as Record<string, unknown>;
+      masterData = (raw as { master?: Record<string, unknown> }).master || {};
     } else {
       aiData = { name: 'Agent' };
       masterData = {};
     }
 
-    const toList = (v: any): string[] => {
-      if (Array.isArray(v)) return v.filter(x => typeof x === 'string' && x.trim());
+    /**
+     * 将值转换为字符串数组
+     * 支持数组、逗号分隔字符串和单个字符串格式
+     * @param v - 输入值
+     * @returns 标准化的字符串数组
+     */
+    const toList = (v: unknown): string[] => {
+      if (Array.isArray(v)) return (v as string[]).filter(x => typeof x === 'string' && x.trim());
       if (typeof v === 'string') {
         if (v.includes(',')) {
           return v.split(',').map(x => x.trim()).filter(x => x);
@@ -85,10 +103,17 @@ export class StorageManager {
       return [];
     };
 
-    const safeGet = (obj: any, key: string, defaultValue: any): any => {
+    /**
+     * 安全地获取对象属性值
+     * @param obj - 目标对象
+     * @param key - 属性键
+     * @param defaultValue - 默认值
+     * @returns 属性值或默认值
+     */
+    const safeGet = <T>(obj: Record<string, unknown> | undefined, key: string, defaultValue: T): T => {
       if (!obj || typeof obj !== 'object') return defaultValue;
       const val = obj[key];
-      return val === undefined || val === null ? defaultValue : val;
+      return val === undefined || val === null ? defaultValue : val as T;
     };
 
     return {
@@ -110,25 +135,34 @@ export class StorageManager {
     };
   }
 
-  // Read base rule file
+  /**
+   * 读取基础规则文件
+   * @param filename - 规则文件名
+   * @returns 文件内容或 null
+   */
   readBaseRule(filename: string): string | null {
-    const rulePath = path.join(this.projectRoot, 'src', filename);
-    if (!fs.existsSync(rulePath)) {
-      return null;
-    }
-    return fs.readFileSync(rulePath, 'utf-8');
+    const rulePath = path.join(PROJECT_ROOT, 'src', filename);
+    return readFile(rulePath);
   }
 
-  // Get soul state path
+  /**
+   * 获取灵魂状态文件路径
+   * @returns 灵魂状态文件的完整路径
+   */
   private getSoulStatePath(): string {
-    return path.join(this.projectRoot, 'data', 'soul', 'soul_variable', 'state_vector.json');
+    return path.join(DATA_ROOT, 'soul', 'soul_variable', 'state_vector.json');
   }
 
-  // Read current soul state
+  /**
+   * 读取当前灵魂状态
+   * 如果文件不存在或解析失败，返回默认状态
+   * @returns 灵魂状态对象
+   */
   readSoulState(): SoulState {
     const statePath = this.getSoulStatePath();
 
-    if (!this.validateDataPath(statePath)) {
+    const checkedPath = safePath(statePath, DATA_ROOT);
+    if (!checkedPath) {
       console.error('Path traversal detected in readSoulState');
       return {
         pleasure: 0.3,
@@ -139,8 +173,9 @@ export class StorageManager {
       };
     }
 
-    if (!fs.existsSync(statePath)) {
-      // Return default baseline
+    const content = readFile(checkedPath);
+    if (content === null) {
+      // 返回默认基准状态
       return {
         pleasure: 0.3,
         arousal: 0.2,
@@ -151,7 +186,6 @@ export class StorageManager {
     }
 
     try {
-      const content = fs.readFileSync(statePath, 'utf-8');
       return JSON.parse(content) as SoulState;
     } catch (e) {
       return {
@@ -164,22 +198,26 @@ export class StorageManager {
     }
   }
 
-  // Write soul state
+  /**
+   * 写入灵魂状态
+   * @param state - 要保存的灵魂状态对象
+   * @returns 写入是否成功
+   */
   writeSoulState(state: SoulState): boolean {
     const statePath = this.getSoulStatePath();
 
-    if (!this.validateDataPath(statePath)) {
+    const checkedPath = safePath(statePath, DATA_ROOT);
+    if (!checkedPath) {
       console.error('Path traversal detected in writeSoulState');
       return false;
     }
 
-    const dir = path.dirname(statePath);
+    const dir = path.dirname(checkedPath);
 
     try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf-8');
+      // 使用 recursive: true 的 mkdir 是幂等的 - 不需要先检查目录是否存在
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(checkedPath, JSON.stringify(state, null, 2), 'utf-8');
       return true;
     } catch (e) {
       console.error('Failed to write soul state:', e);
@@ -187,42 +225,56 @@ export class StorageManager {
     }
   }
 
-  // Generic time-based memory path getter
+  /**
+   * 获取基于时间的记忆文件路径
+   * @param period - 时间周期类型
+   * @param identifier - 标识符（日期、周次、月份或年份）
+   * @returns 记忆文件的完整路径
+   */
   private getTimeMemoryPath(period: 'day' | 'week' | 'month' | 'year', identifier: string): string {
-    return path.join(this.projectRoot, 'data', 'memory', period, `${identifier}.md`);
+    return path.join(DATA_ROOT, 'memory', period, `${identifier}.md`);
   }
 
-  // Read time-based memory (generic)
+  /**
+   * 读取基于时间的记忆（通用方法）
+   * @param period - 时间周期类型
+   * @param identifier - 标识符
+   * @returns 记忆内容或 null
+   */
   private readTimeMemory(period: 'day' | 'week' | 'month' | 'year', identifier: string): string | null {
     const filePath = this.getTimeMemoryPath(period, identifier);
 
-    if (!this.validateDataPath(filePath)) {
+    const checkedPath = safePath(filePath, DATA_ROOT);
+    if (!checkedPath) {
       console.error(`Path traversal detected in read${period}Memory`);
       return null;
     }
 
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
-    return fs.readFileSync(filePath, 'utf-8');
+    return readFile(checkedPath);
   }
 
-  // Write time-based memory (generic)
+  /**
+   * 写入基于时间的记忆（通用方法）
+   * @param period - 时间周期类型
+   * @param identifier - 标识符
+   * @param content - 要写入的内容
+   * @returns 写入是否成功
+   */
   private writeTimeMemory(period: 'day' | 'week' | 'month' | 'year', identifier: string, content: string): boolean {
     const filePath = this.getTimeMemoryPath(period, identifier);
 
-    if (!this.validateDataPath(filePath)) {
+    const checkedPath = safePath(filePath, DATA_ROOT);
+    if (!checkedPath) {
       console.error(`Path traversal detected in write${period}Memory`);
       return false;
     }
 
-    const dir = path.dirname(filePath);
+    const dir = path.dirname(checkedPath);
 
     try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(filePath, content, 'utf-8');
+      // 使用 recursive: true 的 mkdir 是幂等的 - 不需要先检查目录是否存在
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(checkedPath, content, 'utf-8');
       return true;
     } catch (e) {
       console.error(`Failed to write ${period} memory:`, e);
@@ -230,90 +282,149 @@ export class StorageManager {
     }
   }
 
-  // Daily memory specific methods (public API preserved)
+  /**
+   * 读取日记忆
+   * @param date - 日期字符串
+   * @returns 日记忆内容或 null
+   */
   readDailyMemory(date: string): string | null {
     return this.readTimeMemory('day', date);
   }
 
+  /**
+   * 写入日记忆
+   * @param date - 日期字符串
+   * @param content - 记忆内容
+   * @returns 写入是否成功
+   */
   writeDailyMemory(date: string, content: string): boolean {
     return this.writeTimeMemory('day', date, content);
   }
 
-  // Weekly memory
+  /**
+   * 读取周记忆
+   * @param yearWeek - 年-周字符串
+   * @returns 周记忆内容或 null
+   */
   readWeeklyMemory(yearWeek: string): string | null {
     return this.readTimeMemory('week', yearWeek);
   }
 
+  /**
+   * 写入周记忆
+   * @param yearWeek - 年-周字符串
+   * @param content - 记忆内容
+   * @returns 写入是否成功
+   */
   writeWeeklyMemory(yearWeek: string, content: string): boolean {
     return this.writeTimeMemory('week', yearWeek, content);
   }
 
-  // Monthly memory
+  /**
+   * 读取月记忆
+   * @param yearMonth - 年-月字符串
+   * @returns 月记忆内容或 null
+   */
   readMonthlyMemory(yearMonth: string): string | null {
     return this.readTimeMemory('month', yearMonth);
   }
 
+  /**
+   * 写入月记忆
+   * @param yearMonth - 年-月字符串
+   * @param content - 记忆内容
+   * @returns 写入是否成功
+   */
   writeMonthlyMemory(yearMonth: string, content: string): boolean {
     return this.writeTimeMemory('month', yearMonth, content);
   }
 
-  // Yearly memory
+  /**
+   * 读取年记忆
+   * @param year - 年份字符串
+   * @returns 年记忆内容或 null
+   */
   readYearlyMemory(year: string): string | null {
     return this.readTimeMemory('year', year);
   }
 
+  /**
+   * 写入年记忆
+   * @param year - 年份字符串
+   * @param content - 记忆内容
+   * @returns 写入是否成功
+   */
   writeYearlyMemory(year: string, content: string): boolean {
     return this.writeTimeMemory('year', year, content);
   }
 
-  // Get topic memory path
+  /**
+   * 获取主题记忆文件路径
+   * @param topic - 主题名称
+   * @returns 主题记忆文件的完整路径
+   */
   private getTopicMemoryPath(topic: string): string {
-    return path.join(this.projectRoot, 'data', 'memory', 'topic', `${topic.replace(/\//g, '_')}.md`);
+    return path.join(DATA_ROOT, 'memory', 'topic', `${topic.replace(/\//g, '_')}.md`);
   }
 
-  // Get archived topic path
+  /**
+   * 获取归档主题记忆文件路径
+   * @param topic - 主题名称
+   * @returns 归档主题记忆文件的完整路径
+   */
   private getArchivedTopicPath(topic: string): string {
-    return path.join(this.projectRoot, 'data', 'memory', 'topic', 'archive', `${topic.replace(/\//g, '_')}.md`);
+    return path.join(DATA_ROOT, 'memory', 'topic', 'archive', `${topic.replace(/\//g, '_')}.md`);
   }
 
-  // Read topic memory
+  /**
+   * 读取主题记忆
+   * 先尝试读取活跃主题，失败后尝试读取归档主题
+   * @param topic - 主题名称
+   * @returns 主题记忆内容或 null
+   */
   readTopicMemory(topic: string): string | null {
     let filePath = this.getTopicMemoryPath(topic);
 
-    if (!this.validateDataPath(filePath)) {
+    let checkedPath = safePath(filePath, DATA_ROOT);
+    if (!checkedPath) {
       console.error('Path traversal detected in readTopicMemory');
       return null;
     }
 
-    if (!fs.existsSync(filePath)) {
+    let content = readFile(checkedPath);
+    if (content === null) {
       filePath = this.getArchivedTopicPath(topic);
-      if (!this.validateDataPath(filePath)) {
+      checkedPath = safePath(filePath, DATA_ROOT);
+      if (!checkedPath) {
         console.error('Path traversal detected in archived readTopicMemory');
         return null;
       }
-      if (!fs.existsSync(filePath)) {
-        return null;
-      }
+      content = readFile(checkedPath);
     }
-    return fs.readFileSync(filePath, 'utf-8');
+    return content;
   }
 
-  // Write topic memory
+  /**
+   * 写入主题记忆
+   * @param topic - 主题名称
+   * @param content - 记忆内容
+   * @returns 写入是否成功
+   */
   writeTopicMemory(topic: string, content: string): boolean {
     const filePath = this.getTopicMemoryPath(topic);
 
-    if (!this.validateDataPath(filePath)) {
+    const checkedPath = safePath(filePath, DATA_ROOT);
+    if (!checkedPath) {
       console.error('Path traversal detected in writeTopicMemory');
       return false;
     }
 
-    const dir = path.dirname(filePath);
+    const dir = path.dirname(checkedPath);
 
     try {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(filePath, content, 'utf-8');
+      // 使用 recursive: true 的 mkdir 是幂等的 - 不需要先检查目录是否存在
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(checkedPath, content, 'utf-8');
       return true;
     } catch (e) {
       console.error('Failed to write topic memory:', e);
@@ -321,13 +432,17 @@ export class StorageManager {
     }
   }
 
-  // List all memory topics
+  /**
+   * 列出所有记忆主题
+   * @returns 包含主题名称和状态的数组，按名称排序
+   */
   listMemoryTopics(): { name: string; status: 'active' | 'archived' }[] {
-    const activeDir = path.join(this.projectRoot, 'data', 'memory', 'topic');
-    const archiveDir = path.join(this.projectRoot, 'data', 'memory', 'topic', 'archive');
+    const activeDir = path.join(DATA_ROOT, 'memory', 'topic');
+    const archiveDir = path.join(DATA_ROOT, 'memory', 'topic', 'archive');
 
     const results: { name: string; status: 'active' | 'archived' }[] = [];
 
+    // 读取活跃主题目录
     if (fs.existsSync(activeDir)) {
       const files = fs.readdirSync(activeDir);
       for (const file of files) {
@@ -340,6 +455,7 @@ export class StorageManager {
       }
     }
 
+    // 读取归档主题目录
     if (fs.existsSync(archiveDir)) {
       const files = fs.readdirSync(archiveDir);
       for (const file of files) {
@@ -355,32 +471,39 @@ export class StorageManager {
     return results.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Archive topic
+  /**
+   * 归档主题
+   * 将活跃主题移动到归档目录
+   * @param topic - 要归档的主题名称
+   * @returns 归档是否成功
+   */
   archiveTopic(topic: string): boolean {
     const activePath = this.getTopicMemoryPath(topic);
     const archivePath = this.getArchivedTopicPath(topic);
 
-    if (!this.validateDataPath(activePath) || !this.validateDataPath(archivePath)) {
+    const checkedActive = safePath(activePath, DATA_ROOT);
+    const checkedArchive = safePath(archivePath, DATA_ROOT);
+    if (!checkedActive || !checkedArchive) {
       console.error('Path traversal detected in archiveTopic');
       return false;
     }
 
-    if (!fs.existsSync(activePath)) {
+    if (!fs.existsSync(checkedActive)) {
       console.error(`Topic ${topic} not found`);
       return false;
     }
 
     try {
-      const archiveDir = path.dirname(archivePath);
-      if (!fs.existsSync(archiveDir)) {
-        fs.mkdirSync(archiveDir, { recursive: true });
+      const archiveDir = path.dirname(checkedArchive);
+      // 使用 recursive: true 的 mkdir 是幂等的 - 不需要先检查目录是否存在
+      fs.mkdirSync(archiveDir, { recursive: true });
+
+      // 如果归档文件已存在，先删除
+      if (fs.existsSync(checkedArchive)) {
+        fs.unlinkSync(checkedArchive);
       }
 
-      if (fs.existsSync(archivePath)) {
-        fs.unlinkSync(archivePath);
-      }
-
-      fs.renameSync(activePath, archivePath);
+      fs.renameSync(checkedActive, checkedArchive);
       return true;
     } catch (e) {
       console.error('Failed to archive topic:', e);

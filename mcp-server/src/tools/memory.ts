@@ -1,5 +1,7 @@
-// AgentSoul MCP - Memory storage tools
-// Handles hierarchical memory: daily/weekly/monthly/yearly time slices and topic-based memory
+/**
+ * @fileoverview 分层记忆存储工具模块
+ * @description 处理分层记忆系统，包括日/周/月/年的时间切片记忆和主题记忆的读写操作
+ */
 
 import { z } from 'zod';
 import { StorageManager } from '../storage.js';
@@ -7,7 +9,14 @@ import { ToolResponse } from '../types.js';
 
 const storage = new StorageManager();
 
-// Generic response helpers to eliminate duplication
+/**
+ * 通用读取响应生成函数，消除重复代码
+ * @param found - 是否找到对应记忆内容
+ * @param key - 响应数据的键名（如 date, year_week 等）
+ * @param value - 键值
+ * @param content - 记忆内容
+ * @returns 格式化的工具响应
+ */
 function makeReadResponse<T>(found: boolean, key: string, value: string, content: string | null): ToolResponse {
   const data = found
     ? { found, [key]: value, content }
@@ -16,31 +25,43 @@ function makeReadResponse<T>(found: boolean, key: string, value: string, content
     content: [
       {
         type: 'text',
-        text: JSON.stringify(data, null, 2),
+        text: JSON.stringify(data),
       },
     ],
   };
 }
 
+/**
+ * 通用写入响应生成函数
+ * @param success - 写入操作是否成功
+ * @param key - 响应数据的键名
+ * @param value - 键值
+ * @param append - 是否是追加模式
+ * @returns 格式化的工具响应
+ */
 function makeWriteResponse(success: boolean, key: string, value: string, append: boolean): ToolResponse {
   return {
     content: [
       {
         type: 'text',
-        text: JSON.stringify(
-          {
-            success,
-            [key]: value,
-            mode: append ? 'append' : 'overwrite',
-          },
-          null,
-          2
-        ),
+        text: JSON.stringify({
+          success,
+          [key]: value,
+          mode: append ? 'append' : 'overwrite',
+        }),
       },
     ],
   };
 }
 
+/**
+ * 处理追加模式的内容拼接逻辑
+ * @param identifier - 记忆标识符
+ * @param content - 新内容
+ * @param append - 是否追加模式
+ * @param readFn - 读取已有内容的函数
+ * @returns 处理后的完整内容
+ */
 function handleAppendRead(
   identifier: string,
   content: string,
@@ -48,6 +69,7 @@ function handleAppendRead(
   readFn: (id: string) => string | null
 ): string {
   let fullContent = content;
+  // 如果是追加模式，读取现有内容并与新内容拼接
   if (append) {
     const existing = readFn(identifier);
     if (existing !== null) {
@@ -57,11 +79,16 @@ function handleAppendRead(
   return fullContent;
 }
 
-// Read daily memory for a specific date
+/** 读取特定日期的记忆的参数定义 */
 export const ReadMemoryDaySchema = z.object({
   date: z.string().describe('Date in YYYY-MM-DD format'),
 });
 
+/**
+ * 处理读取特定日期记忆的函数
+ * @param params - 包含日期的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleReadMemoryDay(
   params: z.infer<typeof ReadMemoryDaySchema>
 ): Promise<ToolResponse> {
@@ -69,13 +96,18 @@ export async function handleReadMemoryDay(
   return makeReadResponse(content !== null, 'date', params.date, content);
 }
 
-// Write daily memory
+/** 写入特定日期记忆的参数定义 */
 export const WriteMemoryDaySchema = z.object({
   date: z.string().describe('Date in YYYY-MM-DD format'),
   content: z.string().describe('Content to write'),
   append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
 });
 
+/**
+ * 处理写入特定日期记忆的函数
+ * @param params - 包含日期、内容、追加标记的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleWriteMemoryDay(
   params: z.infer<typeof WriteMemoryDaySchema>
 ): Promise<ToolResponse> {
@@ -85,11 +117,16 @@ export async function handleWriteMemoryDay(
   return makeWriteResponse(success, 'date', date, append);
 }
 
-// Read weekly memory for a specific week
+/** 读取特定周记忆的参数定义 */
 export const ReadMemoryWeekSchema = z.object({
   year_week: z.string().describe('Week in YYYY-WW format (e.g. 2024-12)'),
 });
 
+/**
+ * 处理读取特定周记忆的函数
+ * @param params - 包含年周的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleReadMemoryWeek(
   params: z.infer<typeof ReadMemoryWeekSchema>
 ): Promise<ToolResponse> {
@@ -97,13 +134,18 @@ export async function handleReadMemoryWeek(
   return makeReadResponse(content !== null, 'year_week', params.year_week, content);
 }
 
-// Write weekly memory
+/** 写入特定周记忆的参数定义 */
 export const WriteMemoryWeekSchema = z.object({
   year_week: z.string().describe('Week in YYYY-WW format (e.g. 2024-12)'),
   content: z.string().describe('Content to write'),
   append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
 });
 
+/**
+ * 处理写入特定周记忆的函数
+ * @param params - 包含年周、内容、追加标记的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleWriteMemoryWeek(
   params: z.infer<typeof WriteMemoryWeekSchema>
 ): Promise<ToolResponse> {
@@ -113,11 +155,16 @@ export async function handleWriteMemoryWeek(
   return makeWriteResponse(success, 'year_week', year_week, append);
 }
 
-// Read monthly memory for a specific month
+/** 读取特定月记忆的参数定义 */
 export const ReadMemoryMonthSchema = z.object({
   year_month: z.string().describe('Month in YYYY-MM format (e.g. 2024-03)'),
 });
 
+/**
+ * 处理读取特定月记忆的函数
+ * @param params - 包含年月的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleReadMemoryMonth(
   params: z.infer<typeof ReadMemoryMonthSchema>
 ): Promise<ToolResponse> {
@@ -125,13 +172,18 @@ export async function handleReadMemoryMonth(
   return makeReadResponse(content !== null, 'year_month', params.year_month, content);
 }
 
-// Write monthly memory
+/** 写入特定月记忆的参数定义 */
 export const WriteMemoryMonthSchema = z.object({
   year_month: z.string().describe('Month in YYYY-MM format (e.g. 2024-03)'),
   content: z.string().describe('Content to write'),
   append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
 });
 
+/**
+ * 处理写入特定月记忆的函数
+ * @param params - 包含年月、内容、追加标记的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleWriteMemoryMonth(
   params: z.infer<typeof WriteMemoryMonthSchema>
 ): Promise<ToolResponse> {
@@ -141,11 +193,16 @@ export async function handleWriteMemoryMonth(
   return makeWriteResponse(success, 'year_month', year_month, append);
 }
 
-// Read yearly memory for a specific year
+/** 读取特定年记忆的参数定义 */
 export const ReadMemoryYearSchema = z.object({
   year: z.string().describe('Year in YYYY format (e.g. 2024)'),
 });
 
+/**
+ * 处理读取特定年记忆的函数
+ * @param params - 包含年份的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleReadMemoryYear(
   params: z.infer<typeof ReadMemoryYearSchema>
 ): Promise<ToolResponse> {
@@ -153,13 +210,18 @@ export async function handleReadMemoryYear(
   return makeReadResponse(content !== null, 'year', params.year, content);
 }
 
-// Write yearly memory
+/** 写入特定年记忆的参数定义 */
 export const WriteMemoryYearSchema = z.object({
   year: z.string().describe('Year in YYYY format (e.g. 2024)'),
   content: z.string().describe('Content to write'),
   append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
 });
 
+/**
+ * 处理写入特定年记忆的函数
+ * @param params - 包含年份、内容、追加标记的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleWriteMemoryYear(
   params: z.infer<typeof WriteMemoryYearSchema>
 ): Promise<ToolResponse> {
@@ -169,102 +231,59 @@ export async function handleWriteMemoryYear(
   return makeWriteResponse(success, 'year', year, append);
 }
 
-// Read topic memory
+/** 读取主题记忆的参数定义 */
 export const ReadMemoryTopicSchema = z.object({
   topic: z.string().describe('Topic name'),
 });
 
+/**
+ * 处理读取主题记忆的函数
+ * @param params - 包含主题名称的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleReadMemoryTopic(
   params: z.infer<typeof ReadMemoryTopicSchema>
 ): Promise<ToolResponse> {
   const content = storage.readTopicMemory(params.topic);
-
-  if (content === null) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              found: false,
-              topic: params.topic,
-              content: null,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            found: true,
-            topic: params.topic,
-            content: content,
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
+  return makeReadResponse(content !== null, 'topic', params.topic, content);
 }
 
-// Write topic memory
+/** 写入主题记忆的参数定义 */
 export const WriteMemoryTopicSchema = z.object({
   topic: z.string().describe('Topic name'),
   content: z.string().describe('Content to write'),
   append: z.boolean().optional().default(false).describe('Append to existing content instead of overwriting'),
 });
 
+/**
+ * 处理写入主题记忆的函数
+ * @param params - 包含主题名称、内容、追加标记的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleWriteMemoryTopic(
   params: z.infer<typeof WriteMemoryTopicSchema>
 ): Promise<ToolResponse> {
   const { topic, content, append } = params;
-
-  let fullContent = content;
-  if (append) {
-    const existing = storage.readTopicMemory(topic);
-    if (existing !== null) {
-      fullContent = existing + '\n\n' + content;
-    }
-  }
-
+  const fullContent = handleAppendRead(topic, content, append, storage.readTopicMemory.bind(storage));
   const success = storage.writeTopicMemory(topic, fullContent);
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(
-          {
-            success,
-            topic,
-            mode: append ? 'append' : 'overwrite',
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  };
+  return makeWriteResponse(success, 'topic', topic, append);
 }
 
-// List memory topics by status
+/** 列出记忆主题的参数定义 */
 export const ListMemoryTopicsSchema = z.object({
   status: z.enum(['active', 'archived', 'all']).optional().default('active'),
 });
 
+/**
+ * 处理列出记忆主题的函数
+ * @param params - 包含状态筛选的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleListMemoryTopics(
   params: z.infer<typeof ListMemoryTopicsSchema>
 ): Promise<ToolResponse> {
   const allTopics = storage.listMemoryTopics();
+  // 根据状态筛选主题列表，如果是 'all' 则返回全部
   const filtered = params.status === 'all'
     ? allTopics
     : allTopics.filter(t => t.status === params.status);
@@ -286,11 +305,16 @@ export async function handleListMemoryTopics(
   };
 }
 
-// Archive a topic
+/** 归档主题的参数定义 */
 export const ArchiveMemoryTopicSchema = z.object({
   topic: z.string().describe('Topic name to archive'),
 });
 
+/**
+ * 处理归档主题的函数
+ * @param params - 包含主题名称的参数对象
+ * @returns 工具响应对象
+ */
 export async function handleArchiveMemoryTopic(
   params: z.infer<typeof ArchiveMemoryTopicSchema>
 ): Promise<ToolResponse> {

@@ -1,16 +1,18 @@
 agent:
-  name: Agent
-  nickname: ''
+  name: 测试
+  nickname: demo
   naming_mode: default
-  role: AI Assistant
+  role: 测试
   personality: []
   core_values: []
   interaction_style:
     tone: neutral
     language: chinese
-    emoji_usage: minimal
+    emoji_usage: frequent
 master:
-  name: ''
-  nickname: []
+  name: ldh
+  nickname:
+  - ldh
   timezone: Asia/Shanghai
-  labels: []
+  labels:
+  - 物

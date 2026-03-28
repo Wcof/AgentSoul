@@ -80,9 +80,20 @@ AgentSoul/
 │   │   ├── index.ts              # MCP service entry
 │   │   ├── types.ts              # Type definitions
 │   │   ├── storage.ts            # Storage utilities
+│   │   ├── lib/                  # Core libraries (from soul-main)
+│   │   │   ├── core-memory.ts    # Per-agent persistent facts
+│   │   │   ├── entity-memory.ts  # Structured entity tracking
+│   │   │   ├── soul-engine.ts    # Soul Board & Ledger
+│   │   │   ├── utils.ts          # Shared utilities
+│   │   │   ├── config.ts         # Configuration
+│   │   │   └── kv-cache/         # 3-tier KV-Cache with Ebbinghaus GC
 │   │   └── tools/
 │   │       ├── soul.ts           # Soul/personality tools
-│   │       └── memory.ts         # Memory tools
+│   │       ├── memory.ts         # Memory tools
+│   │       ├── core-memory.ts     # Core memory MCP tools
+│   │       ├── entity-memory.ts   # Entity memory MCP tools
+│   │       ├── kv-cache.ts       # KV-Cache MCP tools
+│   │       └── soul-board.ts      # Soul Board & Ledger tools
 ├── scripts/
 │   ├── scan_privacy.py           # Privacy scanning tool
 │   └── migrate_from_xiaonuan.py  # Migration tool
@@ -104,9 +115,12 @@ AgentSoul/
 2. **Rule Files** (`src/*.md`):
    - Markdown files define system architecture and behavior rules
    - `SKILL.md`: Top-level personality rules, security levels, startup flow
-   - `soul_base.md`: PAD emotional space model, state transition algorithm
-   - `memory_base.md`: Daily + topic-based memory with archiving
+   - `soul_base.md`: PAD (Pleasure-Arousal-Dominance) emotional space model, state transition algorithm
+   - `memory_base.md`: Full hierarchical memory system - daily/weekly/monthly/yearly time-slice memory + topic-based memory with archiving
+   - `master_base.md`: User profile rules
    - `secure_base.md`: Security protocol definition
+   - `skills_base.md`: Skill system rules
+   - `tasks_base.md`: Task scheduling rules
 
 3. **Installation Script** (`install.py`):
    - Creates identity profile files in `data/identity/`
@@ -121,12 +135,61 @@ AgentSoul/
      - `get_persona_config`: Get current persona configuration
      - `get_soul_state`: Read current PAD emotion state
      - `update_soul_state`: Update emotion state
-     - `read_memory_day`: Read daily memory by date
+     - `get_base_rules`: Get base rules documentation with security access control
+     - `get_mcp_usage_guide`: Get complete MCP usage guide and workflow instructions
+     - `read_memory_day`: Read daily memory by date (YYYY-MM-DD)
      - `write_memory_day`: Write daily memory
+     - `read_memory_week`: Read weekly memory by week (YYYY-WW)
+     - `write_memory_week`: Write weekly memory
+     - `read_memory_month`: Read monthly memory by month (YYYY-MM)
+     - `write_memory_month`: Write monthly memory
+     - `read_memory_year`: Read yearly memory by year (YYYY)
+     - `write_memory_year`: Write yearly memory
      - `read_memory_topic`: Read topic memory
      - `write_memory_topic`: Write topic memory
-     - `list_memory_topics`: List memory topics
+     - `list_memory_topics`: List memory topics filtered by status
      - `archive_memory_topic`: Archive a memory topic
+
+### New Tools (from soul-main integration)
+
+#### Core Memory Tools
+Core memory provides per-agent persistent key-value facts that are auto-injected at boot:
+- `core_memory_read`: Read all core memory entries for an agent
+- `core_memory_write`: Write or update a key-value fact in core memory
+- `core_memory_delete`: Delete a key from core memory
+- `core_memory_list`: List all keys in core memory
+
+#### Entity Memory Tools
+Structured entity tracking for people, hardware, projects, concepts, places, and services:
+- `entity_upsert`: Create or update a structured entity
+- `entity_get`: Get a specific entity by name
+- `entity_search`: Search entities by keyword
+- `entity_list`: List all entities, optionally filtered by type
+- `entity_delete`: Delete an entity by name
+- `entity_prune`: Prune old entities not mentioned recently
+
+#### 3-Tier KV-Cache Tools
+Session cache with automatic Hot/Warm/Cold tiering and Ebbinghaus forgetting curve GC:
+- `kv_cache_save`: Save a session snapshot to the 3-tier KV-Cache
+- `kv_cache_load`: Load the most recent session snapshot with automatic token trimming
+- `kv_cache_search`: Search across KV-Cache snapshots by keyword
+- `kv_cache_list`: List all snapshots for a project
+- `kv_cache_gc`: Run garbage collection based on Ebbinghaus forgetting curve
+- `kv_cache_backend_info`: Get KV-Cache backend information and statistics
+
+#### Soul Board Tools (P2)
+Project state management and multi-agent safety:
+- `board_read`: Read the complete project board state
+- `board_update_summary`: Update the project summary
+- `board_add_decision`: Record a project decision
+- `board_claim_file`: Claim file ownership (prevents multi-agent conflicts)
+- `board_release_file`: Release all files claimed by this agent
+- `board_set_active_work`: Set the current active work task
+
+#### Ledger Tools (P2)
+Immutable work session ledger:
+- `ledger_list`: List ledger entries for a project
+- `ledger_read`: Read a specific ledger entry by ID
 
 ### Security Model
 
