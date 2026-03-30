@@ -3,7 +3,6 @@
  * @description Loads behavior configuration from behavior.yaml
  */
 
-import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { PROJECT_ROOT, DATA_ROOT } from './paths';

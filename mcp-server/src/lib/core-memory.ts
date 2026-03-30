@@ -95,7 +95,6 @@ export class CoreMemory {
     }
 
     try {
-      this.ensureDirectory();
       const content = JSON.stringify(storage, null, 2);
       fs.writeFileSync(checkedPath, content, 'utf-8');
       return true;

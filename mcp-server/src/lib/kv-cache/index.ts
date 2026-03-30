@@ -134,7 +134,6 @@ export class SoulKVCache {
     }
 
     try {
-      this.ensureDirectories();
       const content = JSON.stringify(index, null, 2);
       fs.writeFileSync(checkedPath, content, 'utf-8');
       return true;
@@ -175,7 +174,6 @@ export class SoulKVCache {
     }
 
     try {
-      this.ensureDirectories();
       const content = JSON.stringify(snapshot, null, 2);
       fs.writeFileSync(checkedPath, content, 'utf-8');
       return true;

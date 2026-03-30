@@ -58,6 +58,7 @@ interface EntityStorage {
 export class EntityMemory {
   private baseDir: string;
   private storagePath: string;
+  private cachedStorage: EntityStorage | null = null;
 
   /**
    * Constructor
@@ -86,31 +87,38 @@ export class EntityMemory {
   }
 
   /**
-   * Read entities from storage
+   * Read entities from storage (with caching)
    */
   private readStorage(): EntityStorage {
+    if (this.cachedStorage) {
+      return this.cachedStorage;
+    }
+
     const checkedPath = safePath(this.storagePath, this.baseDir);
     if (!checkedPath || !fs.existsSync(checkedPath)) {
-      return {
+      this.cachedStorage = {
         entities: {},
         version: 1,
       };
+      return this.cachedStorage;
     }
 
     try {
       const content = fs.readFileSync(checkedPath, 'utf-8');
-      return JSON.parse(content) as EntityStorage;
+      this.cachedStorage = JSON.parse(content) as EntityStorage;
+      return this.cachedStorage;
     } catch (e) {
       console.error('Error reading entity storage:', e);
-      return {
+      this.cachedStorage = {
         entities: {},
         version: 1,
       };
+      return this.cachedStorage;
     }
   }
 
   /**
-   * Write entities to storage
+   * Write entities to storage (updates cache)
    */
   private writeStorage(storage: EntityStorage): boolean {
     const checkedPath = safePath(this.storagePath, this.baseDir);
@@ -120,7 +128,7 @@ export class EntityMemory {
     }
 
     try {
-      this.ensureDirectory();
+      this.cachedStorage = storage;
       const content = JSON.stringify(storage, null, 2);
       fs.writeFileSync(checkedPath, content, 'utf-8');
       return true;
@@ -133,27 +141,19 @@ export class EntityMemory {
   /**
    * Upsert (create or update) an entity
    */
-  upsert(entity: Omit<Entity, 'created_at' | 'updated_at' | 'accessed_at'> & { attributes?: Record<string, string | number | boolean | null> }): Entity {
+  upsert(entity: Omit<Entity, 'created_at' | 'updated_at' | 'accessed_at'>): Entity {
     const storage = this.readStorage();
     const now = Date.now();
     const key = this.normalizeName(entity.name);
 
     const existing = storage.entities[key];
 
-    // Convert all attribute values to strings as required by type
-    const convertedAttributes: Record<string, string> = {};
-    if (entity.attributes) {
-      for (const [k, v] of Object.entries(entity.attributes)) {
-        convertedAttributes[k] = String(v);
-      }
-    }
-
     const updatedEntity: Entity = {
       name: entity.name,
       type: entity.type,
       description: entity.description || '',
       aliases: entity.aliases || [],
-      attributes: convertedAttributes,
+      attributes: entity.attributes || {},
       tags: entity.tags || [],
       created_at: existing ? existing.created_at : now,
       updated_at: now,
@@ -167,7 +167,7 @@ export class EntityMemory {
   }
 
   /**
-   * Get an entity by name
+   * Get an entity by name - updates accessed_at (batched by cache)
    */
   get(name: string): Entity | null {
     const storage = this.readStorage();
@@ -178,11 +178,9 @@ export class EntityMemory {
       return null;
     }
 
-    // Update accessed time
+    // Update accessed_at in cache only - will be written on next write
+    // This avoids writing to disk on every read
     entity.accessed_at = Date.now();
-    storage.entities[key] = entity;
-    this.writeStorage(storage);
-
     return entity;
   }
 
@@ -222,6 +220,13 @@ export class EntityMemory {
   }
 
   /**
+   * List entities by type
+   */
+  getByType(type: EntityType): Entity[] {
+    return this.list(type);
+  }
+
+  /**
    * List all entities, optionally filtered by type
    */
   list(type?: EntityType): Entity[] {
@@ -234,6 +239,13 @@ export class EntityMemory {
 
     // Sort by most recently updated
     return entities.sort((a, b) => b.updated_at - a.updated_at);
+  }
+
+  /**
+   * Delete an entity by name (alias for delete, backward compatibility)
+   */
+  remove(name: string, _type?: EntityType): boolean {
+    return this.delete(name);
   }
 
   /**
@@ -257,8 +269,8 @@ export class EntityMemory {
    * @returns Number of entities pruned
    */
   prune(maxAgeDays: number = 90): number {
-    const cutoffTimestamp = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
     const storage = this.readStorage();
+    const cutoffTimestamp = Date.now() - (maxAgeDays * 24 * 60 * 60 * 1000);
     const originalCount = Object.keys(storage.entities).length;
 
     for (const [key, entity] of Object.entries(storage.entities)) {
@@ -279,21 +291,6 @@ export class EntityMemory {
   count(): number {
     const storage = this.readStorage();
     return Object.keys(storage.entities).length;
-  }
-
-  /**
-   * List entities by type
-   */
-  getByType(type: EntityType): Entity[] {
-    return this.list(type);
-  }
-
-  /**
-   * Delete an entity by name (alias for delete)
-   */
-  remove(name: string, _type?: EntityType): boolean {
-    // type parameter ignored for backward compatibility
-    return this.delete(name);
   }
 }
 
