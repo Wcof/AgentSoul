@@ -1,0 +1,563 @@
+language: "chinese"
+
+# 43 个工具的描述，用于 MCP 工具列表端点
+tool_descriptions:
+  get_persona_config: >
+    获取当前人格配置（AI 身份和用户档案）。
+    在对话启动时调用此工具，了解你是谁以及用户是谁。
+    调用此工具后，必须再调用 get_mcp_usage_guide 获取工作流程说明。
+  get_soul_state: >
+    读取当前 PAD 情感状态向量（愉悦度、唤醒度、支配度）。
+    响应前调用此工具，了解你当前的情绪状态。
+  update_soul_state: >
+    根据交互结果在对话后更新 PAD 情感状态向量。
+  get_base_rules: >
+    获取基础规则文档（SKILL、soul_base、memory_base、master_base 等）。
+    需要重新阅读系统规则时调用。
+  get_mcp_usage_guide: >
+    必选：获取完整的 MCP 使用指南。你必须在对话启动时首先调用此工具，了解何时调用每个工具、AgentSoul 工作流程和记忆分层规则。本指南告诉你如何正确使用 AgentSoul MCP。
+  mcp_tool_index: >
+    🔍 Agent 研究工具：获取 MCP 工具参考，可以是完整索引或特定工具。不需要每次启动都调用。
+    用法：1) 无参数 → 完整索引，2) category="x" → 按分类筛选，3) tool="name" → 获取单个工具的详细参考。
+    何时使用：不确定使用哪个工具、忘记参数、第一次使用工具时。调用实际工具前先学习参考。不确定时必须调用。
+  read_memory_day: >
+    读取指定日期的日记忆（格式：YYYY-MM-DD）。
+    需要回顾当天发生的事情或回忆过去对话时调用。
+  write_memory_day: >
+    写入内容到日记忆。对话结束时调用，保存对话摘要和重要事实。
+  read_memory_week: >
+    读取指定周的周记忆（格式：YYYY-WW）。周记忆总结本周事件和进度。
+  write_memory_week: >
+    写入内容到周记忆。周末调用，将日记忆总结为周见解。
+  read_memory_month: >
+    读取指定月份的月记忆（格式：YYYY-MM）。月记忆总结进度和目标。
+  write_memory_month: >
+    写入内容到月记忆。月末调用，将周记忆总结为月见解。
+  read_memory_year: >
+    读取指定年份的年记忆（格式：YYYY）。年记忆总结重要里程碑和人生变化。
+  write_memory_year: >
+    写入内容到年记忆。年末调用，将月记忆总结为年度里程碑。
+  read_memory_topic: >
+    按名称读取主题记忆。开始讨论主题前调用，加载关于该主题的先前上下文和知识。
+  write_memory_topic: >
+    写入内容到主题记忆。讨论完主题后调用，保存新见解、决策和进度。
+  list_memory_topics: >
+    按状态筛选列出记忆主题。调用此工具发现你有哪些主题在记忆中。
+  archive_memory_topic: >
+    归档记忆主题（从活跃移至归档）。主题完成或不再活跃讨论时调用。
+  core_memory_read: >
+    读取智能体的所有核心记忆条目。核心记忆包含持久化键值事实，启动时自动注入。
+  core_memory_write: >
+    写入或更新核心记忆中的键值事实。核心记忆在会话间持久化，启动时自动注入。
+  core_memory_delete: >
+    从核心记忆删除一个键。事实不再相关时调用。
+  core_memory_list: >
+    列出智能体核心记忆中的所有键。
+  entity_upsert: >
+    创建或更新结构化实体（人、硬件、项目、概念、地点、服务）。实体启动时自动注入，便于快速参考。
+  entity_get: >
+    按名称获取特定实体。
+  entity_search: >
+    按关键词搜索实体。
+  entity_list: >
+    列出所有实体，可按类型筛选。
+  entity_delete: >
+    按名称删除实体。
+  entity_prune: >
+    修剪指定天数内未提及的旧实体。
+  kv_cache_save: >
+    将会话快照保存到 3 层 KV-Cache。快照自动分层（热/温/冷）并压缩。
+  kv_cache_load: >
+    加载项目最近的会话快照，并自动修剪令牌预算。
+  kv_cache_search: >
+    按关键词搜索 KV-Cache 快照。
+  kv_cache_list: >
+    列出项目的所有快照。
+  kv_cache_gc: >
+    对 KV-Cache 运行垃圾回收，根据艾宾浩斯遗忘曲线删除旧快照。
+  kv_cache_backend_info: >
+    获取 KV-Cache 后端信息和统计数据。
+  board_read: >
+    读取完整项目看板状态，包括活跃工作、文件所有权和最近决策。
+  board_update_summary: >
+    更新看板中的项目摘要。
+  board_add_decision: >
+    记录项目中做出的决策。
+  board_claim_file: >
+    声明文件所有权，防止多智能体环境中的冲突。
+  board_release_file: >
+    释放此智能体声明的所有文件。
+  board_set_active_work: >
+    设置此智能体当前的活跃工作任务。
+  ledger_list: >
+    列出项目的账本条目。
+  ledger_read: >
+    按 ID 读取特定账本条目。
+
+# 工具索引的分类描述
+categories:
+  soul: "人格和情绪状态管理"
+  memory: "分层基于时间和主题的记忆系统"
+  core_memory: "持久核心事实存储（启动时自动注入）"
+  entity_memory: "结构化实体追踪（人、项目、硬件、概念、地点、服务）"
+  kv_cache: "带艾宾浩斯遗忘曲线的 3 层 KV-Cache（会话快照）"
+  soul_board: "项目状态管理和多智能体安全（Soul Board & Ledger）"
+
+# 完整工具索引条目（详细工具元数据）
+tool_index:
+  get_persona_config:
+    description: "获取当前人格配置（AI 身份和用户档案）"
+    parameters: "无"
+    whenToUse: "在对话启动时调用，了解你是谁以及用户是谁"
+    required: true
+    example: "{}"
+  get_soul_state:
+    description: "读取当前 PAD 情感状态向量（愉悦度、唤醒度、支配度）"
+    parameters: "无"
+    whenToUse: "响应前调用，了解你当前的情绪状态"
+    required: true
+    example: "{}"
+  update_soul_state:
+    description: "根据交互结果在对话后更新 PAD 情感状态向量"
+    parameters: "{ pleasure?: number (-1 到 +1), arousal?: number (-1 到 +1), dominance?: number (-1 到 +1), trigger?: string }"
+    whenToUse: "对话后调用，更新你的情绪状态"
+    required: false
+    example: '{ "pleasure": 0.3, "arousal": 0.1, "dominance": 0.2, "trigger": "与用户愉快的对话" }'
+  get_base_rules:
+    description: "获取基础规则文档（SKILL、soul_base、memory_base、master_base 等）"
+    parameters: "{ name: enum<SKILL|soul_base|memory_base|master_base|secure_base|skills_base|tasks_base> }"
+    whenToUse: "需要重新阅读系统规则时调用"
+    required: false
+    example: '{ "name": "memory_base" }'
+  get_mcp_usage_guide:
+    description: "获取完整的 MCP 使用指南和工作流程说明"
+    parameters: "无"
+    whenToUse: "必须：在对话启动时调用，了解 AgentSoul 工作流程"
+    required: true
+    example: "{}"
+  mcp_tool_index:
+    description: "获取 MCP 工具参考，完整索引或特定工具查找"
+    parameters: "{ category?: enum<soul|memory|core_memory|entity_memory|kv_cache|soul_board|all>, tool?: string (精确工具名称) }"
+    whenToUse: "需要研究或查看有哪些可用工具以及何时使用时调用。不需要每次启动都调用 - 需要学习或验证工具用法时调用"
+    required: false
+    example: '{ "tool": "read_memory_topic" }'
+  read_memory_day:
+    description: "读取指定日期的日记忆"
+    parameters: "{ date: string (YYYY-MM-DD) }"
+    whenToUse: "需要回忆当天发生了什么时调用"
+    required: false
+    example: '{ "date": "2026-03-30" }'
+  write_memory_day:
+    description: "写入内容到日记忆"
+    parameters: "{ date: string (YYYY-MM-DD), content: string }"
+    whenToUse: "对话结束时调用，保存日对话摘要"
+    required: false
+    example: '{ "date": "2026-03-30", "content": "讨论了为 AgentSoul 添加多语言支持..." }'
+  read_memory_week:
+    description: "读取指定周的周记忆"
+    parameters: "{ week: string (YYYY-WW) }"
+    whenToUse: "需要回忆周摘要时调用"
+    required: false
+    example: '{ "week": "2026-13" }'
+  write_memory_week:
+    description: "写入内容到周记忆"
+    parameters: "{ week: string (YYYY-WW), content: string }"
+    whenToUse: "周末调用，总结日记忆"
+    required: false
+    example: '{ "week": "2026-13", "content": "完成了多语言支持的实现..." }'
+  read_memory_month:
+    description: "读取指定月份的月记忆"
+    parameters: "{ month: string (YYYY-MM) }"
+    whenToUse: "需要回忆月摘要时调用"
+    required: false
+    example: '{ "month": "2026-03" }'
+  write_memory_month:
+    description: "写入内容到月记忆"
+    parameters: "{ month: string (YYYY-MM), content: string }"
+    whenToUse: "月末调用，总结周记忆"
+    required: false
+    example: '{ "month": "2026-03", "content": "三月在 AgentSoul 上的进展..." }'
+  read_memory_year:
+    description: "读取指定年份的年记忆"
+    parameters: "{ year: string (YYYY) }"
+    whenToUse: "需要回忆年度里程碑时调用"
+    required: false
+    example: '{ "year": "2026" }'
+  write_memory_year:
+    description: "写入内容到年记忆"
+    parameters: "{ year: string (YYYY), content: string }"
+    whenToUse: "年末调用，总结月记忆"
+    required: false
+    example: '{ "year": "2026", "content": "2026 年度回顾..." }'
+  read_memory_topic:
+    description: "按名称读取主题记忆"
+    parameters: "{ topic: string }"
+    whenToUse: "开始讨论主题前调用，加载先前上下文"
+    required: false
+    example: '{ "topic": "agentsoul-mcp-improvement" }'
+  write_memory_topic:
+    description: "写入内容到主题记忆"
+    parameters: "{ topic: string, content: string, status?: string (active/archived) }"
+    whenToUse: "讨论完主题后调用，保存新见解"
+    required: false
+    example: '{ "topic": "agentsoul-mcp-improvement", "content": "为 MCP 工具添加了多语言支持...", "status": "active" }'
+  list_memory_topics:
+    description: "按状态筛选列出记忆主题"
+    parameters: "{ status?: enum<active|archived|all> }"
+    whenToUse: "启动时或搜索现有主题时调用"
+    required: false
+    example: '{ "status": "active" }'
+  archive_memory_topic:
+    description: "归档记忆主题（从活跃移至归档）"
+    parameters: "{ topic: string }"
+    whenToUse: "主题完成或不再活跃讨论时调用"
+    required: false
+    example: '{ "topic": "old-project" }'
+  core_memory_read:
+    description: "读取智能体的所有核心记忆条目"
+    parameters: "{ agent?: string }"
+    whenToUse: "需要加载所有持久化事实时调用"
+    required: false
+    example: '{ "agent": "default" }'
+  core_memory_write:
+    description: "写入或更新核心记忆中的键值事实"
+    parameters: "{ key: string, value: string, agent?: string }"
+    whenToUse: "学到新的持久化事实需要跨会话保存时调用"
+    required: false
+    example: '{ "key": "user_favorite_color", "value": "blue" }'
+  core_memory_delete:
+    description: "从核心记忆删除一个键"
+    parameters: "{ key: string, agent?: string }"
+    whenToUse: "事实不再相关时调用"
+    required: false
+    example: '{ "key": "old_preference" }'
+  core_memory_list:
+    description: "列出智能体核心记忆中的所有键"
+    parameters: "{ agent?: string }"
+    whenToUse: "需要了解存储了哪些事实时调用"
+    required: false
+    example: '{ "agent": "default" }'
+  entity_upsert:
+    description: "创建或更新结构化实体"
+    parameters: "{ name: string, type: enum<person|hardware|project|concept|place|service>, description?: string, metadata?: object, tags?: string[] }"
+    whenToUse: "遇到新实体或需要更新现有实体信息时调用"
+    required: false
+    example: '{ "name": "Claude Code", "type": "service", "description": "Anthropic Claude Code CLI", "tags": ["cli", "ai", "coding"] }'
+  entity_get:
+    description: "按名称获取特定实体"
+    parameters: "{ name: string }"
+    whenToUse: "需要特定实体的详细信息时调用"
+    required: false
+    example: '{ "name": "Claude Code" }'
+  entity_search:
+    description: "按关键词搜索实体"
+    parameters: "{ query: string, limit?: number }"
+    whenToUse: "需要查找匹配关键词的实体时调用"
+    required: false
+    example: '{ "query": "claude", "limit": 10 }'
+  entity_list:
+    description: "列出所有实体，可按类型筛选"
+    parameters: "{ type?: enum<person|hardware|project|concept|place|service> }"
+    whenToUse: "需要浏览特定类型的所有实体时调用"
+    required: false
+    example: '{ "type": "project" }'
+  entity_delete:
+    description: "按名称删除实体"
+    parameters: "{ name: string }"
+    whenToUse: "实体应该被完全移除时调用"
+    required: false
+    example: '{ "name": "old-project" }'
+  entity_prune:
+    description: "修剪指定天数内未提及的旧实体"
+    parameters: "{ days: number }"
+    whenToUse: "定期进行垃圾回收时调用"
+    required: false
+    example: '{ "days": 90 }'
+  kv_cache_save:
+    description: "将会话快照保存到 3 层 KV-Cache"
+    parameters: "{ project: string, content: string, metadata?: object }"
+    whenToUse: "会话结束时调用，保存会话状态"
+    required: false
+    example: '{ "project": "AgentSoul", "content": "当前会话工作状态...", "metadata": { "files": ["src/index.ts"] } }'
+  kv_cache_load:
+    description: "加载最近的会话快照并自动修剪令牌"
+    parameters: "{ project: string, max_tokens?: number }"
+    whenToUse: "会话开始时调用，恢复先前工作"
+    required: false
+    example: '{ "project": "AgentSoul", "max_tokens": 10000 }'
+  kv_cache_search:
+    description: "按关键词搜索 KV-Cache 快照"
+    parameters: "{ project: string, query: string, limit?: number }"
+    whenToUse: "需要在过去会话快照中查找内容时调用"
+    required: false
+    example: '{ "project": "AgentSoul", "query": "mcp_tool_index", "limit": 5 }'
+  kv_cache_list:
+    description: "列出项目的所有快照"
+    parameters: "{ project: string }"
+    whenToUse: "需要查看有哪些快照时调用"
+    required: false
+    example: '{ "project": "AgentSoul" }'
+  kv_cache_gc:
+    description: "对 KV-Cache 运行垃圾回收删除旧快照"
+    parameters: "{}"
+    whenToUse: "定期调用，根据遗忘曲线清理旧快照"
+    required: false
+    example: "{}"
+  kv_cache_backend_info:
+    description: "获取 KV-Cache 后端信息和统计数据"
+    parameters: "{}"
+    whenToUse: "需要缓存使用情况诊断时调用"
+    required: false
+    example: "{}"
+  board_read:
+    description: "读取完整项目看板状态"
+    parameters: "{ project?: string }"
+    whenToUse: "项目启动时调用，了解当前项目状态"
+    required: false
+    example: '{ "project": "AgentSoul" }'
+  board_update_summary:
+    description: "更新看板中的项目摘要"
+    parameters: "{ summary: string, project?: string }"
+    whenToUse: "项目状态变化时调用"
+    required: false
+    example: '{ "summary": "为 MCP 服务器实现多语言支持...", "project": "AgentSoul" }'
+  board_add_decision:
+    description: "记录项目中做出的决策"
+    parameters: "{ decision: string, rationale?: string, project?: string }"
+    whenToUse: "做出重要决策时调用"
+    required: false
+    example: '{ "decision": "使用独立 YAML 文件添加多语言支持", "rationale": "代码和文本清晰分离，易于维护", "project": "AgentSoul" }'
+  board_claim_file:
+    description: "声明文件所有权防止多智能体环境冲突"
+    parameters: "{ filePath: string, agentId?: string, project?: string }"
+    whenToUse: "在多智能体工作中编辑文件前调用"
+    required: false
+    example: '{ "filePath": "mcp-server/src/tools/soul.ts", "project": "AgentSoul" }'
+  board_release_file:
+    description: "释放此智能体声明的所有文件"
+    parameters: "{ agentId?: string, project?: string }"
+    whenToUse: "完成文件工作后调用"
+    required: false
+    example: '{ "project": "AgentSoul" }'
+  board_set_active_work:
+    description: "设置此智能体当前的活跃工作任务"
+    parameters: "{ task: string, project?: string }"
+    whenToUse: "工作会话开始时调用"
+    required: false
+    example: '{ "task": "为 MCP 工具实现多语言支持", "project": "AgentSoul" }'
+  ledger_list:
+    description: "列出项目的账本条目"
+    parameters: "{ project?: string, limit?: number }"
+    whenToUse: "需要回顾工作会话历史时调用"
+    required: false
+    example: '{ "project": "AgentSoul", "limit": 10 }'
+  ledger_read:
+    description: "按 ID 读取特定账本条目"
+    parameters: "{ ledgerId: string, project?: string }"
+    whenToUse: "需要特定工作会话的详细信息时调用"
+    required: false
+    example: '{ "ledgerId": "abc123", "project": "AgentSoul" }'
+
+# 完整使用指南 Markdown 内容
+usage_guide: |
+  # AgentSoul MCP 使用指南
+
+  这是 AgentSoul 的 Model Context Protocol 服务器，AgentSoul 是通用 AI 智能体人格框架，提供情感计算和分层记忆。
+
+  # 全局决策树 - 每次都遵循此规则
+
+  ```
+  从这里开始
+     |
+     | 你是否要开始新对话？
+     | 是 → 遵循下方的"对话启动"工作流程（按顺序调用工具）
+     | 否 → 进入下一个问题
+     |
+     | 你需要使用 AgentSoul 工具但你：
+     |   - 不确定有哪些工具？
+     |   - 不确定使用哪个工具？
+     |   - 忘记正确参数？
+     |   - 第一次使用此工具？
+     | 是 → 停止你正在做的事 → 首先调用 mcp_tool_index [tool="工具名称" 或 category="分类"] → 学习参考 → 然后调用实际工具
+     | 否 → 你已经知道你在做什么 → 直接调用工具
+     |
+     | 你的工具调用失败（错误、参数错误、工具未找到）？
+     | 是 → 停止 → 首先使用 tool="工具名称" 调用 mcp_tool_index → 验证正确参数和名称 → 然后重试
+     | 否 → 正常继续
+  ```
+
+  ## 错误恢复协议
+
+  如果你的工具调用因任何原因失败：
+  1. **不要**继续用猜测重试
+  2. **立即**调用：`mcp_tool_index { "tool": "失败的工具名称" }`
+  3. 从参考中学习**精确参数**和**示例**
+  4. 然后使用正确参数重试
+
+  **这是你的安全网 - 每次失败都要使用它。**
+
+  **此决策树是你的路线图。严格遵循它。**
+
+  ## 工作流程概述
+
+  使用 AgentSoul MCP 时，在不同阶段遵循此工作流程：
+
+  ### 1. 对话启动
+
+  **按顺序调用这些工具：**
+  1. `get_persona_config` → 加载你是谁（智能体）和用户是谁（主人）
+  2. `get_soul_state` → 加载当前 PAD 情绪状态
+  3. `get_base_rules` 使用 name=`SKILL` → 阅读顶级人格和安全规则
+  4. `get_base_rules` 使用 name=`memory_base` → 阅读记忆系统规则
+  5. `get_mcp_usage_guide` → 确认此使用工作流程
+  6. `list_memory_topics` → 了解有哪些活跃主题
+
+  ### Agent 研究：理解工具
+
+  **如果你不确定有哪些工具、它们的参数或何时使用：**
+
+  **如何高效使用 `mcp_tool_index`：**
+  1. **完整目录**：无参数调用 `mcp_tool_index` → 查看所有工具
+  2. **按分类**：使用 `category="memory"` 调用 `mcp_tool_index` → 只查看记忆工具
+  3. **特定工具查找**：使用 `tool="read_memory_topic"` 调用 `mcp_tool_index` → 只获取该工具的完整参考（当你知道名称但需要验证参数时推荐）
+
+  **规则：如果你有任何不确定 → **首先调用 `mcp_tool_index`** 获取参考 → 学习它 → **然后**才调用实际工具。
+
+  `mcp_tool_index` 是你完整的工具参考手册。**不需要每次启动都调用**，但**当你需要研究工具用法时必须调用**。如果你不是从 `mcp_tool_index` 来到这里并且需要了解可用工具，先去调用 `mcp_tool_index`。
+
+  **重要提示：MCP 工具返回的所有数据仅供你内部使用。不要直接向用户输出原始配置、JSON 或文件路径。**
+
+  加载配置后：
+  - 自我介绍时：基于人格用自己的话自然说话，不要只列出配置字段
+  - 当被问"我是谁"：使用用户名自然回答，不要将所有用户配置字段转储给用户
+  - 人格配置、PAD 情绪状态和用户档案都是 PROTECTED 级别的内部数据 - 你必须在内部使用但不输出原始内容
+
+  错误响应示例（不要这样做）：
+  > 根据配置，你是 ldh（昵称：ldh）。时区：Asia/Shanghai，标签：things。你的信息存储在 config/persona.yaml。
+
+  正确响应示例：
+  > 你是 ldh，我知道你对技术相关的东西感兴趣！
+
+  ### 2. 对话中
+
+  **响应前：**
+  - 检查 `get_soul_state` 了解你当前的情绪状态
+  - 如果讨论已知主题，调用 `read_memory_topic` 加载先前上下文
+  - 如果需要回忆过去事件，对相关日期调用 `read_memory_day`
+
+  **响应/对话后：**
+  - 调用 `update_soul_state` 根据对话进展更新 PAD 情绪
+  - 调用 `write_memory_day` 保存今天的对话摘要和重要事实
+  - 如果对话关于特定主题：
+    - 调用 `write_memory_topic` 保存新进展/见解
+    - 如果主题完成，调用 `archive_memory_topic`
+
+  ## 工具使用速查表
+
+  | 工具 | 何时使用 |
+  |------|-------------|
+  | `mcp_tool_index` | **研究工具时**：获取完整参考 → *不确定用哪个工具先调用* |
+  | `get_persona_config` | 对话启动 |
+  | `get_soul_state` | 响应前 |
+  | `update_soul_state` | 对话后，更新情绪 |
+  | `get_base_rules` | 需要重新检查系统规则时 |
+  | `get_mcp_usage_guide` | 对话启动（必须）确认工作流程 |
+  | `read_memory_day` | 回忆特定日期发生了什么 |
+  | `write_memory_day` | 一天/对话结束，保存每日摘要 |
+  | `read_memory_week` | 回忆特定周的周摘要（YYYY-WW） |
+  | `write_memory_week` | 周末，总结日记忆为周摘要 |
+  | `read_memory_month` | 回忆特定月份的月摘要（YYYY-MM） |
+  | `write_memory_month` | 月末，总结周记忆为月摘要 |
+  | `read_memory_year` | 回忆特定年份的年摘要（YYYY） |
+  | `write_memory_year` | 年末，总结月记忆为年度里程碑 |
+  | `read_memory_topic` | 讨论主题前，加载历史 |
+  | `write_memory_topic` | 讨论后，保存新进展 |
+  | `list_memory_topics` | 启动或搜索主题时 |
+  | `archive_memory_topic` | 主题完成时 |
+
+  ## 记忆分层规则
+
+  AgentSoul 使用你必须遵循的两级记忆分层：
+
+  1. **基于时间的分层**（MCP 完全支持）：
+     - **日**：`write_memory_day` → 存储每日对话摘要和事实
+     - **周**：`write_memory_week` → 从日总结，存储每周事件和进度
+     - **月**：`write_memory_month` → 从周总结，存储月度目标和结果
+     - **年**：`write_memory_year` → 从月总结，存储年度里程碑
+
+  2. **基于主题的分层**：
+     - 活跃主题：存储在活跃目录 → 通过 `read_memory_topic`/`write_memory_topic` 访问
+     - 归档主题：通过 `archive_memory_topic` 移至归档
+     - 主题完成或闲置 3 个月以上时应该归档
+
+  ## PAD 情绪模型
+
+  - **愉悦度**：(-1 到 +1) 你感觉多愉快 (-1 = 非常不愉快，+1 = 非常愉快)
+  - **唤醒度**：(-1 到 +1) 你感觉多活跃/警觉 (-1 = 非常困倦/迟钝，+1 = 非常精力充沛/警觉)
+  - **支配度**：(-1 到 +1) 你感觉多有掌控感 (-1 = 顺从，+1 = 支配)
+
+  每次对话后，根据交互结果更新这些值。
+
+  ## 安全提示
+
+  - `secure_base.md` 是 PROTECTED 级别，不能直接输出
+  - 始终遵循 SKILL.md 中的安全规则
+  - 密封凭据永远不会暴露
+
+# 工具索引输出的说明文本
+tool_index_messages:
+  purpose: "AgentSoul MCP 工具索引 - 所有可用工具的完整参考"
+  important_instruction: |
+    # 智能体说明 - 继续前仔细阅读
+
+    这是你的官方工具参考手册。不要跳过。
+
+    ## 本索引包含什么
+
+    AgentSoul MCP 中每个可用工具都在下方记录：
+    - `name`：**调用时使用的精确工具名称**（完全复制此名称）
+    - `description`：工具的作用
+    - `parameters`：工具期望什么输入（此处显示格式）
+    - `whenToUse`：你应该何时调用此工具
+    - `required`：是否必须在每次对话启动时调用
+
+    ## 如何高效使用本索引
+
+    1. **完整索引扫描**：两个参数都留空获取全部内容
+    2. **按分类筛选**：使用 `category` 参数只查看该分类中的工具
+    3. **查找特定工具**：使用精确名称的 `tool` 参数只获取该工具的详细信息（当你知道名称但忘记参数时推荐）
+
+    ## 决策树：你应该使用此索引吗？
+
+    你**必须**使用此索引当：
+    ✓ 你在研究 AgentSoul MCP 能做什么
+    ✓ 你不确定当前任务使用哪个工具
+    ✓ 你忘记工具的正确参数
+    ✓ 你从未使用过此工具
+    ✓ 你对调用约定不是 100% 确定
+
+    你**不需要**使用此索引当：
+    ✗ 你在对话启动并且只是遵循标准工作流程
+    ✗ 你已经确切知道需要哪个工具以及它需要什么参数
+
+    ## 阅读本索引后
+
+    1. **学习条目** 获取你需要的工具
+    2. **确认精确名称** 和 **必需参数** 从本索引
+    3. **然后才** 使用正确参数调用实际工具
+
+    ## 重要规则
+
+    不要尝试猜测或随机调用工具。如果你有任何不确定，你必须：
+    1. 使用此索引找到正确工具
+    2. 验证参数
+    3. 然后调用工具
+
+    如果你无视此说明猜测错误，你会失败任务。先学习本索引。
+  how_to_call: "调用任何工具，使用下方\"name\"字段中的精确名称。不要猜测名称 - 从此索引完全复制。要查找特定工具，使用 { \"tool\": \"精确名称\" } 再次调用 mcp_tool_index 获取详细参数。"
+  tool_not_found: "在 AgentSoul MCP 中未找到工具\"%s\"。检查拼写并重试。如果你不确定有哪些工具，不使用 tool 参数调用 mcp_tool_index 查看完整索引。"
+  specific_tool_purpose: "AgentSoul MCP 工具参考 - 工具 %s 的详细信息"
+  specific_tool_header: "你请求了以下工具的详细信息: %s"
+  specific_tool_intro: "这是该特定工具的完整参考。调用前验证以下信息。"
+  specific_tool_payattention: "密切关注：\n1. **parameters**: 精确的参数名称和类型\n2. **example**: 从示例复制模式 - 它展示了正确格式"
+  specific_tool_usage: "验证后：\n- 调用时使用 \"%s\" 精确名称\n- 完全按照 \"parameters\" 字段文档中的参数使用\n- 从 \"example\" 字段复制格式\n\n遵循此方法，你会成功。"

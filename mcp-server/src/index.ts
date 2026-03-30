@@ -46,7 +46,16 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
+import { z } from 'zod';
 import { PROJECT_ROOT } from './lib/paths.js';
+import { initLanguage, getLanguageResources, getToolDescription } from './language/index.js';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+
+/**
+ * Cached tools array with language descriptions already resolved.
+ * Built once at startup after language initialization since language doesn't change at runtime.
+ */
+let cachedTools: Tool[] | null = null;
 
 import {
   GetPersonaConfigSchema,
@@ -186,189 +195,92 @@ function defineTool(
 }
 
 /**
+ * Tool metadata for building the cached tools list
+ */
+interface ToolMetadata {
+  name: string;
+  fallbackDescription: string;
+  schema: z.ZodObject<any>;
+}
+
+/** All tool metadata - used to build the cached list once after language init */
+const ALL_TOOLS: ToolMetadata[] = [
+  // Soul tools
+  { name: 'get_persona_config', fallbackDescription: 'Get the current persona configuration (agent identity and user profile). Call this at conversation startup to know who you are and who the user is. After calling this, you MUST also call get_mcp_usage_guide to get the workflow instructions.', schema: GetPersonaConfigSchema },
+  { name: 'get_soul_state', fallbackDescription: 'Read current PAD affective state vector (pleasure, arousal, dominance). Call this before responding to understand your current emotional state.', schema: GetSoulStateSchema },
+  { name: 'update_soul_state', fallbackDescription: 'Update the PAD affective state vector after the conversation based on the interaction outcome.', schema: UpdateSoulStateSchema },
+  { name: 'get_base_rules', fallbackDescription: 'Get the base rules documentation (SKILL, soul_base, memory_base, master_base, etc.). Call this when you need to re-read the system rules.', schema: GetBaseRulesSchema },
+  { name: 'get_mcp_usage_guide', fallbackDescription: 'MANDATORY: Get the complete MCP usage guide. YOU MUST CALL THIS FIRST at conversation startup to understand when to call each tool, the AgentSoul workflow, and memory hierarchy rules. This guide tells you exactly how to use AgentSoul MCP correctly.', schema: GetMcpUsageGuideSchema },
+  { name: 'mcp_tool_index', fallbackDescription: '🔍 AGENT RESEARCH TOOL: Get MCP tool reference - complete or specific. NOT REQUIRED on every startup. USAGE: 1) No params → full index, 2) category=\"x\" → filter by category, 3) tool=\"name\" → get detailed reference for ONE specific tool. WHEN TO USE: When uncertain which tool to use, forgot parameters, first time using tool. Study reference first before calling actual tool. MANDATORY when uncertain.', schema: McpToolIndexSchema },
+  // Memory tools
+  { name: 'read_memory_day', fallbackDescription: 'Read daily memory for a specific date (format: YYYY-MM-DD). Call this when you need to review what happened on that day or recall past conversations.', schema: ReadMemoryDaySchema },
+  { name: 'write_memory_day', fallbackDescription: 'Write content to daily memory. Call this at the end of conversation to save daily conversation summary and important facts.', schema: WriteMemoryDaySchema },
+  { name: 'read_memory_week', fallbackDescription: 'Read weekly memory for a specific week (format: YYYY-WW). Weekly memory summarizes events and progress for the week.', schema: ReadMemoryWeekSchema },
+  { name: 'write_memory_week', fallbackDescription: 'Write content to weekly memory. Call this at the end of the week to summarize daily memory into weekly insights.', schema: WriteMemoryWeekSchema },
+  { name: 'read_memory_month', fallbackDescription: 'Read monthly memory for a specific month (format: YYYY-MM). Monthly memory summarizes progress and goals.', schema: ReadMemoryMonthSchema },
+  { name: 'write_memory_month', fallbackDescription: 'Write content to monthly memory. Call this at the end of the month to summarize weekly memory into monthly insights.', schema: WriteMemoryMonthSchema },
+  { name: 'read_memory_year', fallbackDescription: 'Read yearly memory for a specific year (format: YYYY). Yearly memory summarizes major milestones and life changes.', schema: ReadMemoryYearSchema },
+  { name: 'write_memory_year', fallbackDescription: 'Write content to yearly memory. Call this at the end of the year to summarize monthly memory into yearly milestones.', schema: WriteMemoryYearSchema },
+  { name: 'read_memory_topic', fallbackDescription: 'Read topic-based memory by name. Call this before starting a discussion on a topic to load previous context and knowledge about that topic.', schema: ReadMemoryTopicSchema },
+  { name: 'write_memory_topic', fallbackDescription: 'Write content to topic-based memory. Call this after discussing a topic to save new insights, decisions, and progress.', schema: WriteMemoryTopicSchema },
+  { name: 'list_memory_topics', fallbackDescription: 'List memory topics filtered by status (active/archived/all). Call this to discover what topics you have in memory.', schema: ListMemoryTopicsSchema },
+  { name: 'archive_memory_topic', fallbackDescription: 'Archive a memory topic (move from active to archive). Call this when a topic is completed or no longer actively discussed.', schema: ArchiveMemoryTopicSchema },
+  // Core Memory tools
+  { name: 'core_memory_read', fallbackDescription: 'Read all core memory entries for an agent. Core memory contains persistent key-value facts that are auto-injected at boot.', schema: CoreMemoryReadSchema },
+  { name: 'core_memory_write', fallbackDescription: 'Write or update a key-value fact in core memory. Core memory persists across sessions and is auto-injected at boot.', schema: CoreMemoryWriteSchema },
+  { name: 'core_memory_delete', fallbackDescription: 'Delete a key from core memory. Call this when a fact is no longer relevant.', schema: CoreMemoryDeleteSchema },
+  { name: 'core_memory_list', fallbackDescription: 'List all keys in core memory for an agent.', schema: CoreMemoryListSchema },
+  // Entity Memory tools
+  { name: 'entity_upsert', fallbackDescription: 'Create or update a structured entity (person, hardware, project, concept, place, service). Entities are auto-injected at boot for quick reference.', schema: EntityUpsertSchema },
+  { name: 'entity_get', fallbackDescription: 'Get a specific entity by name.', schema: EntityGetSchema },
+  { name: 'entity_search', fallbackDescription: 'Search entities by keyword query.', schema: EntitySearchSchema },
+  { name: 'entity_list', fallbackDescription: 'List all entities, optionally filtered by type.', schema: EntityListSchema },
+  { name: 'entity_delete', fallbackDescription: 'Delete an entity by name.', schema: EntityDeleteSchema },
+  { name: 'entity_prune', fallbackDescription: 'Prune old entities not mentioned within the specified days.', schema: EntityPruneSchema },
+  // KV-Cache tools
+  { name: 'kv_cache_save', fallbackDescription: 'Save a session snapshot to the 3-tier KV-Cache. Snapshots are automatically tiered (hot/warm/cold) and compressed.', schema: KVCacheSaveSchema },
+  { name: 'kv_cache_load', fallbackDescription: 'Load the most recent session snapshot for a project with automatic token budget trimming.', schema: KVCacheLoadSchema },
+  { name: 'kv_cache_search', fallbackDescription: 'Search across KV-Cache snapshots by keyword.', schema: KVCacheSearchSchema },
+  { name: 'kv_cache_list', fallbackDescription: 'List all snapshots for a project.', schema: KVCacheListSchema },
+  { name: 'kv_cache_gc', fallbackDescription: 'Run garbage collection on KV-Cache to remove old snapshots based on Ebbinghaus forgetting curve.', schema: KVCacheGcSchema },
+  { name: 'kv_cache_backend_info', fallbackDescription: 'Get KV-Cache backend information and statistics.', schema: KVCacheBackendInfoSchema },
+  // Soul Board tools
+  { name: 'board_read', fallbackDescription: 'Read the complete project board state including active work, file ownership, and recent decisions.', schema: BoardReadSchema },
+  { name: 'board_update_summary', fallbackDescription: 'Update the project summary in the board.', schema: BoardUpdateSummarySchema },
+  { name: 'board_add_decision', fallbackDescription: 'Record a decision made during this project.', schema: BoardAddDecisionSchema },
+  { name: 'board_claim_file', fallbackDescription: 'Claim file ownership to prevent conflicts in multi-agent environments.', schema: BoardClaimFileSchema },
+  { name: 'board_release_file', fallbackDescription: 'Release all files claimed by this agent.', schema: BoardReleaseFileSchema },
+  { name: 'board_set_active_work', fallbackDescription: 'Set the current active work task for this agent.', schema: BoardSetActiveWorkSchema },
+  // Ledger tools
+  { name: 'ledger_list', fallbackDescription: 'List ledger entries for a project.', schema: LedgerListSchema },
+  { name: 'ledger_read', fallbackDescription: 'Read a specific ledger entry by ID.', schema: LedgerReadSchema },
+];
+
+/**
+ * Build the complete tools array with language descriptions resolved.
+ * Called once at startup after language initialization.
+ */
+function buildCachedTools(): Tool[] {
+  const lang = getLanguageResources();
+  return ALL_TOOLS.map(tool => defineTool(
+    tool.name,
+    getToolDescription(tool.name, tool.fallbackDescription),
+    tool.schema
+  ));
+}
+
+/**
  * 处理工具列表请求
  * @returns 返回所有可用工具的列表，包括人格工具、记忆工具、核心记忆工具、实体记忆工具、KV-Cache 工具、项目看板工具和账本工具
  */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      // Soul tools
-      defineTool('get_persona_config',
-        'Get the current persona configuration (agent identity and user profile). Call this at conversation startup to know who you are and who the user is. After calling this, you MUST also call get_mcp_usage_guide to get the workflow instructions.',
-        GetPersonaConfigSchema
-      ),
-      defineTool('get_soul_state',
-        'Read current PAD affective state vector (pleasure, arousal, dominance). Call this before responding to understand your current emotional state.',
-        GetSoulStateSchema
-      ),
-      defineTool('update_soul_state',
-        'Update the PAD affective state vector after the conversation based on the interaction outcome.',
-        UpdateSoulStateSchema
-      ),
-      defineTool('get_base_rules',
-        'Get the base rules documentation (SKILL, soul_base, memory_base, master_base, etc.). Call this when you need to re-read the system rules.',
-        GetBaseRulesSchema
-      ),
-      defineTool('get_mcp_usage_guide',
-        'MANDATORY: Get the complete MCP usage guide. YOU MUST CALL THIS FIRST at conversation startup to understand when to call each tool, the AgentSoul workflow, and memory hierarchy rules. This guide tells you exactly how to use AgentSoul MCP correctly.',
-        GetMcpUsageGuideSchema
-      ),
-      defineTool('mcp_tool_index',
-        '🔍 AGENT RESEARCH TOOL: Get MCP tool reference - complete or specific. NOT REQUIRED on every startup. USAGE: 1) No params → full index, 2) category="x" → filter by category, 3) tool="name" → get detailed reference for ONE specific tool. WHEN TO USE: When uncertain which tool to use, forgot parameters, first time using tool. Study reference first before calling actual tool. MANDATORY when uncertain.',
-        McpToolIndexSchema
-      ),
-      // Memory tools
-      defineTool('read_memory_day',
-        'Read daily memory for a specific date (format: YYYY-MM-DD). Call this when you need to review what happened on that day or recall past conversations.',
-        ReadMemoryDaySchema
-      ),
-      defineTool('write_memory_day',
-        'Write content to daily memory. Call this at the end of conversation to save daily conversation summary and important facts.',
-        WriteMemoryDaySchema
-      ),
-      defineTool('read_memory_week',
-        'Read weekly memory for a specific week (format: YYYY-WW). Weekly memory summarizes events and progress for the week.',
-        ReadMemoryWeekSchema
-      ),
-      defineTool('write_memory_week',
-        'Write content to weekly memory. Call this at the end of the week to summarize daily memory into weekly insights.',
-        WriteMemoryWeekSchema
-      ),
-      defineTool('read_memory_month',
-        'Read monthly memory for a specific month (format: YYYY-MM). Monthly memory summarizes progress and goals.',
-        ReadMemoryMonthSchema
-      ),
-      defineTool('write_memory_month',
-        'Write content to monthly memory. Call this at the end of the month to summarize weekly memory into monthly insights.',
-        WriteMemoryMonthSchema
-      ),
-      defineTool('read_memory_year',
-        'Read yearly memory for a specific year (format: YYYY). Yearly memory summarizes major milestones and life changes.',
-        ReadMemoryYearSchema
-      ),
-      defineTool('write_memory_year',
-        'Write content to yearly memory. Call this at the end of the year to summarize monthly memory into yearly milestones.',
-        WriteMemoryYearSchema
-      ),
-      defineTool('read_memory_topic',
-        'Read topic-based memory by name. Call this before starting a discussion on a topic to load previous context and knowledge about that topic.',
-        ReadMemoryTopicSchema
-      ),
-      defineTool('write_memory_topic',
-        'Write content to topic-based memory. Call this after discussing a topic to save new insights, decisions, and progress.',
-        WriteMemoryTopicSchema
-      ),
-      defineTool('list_memory_topics',
-        'List memory topics filtered by status (active/archived/all). Call this to discover what topics you have in memory.',
-        ListMemoryTopicsSchema
-      ),
-      defineTool('archive_memory_topic',
-        'Archive a memory topic (move from active to archive). Call this when a topic is completed or no longer actively discussed.',
-        ArchiveMemoryTopicSchema
-      ),
-      // Core Memory tools
-      defineTool('core_memory_read',
-        'Read all core memory entries for an agent. Core memory contains persistent key-value facts that are auto-injected at boot.',
-        CoreMemoryReadSchema
-      ),
-      defineTool('core_memory_write',
-        'Write or update a key-value fact in core memory. Core memory persists across sessions and is auto-injected at boot.',
-        CoreMemoryWriteSchema
-      ),
-      defineTool('core_memory_delete',
-        'Delete a key from core memory. Call this when a fact is no longer relevant.',
-        CoreMemoryDeleteSchema
-      ),
-      defineTool('core_memory_list',
-        'List all keys in core memory for an agent.',
-        CoreMemoryListSchema
-      ),
-      // Entity Memory tools
-      defineTool('entity_upsert',
-        'Create or update a structured entity (person, hardware, project, concept, place, service). Entities are auto-injected at boot for quick reference.',
-        EntityUpsertSchema
-      ),
-      defineTool('entity_get',
-        'Get a specific entity by name.',
-        EntityGetSchema
-      ),
-      defineTool('entity_search',
-        'Search entities by keyword query.',
-        EntitySearchSchema
-      ),
-      defineTool('entity_list',
-        'List all entities, optionally filtered by type.',
-        EntityListSchema
-      ),
-      defineTool('entity_delete',
-        'Delete an entity by name.',
-        EntityDeleteSchema
-      ),
-      defineTool('entity_prune',
-        'Prune old entities not mentioned within the specified days.',
-        EntityPruneSchema
-      ),
-      // KV-Cache tools
-      defineTool('kv_cache_save',
-        'Save a session snapshot to the 3-tier KV-Cache. Snapshots are automatically tiered (hot/warm/cold) and compressed.',
-        KVCacheSaveSchema
-      ),
-      defineTool('kv_cache_load',
-        'Load the most recent session snapshot for a project with automatic token budget trimming.',
-        KVCacheLoadSchema
-      ),
-      defineTool('kv_cache_search',
-        'Search across KV-Cache snapshots by keyword.',
-        KVCacheSearchSchema
-      ),
-      defineTool('kv_cache_list',
-        'List all snapshots for a project.',
-        KVCacheListSchema
-      ),
-      defineTool('kv_cache_gc',
-        'Run garbage collection on KV-Cache to remove old snapshots based on Ebbinghaus forgetting curve.',
-        KVCacheGcSchema
-      ),
-      defineTool('kv_cache_backend_info',
-        'Get KV-Cache backend information and statistics.',
-        KVCacheBackendInfoSchema
-      ),
-      // Soul Board tools
-      defineTool('board_read',
-        'Read the complete project board state including active work, file ownership, and recent decisions.',
-        BoardReadSchema
-      ),
-      defineTool('board_update_summary',
-        'Update the project summary in the board.',
-        BoardUpdateSummarySchema
-      ),
-      defineTool('board_add_decision',
-        'Record a decision made during this project.',
-        BoardAddDecisionSchema
-      ),
-      defineTool('board_claim_file',
-        'Claim file ownership to prevent conflicts in multi-agent environments.',
-        BoardClaimFileSchema
-      ),
-      defineTool('board_release_file',
-        'Release all files claimed by this agent.',
-        BoardReleaseFileSchema
-      ),
-      defineTool('board_set_active_work',
-        'Set the current active work task for this agent.',
-        BoardSetActiveWorkSchema
-      ),
-      // Ledger tools
-      defineTool('ledger_list',
-        'List ledger entries for a project.',
-        LedgerListSchema
-      ),
-      defineTool('ledger_read',
-        'Read a specific ledger entry by ID.',
-        LedgerReadSchema
-      ),
-    ],
-  };
+  if (cachedTools !== null) {
+    return { tools: cachedTools };
+  }
+  // This should only happen on first request before main() completes, which shouldn't happen
+  // But build it anyway for robustness
+  cachedTools = buildCachedTools();
+  return { tools: cachedTools };
 });
 
 /**
@@ -494,6 +406,14 @@ async function main() {
   console.error(`AgentSoul MCP Server starting...`);
   console.error(`- PROJECT_ROOT: ${PROJECT_ROOT}`);
   console.error(`- Working directory: ${process.cwd()}`);
+
+  // Initialize multi-language support
+  const langResources = initLanguage();
+  console.error(`[AgentSoul Language] Loaded: ${langResources.language}`);
+
+  // Build cached tools list with language descriptions resolved
+  cachedTools = buildCachedTools();
+  console.error(`[AgentSoul MCP] Tools cached: ${cachedTools.length} tools`);
 
   // 创建标准输入输出传输通道
   const transport = new StdioServerTransport();

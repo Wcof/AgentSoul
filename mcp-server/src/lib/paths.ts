@@ -81,6 +81,11 @@ export const PROJECT_ROOT = findProjectRoot();
 /** Data root directory */
 export const DATA_ROOT = path.join(PROJECT_ROOT, 'data');
 
+/** Agents directory for N2 Browser integration */
+export function getAgentsDir(): string {
+  return path.join(DATA_ROOT, 'agents');
+}
+
 export default {
   PROJECT_ROOT,
   DATA_ROOT,

@@ -128,6 +128,57 @@ export function truncateText(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + '...';
 }
 
+/**
+ * Log an error message to stderr
+ * @param context - Context description where the error occurred
+ * @param error - The error object or message
+ */
+export function logError(context: string, error: unknown): void {
+  console.error(`[ERROR] ${context}:`, error);
+}
+
+/**
+ * Read and parse JSON from a file
+ * @param filePath - Path to the JSON file
+ * @returns Parsed object, or null if error
+ */
+export function readJson<T>(filePath: string): T | null {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(content) as T;
+  } catch (e) {
+    logError('readJson', e);
+    return null;
+  }
+}
+
+/**
+ * Write object as JSON to a file
+ * @param filePath - Path to write
+ * @param data - Data to serialize
+ * @returns true if successful, false otherwise
+ */
+export function writeJson<T>(filePath: string, data: T): boolean {
+  try {
+    const dir = path.dirname(filePath);
+    fs.mkdirSync(dir, { recursive: true });
+    const content = JSON.stringify(data, null, 2);
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return true;
+  } catch (e) {
+    logError('writeJson', e);
+    return false;
+  }
+}
+
+/**
+ * Get current time as ISO 8601 string
+ * @returns Current timestamp in ISO format
+ */
+export function nowISO(): string {
+  return new Date().toISOString();
+}
+
 export default {
   safePath,
   readFile,
@@ -139,4 +190,8 @@ export default {
   sanitizeTopicName,
   timestampToDate,
   truncateText,
+  logError,
+  readJson,
+  writeJson,
+  nowISO,
 };
