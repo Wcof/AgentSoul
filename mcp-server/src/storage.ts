@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import { safePath, readFile } from './lib/utils.js';
+import { safePath, readFile, writeFile, sanitizeTopicName } from './lib/utils.js';
 import { PROJECT_ROOT } from './lib/paths.js';
 import { SoulState, PersonaConfig } from './types.js';
 
@@ -31,10 +31,11 @@ const DATA_ROOT = path.join(PROJECT_ROOT, 'data');
 export class StorageManager {
   /**
    * 构造函数
-   * @param projectRoot - 可选的项目根目录，用于向后兼容
+   * @param projectRoot - 可选的项目根目录，用于向后兼容 (unused - PROJECT_ROOT from paths.ts is used instead)
    */
   constructor(projectRoot?: string) {
-    // 保留构造函数用于向后兼容性 - 如果提供则覆盖，否则使用 paths 中的 PROJECT_ROOT
+    // Backward compatibility kept, unused parameter kept for compatibility
+    void projectRoot;
   }
 
   /**
@@ -47,6 +48,8 @@ export class StorageManager {
 
     const content = readFile(configPath);
     if (content === null) {
+      console.error(`[AgentSoul Storage] WARNING: Could not read persona config from ${configPath}, using defaults`);
+      console.error(`[AgentSoul Storage] PROJECT_ROOT = ${PROJECT_ROOT}`);
       return {
         ai: {
           name: 'Agent',
@@ -212,17 +215,7 @@ export class StorageManager {
       return false;
     }
 
-    const dir = path.dirname(checkedPath);
-
-    try {
-      // 使用 recursive: true 的 mkdir 是幂等的 - 不需要先检查目录是否存在
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(checkedPath, JSON.stringify(state, null, 2), 'utf-8');
-      return true;
-    } catch (e) {
-      console.error('Failed to write soul state:', e);
-      return false;
-    }
+    return writeFile(checkedPath, JSON.stringify(state, null, 2));
   }
 
   /**
@@ -269,17 +262,7 @@ export class StorageManager {
       return false;
     }
 
-    const dir = path.dirname(checkedPath);
-
-    try {
-      // 使用 recursive: true 的 mkdir 是幂等的 - 不需要先检查目录是否存在
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(checkedPath, content, 'utf-8');
-      return true;
-    } catch (e) {
-      console.error(`Failed to write ${period} memory:`, e);
-      return false;
-    }
+    return writeFile(checkedPath, content);
   }
 
   /**
@@ -364,7 +347,7 @@ export class StorageManager {
    * @returns 主题记忆文件的完整路径
    */
   private getTopicMemoryPath(topic: string): string {
-    return path.join(DATA_ROOT, 'memory', 'topic', `${topic.replace(/\//g, '_')}.md`);
+    return path.join(DATA_ROOT, 'memory', 'topic', `${sanitizeTopicName(topic)}.md`);
   }
 
   /**
@@ -373,7 +356,7 @@ export class StorageManager {
    * @returns 归档主题记忆文件的完整路径
    */
   private getArchivedTopicPath(topic: string): string {
-    return path.join(DATA_ROOT, 'memory', 'topic', 'archive', `${topic.replace(/\//g, '_')}.md`);
+    return path.join(DATA_ROOT, 'memory', 'topic', 'archive', `${sanitizeTopicName(topic)}.md`);
   }
 
   /**
@@ -419,17 +402,7 @@ export class StorageManager {
       return false;
     }
 
-    const dir = path.dirname(checkedPath);
-
-    try {
-      // 使用 recursive: true 的 mkdir 是幂等的 - 不需要先检查目录是否存在
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(checkedPath, content, 'utf-8');
-      return true;
-    } catch (e) {
-      console.error('Failed to write topic memory:', e);
-      return false;
-    }
+    return writeFile(checkedPath, content);
   }
 
   /**

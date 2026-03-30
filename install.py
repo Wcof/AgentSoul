@@ -287,6 +287,14 @@ def prompt_with_default(prompt_key: str, default: str, lang: str) -> str:
     """
     # Verify prompt key exists
     assert prompt_key in PROMPTS[lang], f"Invalid prompt key: {prompt_key}"
+
+    # Enable readline for better Unicode (Chinese) backspace handling
+    try:
+        import readline
+        # readline automatically handles backspace correctly for Unicode
+    except ImportError:
+        pass
+
     default_label = "默认" if lang == 'zh' else "default"
     prompt_text = f"{PROMPTS[lang][prompt_key]} ({default_label}: {default})\n> "
     raw_input = input(prompt_text)

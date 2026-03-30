@@ -5,3 +5,7 @@
 
 export * from './soul.js';
 export * from './memory.js';
+export * from './core-memory.js';
+export * from './entity-memory.js';
+export * from './kv-cache.js';
+export * from './soul-board.js';

@@ -46,6 +46,8 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 
+import { PROJECT_ROOT } from './lib/paths.js';
+
 import {
   GetPersonaConfigSchema,
   handleGetPersonaConfig,
@@ -57,6 +59,8 @@ import {
   handleGetBaseRules,
   GetMcpUsageGuideSchema,
   handleGetMcpUsageGuide,
+  McpToolIndexSchema,
+  handleMcpToolIndex,
 } from './tools/soul.js';
 
 import {
@@ -208,6 +212,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       defineTool('get_mcp_usage_guide',
         'MANDATORY: Get the complete MCP usage guide. YOU MUST CALL THIS FIRST at conversation startup to understand when to call each tool, the AgentSoul workflow, and memory hierarchy rules. This guide tells you exactly how to use AgentSoul MCP correctly.',
         GetMcpUsageGuideSchema
+      ),
+      defineTool('mcp_tool_index',
+        '🔍 AGENT RESEARCH TOOL: Get MCP tool reference - complete or specific. NOT REQUIRED on every startup. USAGE: 1) No params → full index, 2) category="x" → filter by category, 3) tool="name" → get detailed reference for ONE specific tool. WHEN TO USE: When uncertain which tool to use, forgot parameters, first time using tool. Study reference first before calling actual tool. MANDATORY when uncertain.',
+        McpToolIndexSchema
       ),
       // Memory tools
       defineTool('read_memory_day',
@@ -385,6 +393,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleGetBaseRules(GetBaseRulesSchema.parse(args));
     case 'get_mcp_usage_guide':
       return handleGetMcpUsageGuide();
+    case 'mcp_tool_index':
+      return handleMcpToolIndex(McpToolIndexSchema.parse(args));
 
     // Memory tools
     case 'read_memory_day':
@@ -480,6 +490,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * @description 创建标准输入输出传输通道并连接到 MCP 服务器，启动后在标准错误输出打印运行信息
  */
 async function main() {
+  // Log startup info for debugging
+  console.error(`AgentSoul MCP Server starting...`);
+  console.error(`- PROJECT_ROOT: ${PROJECT_ROOT}`);
+  console.error(`- Working directory: ${process.cwd()}`);
+
   // 创建标准输入输出传输通道
   const transport = new StdioServerTransport();
   // 连接传输通道到服务器
