@@ -30,12 +30,9 @@ export function safePath(filePath: string, baseDir: string): string | null {
  */
 export function readFile(filePath: string): string | null {
   try {
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
     return fs.readFileSync(filePath, 'utf-8');
   } catch (e) {
-    console.error(`Error reading file ${filePath}:`, e);
+    // File doesn't exist or error reading
     return null;
   }
 }
@@ -49,9 +46,7 @@ export function readFile(filePath: string): string | null {
 export function writeFile(filePath: string, content: string): boolean {
   try {
     const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(filePath, content, 'utf-8');
     return true;
   } catch (e) {
