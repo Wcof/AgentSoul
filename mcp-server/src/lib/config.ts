@@ -5,8 +5,8 @@
 
 import path from 'path';
 import yaml from 'js-yaml';
-import { PROJECT_ROOT, DATA_ROOT } from './paths';
-import { readFile } from './utils';
+import { PROJECT_ROOT, DATA_ROOT } from './paths.js';
+import { readFile } from './utils.js';
 
 /**
  * Behavior configuration interface

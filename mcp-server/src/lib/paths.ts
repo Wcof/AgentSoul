@@ -5,6 +5,10 @@
 
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Find the project root directory by looking for package.json or config/persona.yaml

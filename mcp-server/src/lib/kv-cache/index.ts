@@ -6,7 +6,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { safePath } from '../utils';
+import { safePath } from '../utils.js';
 
 // ============================================================================
 // Types
