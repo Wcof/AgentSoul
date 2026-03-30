@@ -165,7 +165,7 @@ export async function handleBoardAddDecision(input: BoardAddDecisionInput): Prom
     what: input.decision,
     why: input.why || '',
   };
-  board.decisions.push(decision);
+  board.state.decisions.push(decision);
   engine.writeBoard(input.project, board);
   return {
     content: [{

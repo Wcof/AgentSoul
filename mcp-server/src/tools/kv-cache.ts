@@ -99,8 +99,10 @@ function getKVCache(): SoulKVCache {
 export async function handleKvCacheSave(input: KVCacheSaveInput): Promise<ToolResponse> {
   const cache = getKVCache();
   // 处理文件变更列表，统一格式
-  const filesChanged = input.files_changed?.map(f => {
-    if (typeof f === 'string') return f;
+  const convertedFilesChanged: Array<{path: string; desc?: string}> | undefined = input.files_changed?.map(f => {
+    if (typeof f === 'string') {
+      return { path: f };
+    }
     return { path: f.path, desc: f.desc };
   });
 
@@ -108,9 +110,7 @@ export async function handleKvCacheSave(input: KVCacheSaveInput): Promise<ToolRe
   const id = await cache.save(input.agent || 'default', input.project, {
     summary: input.summary,
     decisions: input.decisions,
-    filesCreated: filesChanged,
-    filesModified: [],
-    filesDeleted: [],
+    filesChanged: convertedFilesChanged,
     todo: input.todo,
     parentSessionId: input.parent_session_id,
   });

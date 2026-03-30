@@ -88,10 +88,21 @@ function getEntityMemory(): EntityMemory {
  */
 export async function handleEntityUpsert(input: EntityUpsertInput): Promise<ToolResponse> {
   const memory = getEntityMemory();
+  // Convert attributes to string as required by the type
+  const convertedAttributes: Record<string, string> = {};
+  if (input.attributes) {
+    for (const [k, v] of Object.entries(input.attributes)) {
+      convertedAttributes[k] = String(v);
+    }
+  }
+
   const result = memory.upsert({
     type: input.type as EntityType,
     name: input.name,
-    attributes: input.attributes,
+    description: '',
+    aliases: [],
+    attributes: convertedAttributes,
+    tags: [],
   });
   return {
     content: [{
