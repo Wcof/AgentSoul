@@ -149,9 +149,9 @@ def select_from_list(prompt_key: str, allowed_values: List[str], default: str, l
             print(f"❌ {PROMPTS[lang]['invalid_number']}")
 
 
-/**
- * Default PAD emotional state vector - fixed constant, created once at module load
- */
+"""
+Default PAD emotional state vector - fixed constant, created once at module load
+"""
 DEFAULT_PAD_STATE: Dict[str, Any] = {
     "pleasure": DEFAULT_PAD_PLEASURE,
     "arousal": DEFAULT_PAD_AROUSAL,
