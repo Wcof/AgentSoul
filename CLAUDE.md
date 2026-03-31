@@ -212,6 +212,41 @@ The framework enforces a strict 3-level security model:
 
 **Priority**: Sealed layer security > Privacy protection > Task completion > User experience
 
+## Key MCP Usage Rules (Critical)
+
+In MCP mode, **all persistent memory must be written via MCP tools**. If you don't call the corresponding write tool, the memory cannot be saved and will be lost in the next conversation. This is a mandatory rule that must be followed.
+
+### Mandatory Startup Sequence (MCP Mode)
+**Always call tools in this order:**
+1. `mcp_tool_index` → **Step 1: Get complete tool index** → Now you know all available tool names, parameters, and when to use them
+2. `get_persona_config` → Load who you are (AI) and who the user is (master)
+3. `get_soul_state` → Load current PAD emotion state
+4. `get_base_rules` with name=`SKILL` → Read top-level personality and security rules
+5. `get_base_rules` with name=`memory_base` → Read memory system rules
+6. `get_mcp_usage_guide` → Confirm this workflow
+7. `list_memory_topics` → Understand what active topics exist
+
+### Mandatory Tool Call Timing
+| Timing | Must Call Tool | Why Mandatory |
+|--------|----------------|---------------|
+| Conversation startup | `mcp_tool_index` first step | Get full tool index before calling any other tools, avoid guessing |
+| Conversation end | `write_memory_day` + `update_soul_state` | Must save daily conversation + update emotion, otherwise amnesia |
+| Weekend end | Must do weekly summary → `write_memory_week` | Aggregate layer by layer, otherwise monthly summary has no data source |
+| Month end | Must do monthly summary → `write_memory_month` | Aggregate layer by layer, otherwise yearly summary has no data source |
+| Year end | Must do yearly summary → `write_memory_year` | Complete annual summary |
+| Before discussing a topic | `read_memory_topic` | Load historical context, avoid amnesia |
+| After discussing a topic | `write_memory_topic` | Save new progress for next time |
+| Topic completed | `archive_memory_topic` | Keep active list clean |
+
+### "Who am I" Answer Optimization
+When user asks "Who am I" / "What's my name":
+- **Forbidden** (machine-style): "According to my configuration information..." / "In my config..."
+- **Required**: Directly and naturally say the name, don't mention "configuration", "system" and other technical terms
+- Adjust tone according to current PAD emotional state
+
+**Example (friendly tone):**
+> You're called Test, we already know each other~ What can I do for you?
+
 ## Configuration
 
 ### Persona Configuration (`config/persona.yaml`)
