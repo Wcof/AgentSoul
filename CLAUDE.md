@@ -59,7 +59,7 @@ python3 scripts/scan_privacy.py
 python3 scripts/migrate_from_xiaonuan.py /path/to/old/config
 
 # Build MCP server manually
-cd mcp-server && npm install && npm run build
+cd mcp_server && npm install && npm run build
 ```
 
 ## Code Architecture
@@ -81,7 +81,7 @@ AgentSoul/
 │   ├── secure_base.md            # Security protocol (PROTECTED level)
 │   ├── skills_base.md            # Skill system rules
 │   └── tasks_base.md             # Task scheduling rules
-├── mcp-server/                   # MCP 服务实现 (TypeScript) - 独立维护
+├── mcp_server/                   # MCP 服务实现 (TypeScript) - 独立维护
 │   ├── src/
 │   │   ├── index.ts              # MCP service entry
 │   │   ├── types.ts              # Type definitions
@@ -139,7 +139,7 @@ AgentSoul/
    - Supports OpenClaw workspace integration
    - Bilingual (Chinese/English) interactive selection for all configurable fields
 
-4. **MCP Server** (`mcp-server/`):
+4. **MCP Server** (`mcp_server/`):
    - Exposes personality and memory tools via Model Context Protocol
    - Full multi-language support (Chinese/English) for tool descriptions
    - Available tools:

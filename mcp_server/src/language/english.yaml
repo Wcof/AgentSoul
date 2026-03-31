@@ -355,7 +355,7 @@ tool_index:
     parameters: "{ filePath: string, agentId?: string, project?: string }"
     whenToUse: "Call before editing a file in multi-agent work"
     required: false
-    example: '{ "filePath": "mcp-server/src/tools/soul.ts", "project": "AgentSoul" }'
+    example: '{ "filePath": "mcp_server/src/tools/soul.ts", "project": "AgentSoul" }'
   board_release_file:
     description: "Release all files claimed by this agent"
     parameters: "{ agentId?: string, project?: string }"

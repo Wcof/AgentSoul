@@ -753,7 +753,7 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
         log(f"注入身份档案失败: {e}", "ERROR")
         return False
 
-    mcp_dir = PROJECT_ROOT / "mcp-server"
+    mcp_dir = PROJECT_ROOT / "mcp_server"
     if not mcp_dir.exists():
         log("MCP 服务目录不存在", "ERROR")
         return False

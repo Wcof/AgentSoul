@@ -355,7 +355,7 @@ tool_index:
     parameters: "{ filePath: string, agentId?: string, project?: string }"
     whenToUse: "在多智能体工作中编辑文件前调用"
     required: false
-    example: '{ "filePath": "mcp-server/src/tools/soul.ts", "project": "AgentSoul" }'
+    example: '{ "filePath": "mcp_server/src/tools/soul.ts", "project": "AgentSoul" }'
   board_release_file:
     description: "释放此智能体声明的所有文件"
     parameters: "{ agentId?: string, project?: string }"

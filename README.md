@@ -41,7 +41,7 @@ AgentSoul/
 │   ├── secure_base.md            # 安全协议（PROTECTED）
 │   ├── skills_base.md            # 技能系统规则
 │   └── tasks_base.md             # 任务调度规则
-├── mcp-server/                   # MCP 服务实现 (TypeScript) - 独立维护
+├── mcp_server/                   # MCP 服务实现 (TypeScript) - 独立维护
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── src/
@@ -271,7 +271,7 @@ python3 scripts/scan_privacy.py
 python3 scripts/migrate_from_xiaonuan.py /path/to/old/config
 
 # 编译 MCP 服务
-cd mcp-server && npm install && npm run build
+cd mcp_server && npm install && npm run build
 ```
 
 ## 安全模型
