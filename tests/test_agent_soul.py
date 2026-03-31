@@ -358,17 +358,17 @@ class TestOpenClawInstaller(unittest.TestCase):
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_init_creates_correct_paths(self):
-        from src.openclaw_installer import OpenClawInstaller
+        from openclaw_server.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         self.assertEqual(installer.agent_path, Path(self.test_dir) / "agent")
 
     def test_is_installed_returns_false_when_not_installed(self):
-        from src.openclaw_installer import OpenClawInstaller
+        from openclaw_server.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         self.assertFalse(installer.is_installed())
 
     def test_create_directory_structure(self):
-        from src.openclaw_installer import OpenClawInstaller
+        from openclaw_server.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         installer._create_directory_structure("current_session")
 
@@ -392,7 +392,7 @@ class TestOpenClawInstaller(unittest.TestCase):
             self.assertTrue(directory.exists(), f"Directory should exist: {directory}")
 
     def test_copy_rule_files_reports_missing(self):
-        from src.openclaw_installer import OpenClawInstaller
+        from openclaw_server.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(Path(self.test_dir), Path(self.test_dir) / "workspace")
 
         # With empty src dir, all files should be missing
@@ -400,7 +400,7 @@ class TestOpenClawInstaller(unittest.TestCase):
         self.assertEqual(len(missing), len(OpenClawInstaller.RULE_FILES))
 
     def test_create_default_soul_state_creates_file(self):
-        from src.openclaw_installer import OpenClawInstaller
+        from openclaw_server.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         installer._create_directory_structure("current_session")
         installer._create_default_soul_state()

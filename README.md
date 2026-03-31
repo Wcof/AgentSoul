@@ -34,7 +34,6 @@ AgentSoul/
 │   ├── __init__.py               # 模块初始化
 │   ├── config_loader.py          # 配置加载器（dataclass）
 │   ├── path_compat.py            # 路径兼容性工具
-│   ├── openclaw_installer.py     # OpenClaw 安装器
 │   ├── SKILL.md                  # 人格核心规则 & 安全策略
 │   ├── soul_base.md              # PAD 情感计算引擎
 │   ├── memory_base.md            # 记忆系统规则
@@ -42,7 +41,7 @@ AgentSoul/
 │   ├── secure_base.md            # 安全协议（PROTECTED）
 │   ├── skills_base.md            # 技能系统规则
 │   └── tasks_base.md             # 任务调度规则
-├── mcp-server/                   # MCP 服务实现 (TypeScript)
+├── mcp-server/                   # MCP 服务实现 (TypeScript) - 独立维护
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── src/
@@ -66,6 +65,9 @@ AgentSoul/
 │           ├── entity-memory.ts  # 实体记忆工具
 │           ├── kv-cache.ts       # 三级缓存工具
 │           └── soul-board.ts     # 项目看板工具 (P2)
+├── openclaw_server/              # OpenClaw 集成实现 (Python) - 独立维护
+│   └── src/
+│       └── openclaw_installer.py # OpenClaw 安装器
 ├── scripts/
 │   └── scan_privacy.py           # 隐私扫描工具
 ├── tests/

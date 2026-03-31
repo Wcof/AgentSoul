@@ -704,7 +704,7 @@ def get_openclaw_workspace() -> Optional[Path]:
 
 
 def install_openclaw(scope: str) -> None:
-    from src.openclaw_installer import OpenClawInstaller
+    from openclaw_server.src.openclaw_installer import OpenClawInstaller
 
     # 验证配置
     config_loader = ConfigLoader(PROJECT_ROOT)

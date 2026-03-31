@@ -74,19 +74,19 @@ AgentSoul/
 │   ├── __init__.py               # Module initialization, version info
 │   ├── config_loader.py          # Configuration loader (dataclass model)
 │   ├── path_compat.py            # Path compatibility utilities
-│   ├── openclaw_installer.py     # OpenClaw integration installer
 │   ├── SKILL.md                  # Top-level personality rules & security policy
 │   ├── soul_base.md              # PAD affective computing engine rules
-│   ├── memory_base.md            # Memory system rules
+│   ├── memory_base.md            # Hierarchical memory system rules
 │   ├── master_base.md            # User profile rules
 │   ├── secure_base.md            # Security protocol (PROTECTED level)
 │   ├── skills_base.md            # Skill system rules
 │   └── tasks_base.md             # Task scheduling rules
-├── mcp-server/                   # MCP service implementation (TypeScript)
+├── mcp-server/                   # MCP 服务实现 (TypeScript) - 独立维护
 │   ├── src/
 │   │   ├── index.ts              # MCP service entry
 │   │   ├── types.ts              # Type definitions
 │   │   ├── storage.ts            # Storage utilities
+│   │   ├── language/             # Multi-language support (中文/英文)
 │   │   ├── lib/                  # Core libraries (from soul-main)
 │   │   │   ├── core-memory.ts    # Per-agent persistent facts
 │   │   │   ├── entity-memory.ts  # Structured entity tracking
@@ -97,10 +97,13 @@ AgentSoul/
 │   │   └── tools/
 │   │       ├── soul.ts           # Soul/personality tools
 │   │       ├── memory.ts         # Memory tools
-│   │       ├── core-memory.ts     # Core memory MCP tools
-│   │       ├── entity-memory.ts   # Entity memory MCP tools
+│   │       ├── core-memory.ts    # Core memory MCP tools
+│   │       ├── entity-memory.ts  # Entity memory MCP tools
 │   │       ├── kv-cache.ts       # KV-Cache MCP tools
 │   │       └── soul-board.ts      # Soul Board & Ledger tools
+├── openclaw_server/              # OpenClaw 集成实现 (Python) - 独立维护
+│   └── src/
+│       └── openclaw_installer.py # OpenClaw integration installer
 ├── scripts/
 │   ├── scan_privacy.py           # Privacy scanning tool
 │   └── migrate_from_xiaonuan.py  # Migration tool
