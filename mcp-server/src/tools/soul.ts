@@ -342,29 +342,13 @@ export async function handleMcpToolIndex(
     filteredIndex = toolIndex.filter(cat => cat.category === params.category);
   }
 
-  // Type definitions for tool index
-  type ToolEntry = {
-    name: string;
-    description: string;
-    parameters: string;
-    whenToUse: string;
-    required: boolean;
-    example: string;
-  };
-
-  type CategoryEntry = {
-    category: string;
-    description: string;
-    tools: ToolEntry[];
-  };
-
   // If specific tool requested, find just that tool
   if (params.tool) {
     const toolName = params.tool;
-    let foundTool: ToolEntry | null = null;
-    let foundCategory: CategoryEntry | null = null;
+    let foundTool: ToolIndexEntry | null = null;
+    let foundCategory: CategoryIndex | null = null;
 
-    for (const cat of filteredIndex as CategoryEntry[]) {
+    for (const cat of filteredIndex as CategoryIndex[]) {
       const match = cat.tools.find(t => t.name === toolName);
       if (match) {
         foundTool = match;

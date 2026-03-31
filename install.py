@@ -149,15 +149,21 @@ def select_from_list(prompt_key: str, allowed_values: List[str], default: str, l
             print(f"❌ {PROMPTS[lang]['invalid_number']}")
 
 
+/**
+ * Default PAD emotional state vector - fixed constant, created once at module load
+ */
+DEFAULT_PAD_STATE: Dict[str, Any] = {
+    "pleasure": DEFAULT_PAD_PLEASURE,
+    "arousal": DEFAULT_PAD_AROUSAL,
+    "dominance": DEFAULT_PAD_DOMINANCE,
+    "last_updated": None,
+    "history": [],
+};
+
 def get_default_pad_state() -> Dict[str, Any]:
-    """Get default PAD emotional state vector."""
-    return {
-        "pleasure": DEFAULT_PAD_PLEASURE,
-        "arousal": DEFAULT_PAD_AROUSAL,
-        "dominance": DEFAULT_PAD_DOMINANCE,
-        "last_updated": None,
-        "history": [],
-    }
+    """Get default PAD emotional state vector - returns a copy of the default state."""
+    # Return a copy to prevent accidental mutation of the constant
+    return DEFAULT_PAD_STATE.copy()
 
 
 # Bilingual prompts for interactive configuration wizard
@@ -737,14 +743,7 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
         soul_state_path = soul_state_dir / "state_vector.json"
         if not soul_state_path.exists():
             import json
-            # 默认 baseline PAD 值: Pleasure=0.3, Arousal=0.2, Dominance=0.3
-            default_state = {
-                "pleasure": 0.3,
-                "arousal": 0.2,
-                "dominance": 0.3,
-                "last_updated": None,
-                "history": [],
-            }
+            default_state = get_default_pad_state()
             soul_state_path.write_text(
                 json.dumps(default_state, indent=2, ensure_ascii=False),
                 encoding="utf-8"

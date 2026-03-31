@@ -48,7 +48,7 @@ import {
 
 import { z } from 'zod';
 import { PROJECT_ROOT } from './lib/paths.js';
-import { initLanguage, getLanguageResources, getToolDescription } from './language/index.js';
+import { initLanguage, getLanguageResources, getToolDescription, getStartupMessage } from './language/index.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 /**
@@ -402,25 +402,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
  * @description 创建标准输入输出传输通道并连接到 MCP 服务器，启动后在标准错误输出打印运行信息
  */
 async function main() {
-  // Log startup info for debugging
-  console.error(`AgentSoul MCP Server starting...`);
-  console.error(`- PROJECT_ROOT: ${PROJECT_ROOT}`);
-  console.error(`- Working directory: ${process.cwd()}`);
-
   // Initialize multi-language support
   const langResources = initLanguage();
-  console.error(`[AgentSoul Language] Loaded: ${langResources.language}`);
 
   // Build cached tools list with language descriptions resolved
   cachedTools = buildCachedTools();
-  console.error(`[AgentSoul MCP] Tools cached: ${cachedTools.length} tools`);
 
   // 创建标准输入输出传输通道
   const transport = new StdioServerTransport();
   // 连接传输通道到服务器
   await server.connect(transport);
-  // 输出服务器启动信息到标准错误
-  console.error('AgentSoul MCP Server running on stdio');
+
+  // Only output startup confirmation in quiet mode
+  // All debugging info is removed for cleaner logs
+  if (process.env.AGENTSOUL_DEBUG === '1') {
+    console.error(getStartupMessage('server_starting'));
+    console.error(getStartupMessage('project_root', PROJECT_ROOT));
+    console.error(getStartupMessage('working_dir', process.cwd()));
+    console.error(getStartupMessage('language_loaded', langResources.language));
+    console.error(getStartupMessage('tools_cached', cachedTools.length));
+  }
+  console.error(getStartupMessage('server_running'));
 }
 
 // 启动服务器并处理可能的错误

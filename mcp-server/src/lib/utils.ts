@@ -55,13 +55,20 @@ export function writeFile(filePath: string, content: string): boolean {
   }
 }
 
+// Precompiled regex patterns for date/time validation
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const WEEK_PATTERN = /^\d{4}-W\d{2}$/;
+const MONTH_PATTERN = /^\d{4}-\d{2}$/;
+const YEAR_PATTERN = /^\d{4}$/;
+const SAFE_FILENAME_PATTERN = /[^a-zA-Z0-9-_]/g;
+
 /**
  * Parse a date string to ensure it's in the expected format
  * @param dateStr - Date string in YYYY-MM-DD format
  * @returns true if valid, false otherwise
  */
 export function isValidDateString(dateStr: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+  if (!DATE_PATTERN.test(dateStr)) {
     return false;
   }
 
@@ -75,7 +82,7 @@ export function isValidDateString(dateStr: string): boolean {
  * @returns true if valid
  */
 export function isValidWeekString(weekStr: string): boolean {
-  return /^\d{4}-W\d{2}$/.test(weekStr);
+  return WEEK_PATTERN.test(weekStr);
 }
 
 /**
@@ -84,7 +91,7 @@ export function isValidWeekString(weekStr: string): boolean {
  * @returns true if valid
  */
 export function isValidMonthString(monthStr: string): boolean {
-  return /^\d{4}-\d{2}$/.test(monthStr);
+  return MONTH_PATTERN.test(monthStr);
 }
 
 /**
@@ -93,7 +100,7 @@ export function isValidMonthString(monthStr: string): boolean {
  * @returns true if valid
  */
 export function isValidYearString(yearStr: string): boolean {
-  return /^\d{4}$/.test(yearStr);
+  return YEAR_PATTERN.test(yearStr);
 }
 
 /**
@@ -103,7 +110,7 @@ export function isValidYearString(yearStr: string): boolean {
  * @returns Sanitized name safe for filenames
  */
 export function sanitizeTopicName(topic: string): string {
-  return topic.replace(/[^a-zA-Z0-9-_]/g, '_');
+  return topic.replace(SAFE_FILENAME_PATTERN, '_');
 }
 
 /**

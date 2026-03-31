@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
 
+from common import get_project_root
+
 
 @dataclass
 class PathMapping:
@@ -41,28 +43,26 @@ class ResolveResult:
 
 
 class PathResolver:
-    DEFAULT_MAPPINGS: List[PathMapping] = [
+    # Default mappings sorted by priority (higher priority first)
+    DEFAULT_MAPPINGS: list[PathMapping] = sorted([
         PathMapping("/xiaonuan/", "/agent/", 100, "核心路径映射"),
         PathMapping("/home/node/.openclaw/workspace/xiaonuan/", "/agent/", 90, "OpenClaw容器路径"),
         PathMapping("xiaonuan/data/", "agent/data/", 80, "相对路径映射"),
         PathMapping("xiaonuan/config/", "agent/config/", 80, "配置路径映射"),
         PathMapping("xiaonuan/src/", "agent/src/", 80, "源码路径映射"),
-    ]
+    ], key=lambda m: m.priority, reverse=True)
 
     def __init__(
         self,
         project_root: Optional[Path] = None,
-        mappings: Optional[List[PathMapping]] = None
+        mappings: Optional[list[PathMapping]] = None,
     ):
-        self.project_root = project_root or self._detect_project_root()
-        self.mappings = mappings or self.DEFAULT_MAPPINGS
-        self.mappings.sort(key=lambda m: m.priority, reverse=True)
-        self._cache: Dict[str, ResolveResult] = {}
-
-    def _detect_project_root(self) -> Path:
-        if "__file__" in globals():
-            return Path(__file__).parent.parent
-        return Path.cwd()
+        self.project_root = project_root or get_project_root()
+        self.mappings = mappings if mappings is not None else self.DEFAULT_MAPPINGS
+        # Only sort if custom mappings provided, default is already sorted
+        if mappings is not None:
+            self.mappings.sort(key=lambda m: m.priority, reverse=True)
+        self._cache: dict[str, ResolveResult] = {}
 
     def _apply_mapping(self, path: str) -> Tuple[str, PathMapping]:
         normalized = path.replace("\\", "/")

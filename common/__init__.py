@@ -32,9 +32,25 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 
 def get_project_root() -> Path:
+    """Get project root directory.
+
+    Uses precomputed PROJECT_ROOT from module level if __file__ is available,
+    otherwise falls back to current working directory.
+    """
     if "__file__" in globals():
-        return Path(__file__).parent.parent
+        return PROJECT_ROOT
     return Path.cwd()
+
+
+# Icon constants - predefined once at module load time
+ICONS = {
+    "check": "✅",
+    "cross": "❌",
+    "warn": "⚠️",
+    "info": "ℹ️",
+    "gear": "⚙️",
+    "sparkle": "✨",
+}
 
 
 def log(message: str, level: str = "INFO") -> None:
@@ -50,14 +66,12 @@ def log(message: str, level: str = "INFO") -> None:
 
 
 def icons() -> dict:
-    return {
-        "check": "✅",
-        "cross": "❌",
-        "warn": "⚠️",
-        "info": "ℹ️",
-        "gear": "⚙️",
-        "sparkle": "✨",
-    }
+    """Get icon mapping.
+
+    Deprecated: Use ICONS constant directly instead.
+    Kept for backward compatibility.
+    """
+    return ICONS
 
 
 def load_config(project_root: Optional[Path] = None) -> dict:

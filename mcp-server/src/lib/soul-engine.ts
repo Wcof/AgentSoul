@@ -71,6 +71,15 @@ export interface LedgerEntry {
 }
 
 // ============================================================================
+// Precompiled constants - created once at module load
+// ============================================================================
+
+/**
+ * Precompiled regex for replacing slashes in project IDs
+ */
+const SLASH_PATTERN = /\//g;
+
+// ============================================================================
 // SoulEngine Class
 // ============================================================================
 
@@ -106,14 +115,14 @@ export class SoulEngine {
    * Get board file path
    */
   private getBoardPath(projectId: string): string {
-    return path.join(this.baseDir, `${projectId.replace(/\//g, '_')}.json`);
+    return path.join(this.baseDir, `${projectId.replace(SLASH_PATTERN, '_')}.json`);
   }
 
   /**
    * Get ledger directory for a project
    */
   private getLedgerDir(projectId: string): string {
-    return path.join(this.baseDir, 'ledger', projectId.replace(/\//g, '_'));
+    return path.join(this.baseDir, 'ledger', projectId.replace(SLASH_PATTERN, '_'));
   }
 
   /**

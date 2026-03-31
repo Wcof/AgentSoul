@@ -1,5 +1,28 @@
 language: "chinese"
 
+# 启动日志消息
+startup_messages:
+  paths_search_start: "[AgentSoul paths] 从 __dirname 开始搜索配置文件：%s"
+  paths_checking: "[AgentSoul paths] 检查配置文件：%s"
+  paths_found: "[AgentSoul paths] 在 %s 找到 config/persona.yaml"
+  paths_fallback1_candidate: "[AgentSoul paths] 回退方案 1 候选：%s，检查 %s"
+  paths_fallback1_found: "[AgentSoul paths] 在回退方案 1 找到配置：%s"
+  paths_fallback2_candidate: "[AgentSoul paths] 回退方案 2 候选：%s，检查 %s"
+  paths_fallback2_found: "[AgentSoul paths] 在回退方案 2 找到配置：%s"
+  paths_not_found: "[AgentSoul] 警告：在所有搜索位置都找不到 config/persona.yaml。"
+  paths_fallback_cwd: "[AgentSoul] 回退到工作目录：%s"
+  server_starting: "AgentSoul MCP 服务器启动中..."
+  project_root: "- 项目根目录：%s"
+  working_dir: "- 工作目录：%s"
+  language_initializing: "[AgentSoul Language] 正在初始化语言：%s"
+  language_loaded: "[AgentSoul Language] 加载完成：%s"
+  tools_cached: "[AgentSoul MCP] 工具已缓存：%d 个工具"
+  fallback_to_english: "[AgentSoul Language] 回退到英语"
+  critical_no_english: "[AgentSoul Language] 严重错误：无法加载英语语言文件，使用空回退"
+  server_running: "AgentSoul MCP 服务器已在 stdio 上运行"
+  file_load_error: "[AgentSoul Language] 警告：无法加载 %s 的语言文件，路径：%s"
+  parse_error: "[AgentSoul Language] 错误：解析 YAML 失败 %s：%s"
+
 # 43 个工具的描述，用于 MCP 工具列表端点
 tool_descriptions:
   get_persona_config: >

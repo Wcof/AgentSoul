@@ -15,6 +15,24 @@ import { safePath } from '../utils.js';
 /**
  * A cached session snapshot
  */
+
+// ============================================================================
+// Module-level constants (created once at module load)
+// ============================================================================
+
+/**
+ * Tier names array - created once at module load
+ */
+const TIERS: Tier[] = ['hot', 'warm', 'cold'];
+
+/**
+ * Ebbinghaus forgetting curve constant c = 1.25 for typical forgetting
+ */
+const EBBINGHAUS_C = 1.25;
+
+// ============================================================================
+// Types
+// ============================================================================
 export interface CacheSnapshot {
   /** Unique snapshot ID */
   id: string;
@@ -59,6 +77,13 @@ export interface CacheStats {
  */
 type Tier = 'hot' | 'warm' | 'cold';
 
+/**
+ * Cache index - metadata about all snapshots
+ */
+interface CacheIndex {
+  snapshots: Record<string, Omit<CacheSnapshot, 'content'>>;
+}
+
 // ============================================================================
 // SoulKVCache Class
 // ============================================================================
@@ -92,7 +117,7 @@ export class SoulKVCache {
   }
 
   private ensureDirectories(): void {
-    for (const tier of ['hot', 'warm', 'cold']) {
+    for (const tier of TIERS) {
       const dir = path.join(this.baseDir, tier);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -240,8 +265,7 @@ export class SoulKVCache {
    * R = 1 / ((1 - c) * t + c) where c = 1.25 for typical forgetting
    */
   private ebbinghausRetention(days: number): number {
-    const c = 1.25;
-    return 1 / ((1 - c) * days + c);
+    return 1 / ((1 - EBBINGHAUS_C) * days + EBBINGHAUS_C);
   }
 
   // ============================================================================
@@ -506,13 +530,6 @@ export class SoulKVCache {
 
     return true;
   }
-}
-
-/**
- * Cache index - metadata about all snapshots
- */
-interface CacheIndex {
-  snapshots: Record<string, Omit<CacheSnapshot, 'content'>>;
 }
 
 export default SoulKVCache;

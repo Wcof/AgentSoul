@@ -120,7 +120,8 @@ class ConfigLoader:
         self._persona_cache = PersonaConfig(ai=ai_config, master=master_config)
         return self._persona_cache
 
-    def _safe_get(self, data: Dict, key: str, default: Any) -> Any:
+    @staticmethod
+    def _safe_get(data: Dict, key: str, default: Any) -> Any:
         if not isinstance(data, dict):
             return default
         if key not in data:
@@ -132,7 +133,8 @@ class ConfigLoader:
         # This allows users to intentionally clear the default value
         return value
 
-    def _to_list(self, value: Union[str, list, tuple]) -> list:
+    @staticmethod
+    def _to_list(value: Union[str, list, tuple]) -> list:
         if isinstance(value, (list, tuple)):
             return list(value)
         if isinstance(value, str):
@@ -227,34 +229,34 @@ class ConfigLoader:
         )
 
         return behavior
+# Default persona configuration data - created once at module load
+DEFAULT_PERSONA_DATA: Dict[str, Any] = {
+    "agent": {
+        "name": "Agent",
+        "nickname": "",
+        "naming_mode": "default",
+        "role": "AI Assistant",
+        "personality": [],
+        "core_values": [],
+        "interaction_style": {
+            "tone": "neutral",
+            "language": "chinese",
+            "emoji_usage": "minimal",
+        },
+    },
+    "master": {
+        "name": "",
+        "nickname": [],
+        "timezone": "Asia/Shanghai",
+        "labels": [],
+    },
+}
 
 
 def create_default_persona(output_path: Path) -> None:
-    config_data = {
-        "agent": {
-            "name": "Agent",
-            "nickname": "",
-            "naming_mode": "default",
-            "role": "AI Assistant",
-            "personality": [],
-            "core_values": [],
-            "interaction_style": {
-                "tone": "neutral",
-                "language": "chinese",
-                "emoji_usage": "minimal",
-            },
-        },
-        "master": {
-            "name": "",
-            "nickname": [],
-            "timezone": "Asia/Shanghai",
-            "labels": [],
-        },
-    }
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        yaml.dump(config_data, f, allow_unicode=True, sort_keys=False)
+        yaml.dump(DEFAULT_PERSONA_DATA, f, allow_unicode=True, sort_keys=False)
 
 
 if __name__ == "__main__":

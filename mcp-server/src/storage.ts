@@ -25,6 +25,88 @@ interface RawPersonaConfig {
 const DATA_ROOT = path.join(PROJECT_ROOT, 'data');
 
 /**
+ * Default PAD emotional state vector - created once at module load
+ * Default baseline values: Pleasure=0.3, Arousal=0.2, Dominance=0.3
+ */
+const DEFAULT_SOUL_STATE: SoulState = {
+  pleasure: 0.3,
+  arousal: 0.2,
+  dominance: 0.3,
+  last_updated: null,
+  history: [],
+};
+
+/**
+ * Get a copy of the default soul state.
+ * Returns a copy to prevent accidental mutation of the constant.
+ */
+function getDefaultSoulState(): SoulState {
+  return { ...DEFAULT_SOUL_STATE };
+}
+
+/**
+ * Default persona configuration - created once at module load
+ */
+const DEFAULT_PERSONA_CONFIG: PersonaConfig = {
+  ai: {
+    name: 'Agent',
+    nickname: '',
+    naming_mode: 'default',
+    role: 'AI Assistant',
+    personality: [],
+    core_values: [],
+    interaction_style: {},
+  },
+  master: {
+    name: '',
+    nickname: [],
+    timezone: 'Asia/Shanghai',
+    labels: [],
+  },
+};
+
+/**
+ * Get a copy of the default persona configuration.
+ * Returns a copy to prevent accidental mutation of the constant.
+ */
+function getDefaultPersonaConfig(): PersonaConfig {
+  return {
+    ai: { ...DEFAULT_PERSONA_CONFIG.ai },
+    master: { ...DEFAULT_PERSONA_CONFIG.master },
+  };
+}
+
+/**
+ * 将值转换为字符串数组
+ * 支持数组、逗号分隔字符串和单个字符串格式
+ * @param v - 输入值
+ * @returns 标准化的字符串数组
+ */
+function toList(v: unknown): string[] {
+  if (Array.isArray(v)) return (v as string[]).filter(x => typeof x === 'string' && x.trim());
+  if (typeof v === 'string') {
+    if (v.includes(',')) {
+      return v.split(',').map(x => x.trim()).filter(x => x);
+    }
+    return v.trim() ? [v.trim()] : [];
+  }
+  return [];
+}
+
+/**
+ * 安全地获取对象属性值
+ * @param obj - 目标对象
+ * @param key - 属性键
+ * @param defaultValue - 默认值
+ * @returns 属性值或默认值
+ */
+function safeGet<T>(obj: Record<string, unknown> | undefined, key: string, defaultValue: T): T {
+  if (!obj || typeof obj !== 'object') return defaultValue;
+  const val = obj[key];
+  return val === undefined || val === null ? defaultValue : val as T;
+}
+
+/**
  * 存储管理器类
  * 负责 AgentSoul 所有数据的持久化操作，包括人格配置、灵魂状态和各种记忆
  */
@@ -50,23 +132,7 @@ export class StorageManager {
     if (content === null) {
       console.error(`[AgentSoul Storage] WARNING: Could not read persona config from ${configPath}, using defaults`);
       console.error(`[AgentSoul Storage] PROJECT_ROOT = ${PROJECT_ROOT}`);
-      return {
-        ai: {
-          name: 'Agent',
-          nickname: '',
-          naming_mode: 'default',
-          role: 'AI Assistant',
-          personality: [],
-          core_values: [],
-          interaction_style: {},
-        },
-        master: {
-          name: '',
-          nickname: [],
-          timezone: 'Asia/Shanghai',
-          labels: [],
-        },
-      };
+      return getDefaultPersonaConfig();
     }
 
     const raw = yaml.load(content) as RawPersonaConfig;
@@ -88,36 +154,6 @@ export class StorageManager {
       aiData = { name: 'Agent' };
       masterData = {};
     }
-
-    /**
-     * 将值转换为字符串数组
-     * 支持数组、逗号分隔字符串和单个字符串格式
-     * @param v - 输入值
-     * @returns 标准化的字符串数组
-     */
-    const toList = (v: unknown): string[] => {
-      if (Array.isArray(v)) return (v as string[]).filter(x => typeof x === 'string' && x.trim());
-      if (typeof v === 'string') {
-        if (v.includes(',')) {
-          return v.split(',').map(x => x.trim()).filter(x => x);
-        }
-        return v.trim() ? [v.trim()] : [];
-      }
-      return [];
-    };
-
-    /**
-     * 安全地获取对象属性值
-     * @param obj - 目标对象
-     * @param key - 属性键
-     * @param defaultValue - 默认值
-     * @returns 属性值或默认值
-     */
-    const safeGet = <T>(obj: Record<string, unknown> | undefined, key: string, defaultValue: T): T => {
-      if (!obj || typeof obj !== 'object') return defaultValue;
-      const val = obj[key];
-      return val === undefined || val === null ? defaultValue : val as T;
-    };
 
     return {
       ai: {
@@ -167,37 +203,19 @@ export class StorageManager {
     const checkedPath = safePath(statePath, DATA_ROOT);
     if (!checkedPath) {
       console.error('Path traversal detected in readSoulState');
-      return {
-        pleasure: 0.3,
-        arousal: 0.2,
-        dominance: 0.3,
-        last_updated: null,
-        history: [],
-      };
+      return getDefaultSoulState();
     }
 
     const content = readFile(checkedPath);
     if (content === null) {
       // 返回默认基准状态
-      return {
-        pleasure: 0.3,
-        arousal: 0.2,
-        dominance: 0.3,
-        last_updated: null,
-        history: [],
-      };
+      return getDefaultSoulState();
     }
 
     try {
       return JSON.parse(content) as SoulState;
     } catch (e) {
-      return {
-        pleasure: 0.3,
-        arousal: 0.2,
-        dominance: 0.3,
-        last_updated: null,
-        history: [],
-      };
+      return getDefaultSoulState();
     }
   }
 

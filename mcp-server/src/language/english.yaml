@@ -1,5 +1,28 @@
 language: "english"
 
+# Startup log messages
+startup_messages:
+  paths_search_start: "[AgentSoul paths] Starting search from __dirname: %s"
+  paths_checking: "[AgentSoul paths] Checking %s"
+  paths_found: "[AgentSoul paths] Found config/persona.yaml at %s"
+  paths_fallback1_candidate: "[AgentSoul paths] Fallback 1 candidate: %s, checking %s"
+  paths_fallback1_found: "[AgentSoul paths] Found config in fallback 1: %s"
+  paths_fallback2_candidate: "[AgentSoul paths] Fallback 2 candidate: %s, checking %s"
+  paths_fallback2_found: "[AgentSoul paths] Found config in fallback 2: %s"
+  paths_not_found: "[AgentSoul] WARNING: Could not find config/persona.yaml in any searched locations."
+  paths_fallback_cwd: "[AgentSoul] Falling back to working directory: %s"
+  server_starting: "AgentSoul MCP Server starting..."
+  project_root: "- PROJECT_ROOT: %s"
+  working_dir: "- Working directory: %s"
+  language_initializing: "[AgentSoul Language] Initializing for language: %s"
+  language_loaded: "[AgentSoul Language] Loaded: %s"
+  tools_cached: "[AgentSoul MCP] Tools cached: %d tools"
+  fallback_to_english: "[AgentSoul Language] Falling back to English"
+  critical_no_english: "[AgentSoul Language] CRITICAL: Could not load English language file, using empty fallback"
+  server_running: "AgentSoul MCP Server running on stdio"
+  file_load_error: "[AgentSoul Language] WARNING: Could not load language file for %s at %s"
+  parse_error: "[AgentSoul Language] ERROR: Failed to parse YAML from %s: %s"
+
 # 43 tool descriptions for MCP list tools endpoint
 tool_descriptions:
   get_persona_config: >

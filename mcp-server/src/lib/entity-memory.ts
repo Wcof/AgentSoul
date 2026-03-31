@@ -5,7 +5,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { safePath } from './utils.js';
+import { safePath, sanitizeTopicName } from './utils.js';
 
 /**
  * Entity types supported
@@ -53,6 +53,24 @@ interface EntityStorage {
 }
 
 /**
+ * Default empty entity storage - created once at module load
+ */
+const DEFAULT_EMPTY_STORAGE: EntityStorage = {
+  entities: {},
+  version: 1,
+};
+
+/**
+ * Get a copy of the default empty storage
+ */
+function getEmptyEntityStorage(): EntityStorage {
+  return { ...DEFAULT_EMPTY_STORAGE, entities: {} };
+}
+
+// Precompiled regex patterns for entity name normalization
+const WHITESPACE_PATTERN = /\s+/g;
+
+/**
  * Entity Memory class - structured entity tracking
  */
 export class EntityMemory {
@@ -83,7 +101,8 @@ export class EntityMemory {
    * Normalize entity name for storage (lowercase, no special chars)
    */
   private normalizeName(name: string): string {
-    return name.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9-_]/g, '');
+    const normalized = name.toLowerCase().trim().replace(WHITESPACE_PATTERN, '_');
+    return sanitizeTopicName(normalized);
   }
 
   /**
@@ -96,10 +115,7 @@ export class EntityMemory {
 
     const checkedPath = safePath(this.storagePath, this.baseDir);
     if (!checkedPath || !fs.existsSync(checkedPath)) {
-      this.cachedStorage = {
-        entities: {},
-        version: 1,
-      };
+      this.cachedStorage = getEmptyEntityStorage();
       return this.cachedStorage;
     }
 
@@ -109,10 +125,7 @@ export class EntityMemory {
       return this.cachedStorage;
     } catch (e) {
       console.error('Error reading entity storage:', e);
-      this.cachedStorage = {
-        entities: {},
-        version: 1,
-      };
+      this.cachedStorage = getEmptyEntityStorage();
       return this.cachedStorage;
     }
   }

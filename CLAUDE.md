@@ -11,6 +11,10 @@ AgentSoul is a general-purpose AI Agent personality framework. It provides:
 - MCP Service exposing personality and memory capabilities via Model Context Protocol
 - OpenClaw deep integration support
 
+**Environment Requirements**:
+- Python 3.10+
+- Node.js 18+ (required for MCP server installation)
+
 ## Common Commands
 
 ### Installation & Setup
@@ -39,11 +43,14 @@ python3 install.py --openclaw --scope global
 
 ### Development
 ```bash
-# Run all tests
+# Run all tests (unittest style, works with pytest too)
 python3 -m pytest tests/ -v
 
 # Run a single test file
 python3 -m pytest tests/test_agent_soul.py -v
+
+# Or run directly with unittest
+python3 -m unittest tests/test_agent_soul.py -v
 
 # Run privacy scan (check for sensitive information)
 python3 scripts/scan_privacy.py
@@ -131,12 +138,14 @@ AgentSoul/
 
 4. **MCP Server** (`mcp-server/`):
    - Exposes personality and memory tools via Model Context Protocol
+   - Full multi-language support (Chinese/English) for tool descriptions
    - Available tools:
      - `get_persona_config`: Get current persona configuration
      - `get_soul_state`: Read current PAD emotion state
      - `update_soul_state`: Update emotion state
      - `get_base_rules`: Get base rules documentation with security access control
-     - `get_mcp_usage_guide`: Get complete MCP usage guide and workflow instructions
+     - `get_mcp_usage_guide`: Get complete MCP usage guide and workflow instructions (mandatory on startup)
+     - `mcp_tool_index`: Agent research tool - get MCP tool reference (full index or by category/tool name)
      - `read_memory_day`: Read daily memory by date (YYYY-MM-DD)
      - `write_memory_day`: Write daily memory
      - `read_memory_week`: Read weekly memory by week (YYYY-WW)
@@ -262,3 +271,17 @@ priority:                       # Behavior priority (top = higher priority)
    - Updates identity profiles via `initialize_identity()`
 
 3. Proceeds with selected installation mode (generate persona, install MCP, or install OpenClaw)
+
+## Generated Output Files
+
+When run with `--persona`, the installer generates:
+- `agent-persona.md` - Complete personality profile for Claude Desktop/Trae and other AI editors
+- `.cursorrules` - Cursor editor rules (auto-loaded by Cursor)
+- `.windsurfrules` - Windsurf editor rules (auto-loaded by Windsurf)
+
+When installing to OpenClaw, it creates:
+- `data/identity/self/` - AI identity profile
+- `data/identity/master/` - User identity profile
+- `data/soul/` - PAD emotion state storage
+- `data/memory/` - Hierarchical memory directories
+- `agent/base_rules/` - All AgentSoul base rules

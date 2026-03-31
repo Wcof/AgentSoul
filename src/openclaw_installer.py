@@ -13,9 +13,28 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from common import safe_file_stem, initialize_identity
 from src.config_loader import ConfigLoader
+
+
+# Default PAD emotional state vector - created once at module load
+# Default baseline values: Pleasure=0.3, Arousal=0.2, Dominance=0.3
+_DEFAULT_PAD_STATE: Dict[str, Any] = {
+    "pleasure": 0.3,
+    "arousal": 0.2,
+    "dominance": 0.3,
+    "last_updated": None,
+    "history": [],
+}
+
+
+def _get_default_pad_state() -> Dict[str, Any]:
+    """Get a copy of the default PAD emotional state.
+
+    Returns a copy to prevent accidental mutation of the module-level constant.
+    """
+    return _DEFAULT_PAD_STATE.copy()
 
 
 class OpenClawInstaller:
@@ -158,17 +177,9 @@ Scope: {scope}
         state_dir = self.agent_path / "data" / "soul" / "soul_variable"
         state_path = state_dir / "state_vector.json"
 
-        # 默认 baseline PAD 值: Pleasure=0.3, Arousal=0.2, Dominance=0.3
-        default_state = {
-            "pleasure": 0.3,
-            "arousal": 0.2,
-            "dominance": 0.3,
-            "last_updated": None,
-            "history": [],
-        }
-
         # Only write if not exists to avoid overwriting user modifications
         if not state_path.exists():
+            default_state = _get_default_pad_state()
             state_path.write_text(json.dumps(default_state, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def install(self, scope: str) -> None:

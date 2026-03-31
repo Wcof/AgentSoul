@@ -30,6 +30,21 @@ interface AgentCoreMemory {
 }
 
 /**
+ * Default empty core memory - created once at module load
+ */
+const DEFAULT_EMPTY_STORAGE: AgentCoreMemory = {
+  entries: {},
+  version: 1,
+};
+
+/**
+ * Get a copy of the default empty storage
+ */
+function getEmptyStorage(): AgentCoreMemory {
+  return { ...DEFAULT_EMPTY_STORAGE, entries: {} };
+}
+
+/**
  * Core Memory class - per-agent persistent facts
  */
 export class CoreMemory {
@@ -66,10 +81,7 @@ export class CoreMemory {
   private readStorage(agentName: string): AgentCoreMemory {
     const checkedPath = safePath(this.getStoragePath(agentName), this.baseDir);
     if (!checkedPath || !fs.existsSync(checkedPath)) {
-      return {
-        entries: {},
-        version: 1,
-      };
+      return getEmptyStorage();
     }
 
     try {
@@ -77,10 +89,7 @@ export class CoreMemory {
       return JSON.parse(content) as AgentCoreMemory;
     } catch (e) {
       console.error(`Error reading core memory for ${agentName}:`, e);
-      return {
-        entries: {},
-        version: 1,
-      };
+      return getEmptyStorage();
     }
   }
 
@@ -192,10 +201,7 @@ export class CoreMemory {
    * @returns True if cleared
    */
   clear(agentName: string = 'default'): boolean {
-    const storage: AgentCoreMemory = {
-      entries: {},
-      version: 1,
-    };
+    const storage = getEmptyStorage();
     return this.writeStorage(agentName, storage);
   }
 }
