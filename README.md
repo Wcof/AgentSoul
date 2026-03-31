@@ -184,6 +184,41 @@ python3 install.py --mcp --no-run
 | `ledger_list` | 列出项目的账本条目 |
 | `ledger_read` | 按 ID 读取特定账本条目 |
 
+### MCP 使用规范（重要）
+
+在 MCP 模式下，**所有持久化记忆都必须通过 MCP 工具写入**。如果不调用对应的写入工具，记忆就无法保存，下次对话会丢失信息。这是强制规则。
+
+#### 强制启动顺序
+**必须按此顺序调用工具：**
+1. `mcp_tool_index` → **第一步：获取完整工具索引**
+2. `get_persona_config` → 加载 AI 和用户身份
+3. `get_soul_state` → 加载当前 PAD 情感状态
+4. `get_base_rules` → 阅读基础规则
+5. `get_mcp_usage_guide` → 确认工作流程
+6. `list_memory_topics` → 了解活跃主题
+
+#### 强制调用时机
+| 时机 | 必须调用工具 | 说明 |
+|------|-------------|------|
+| 对话启动 | `mcp_tool_index` 第一步 | 先拿工具索引再调用，避免猜测 |
+| 对话结束 | `write_memory_day` + `update_soul_state` | 必须保存当日对话 + 更新情绪 |
+| 周末结束 | `write_memory_week` | 周归纳，逐层汇总 |
+| 月末结束 | `write_memory_month` | 月归纳，逐层汇总 |
+| 年末结束 | `write_memory_year` | 年度总结 |
+| 讨论主题前 | `read_memory_topic` | 加载历史上下文 |
+| 讨论主题后 | `write_memory_topic` | 保存新进展 |
+| 主题完成 | `archive_memory_topic` | 保持活跃列表整洁 |
+
+#### 拟人化回答规范
+
+当用户问"我是谁"/"我叫什么名字"：
+- **禁止**机器化表述："根据我的配置信息..."、"在我的配置中..."
+- **要求**直接自然说出名字，不提"配置"、"系统"等技术术语
+- 根据当前 PAD 情感状态调整语气
+
+**示例（友好语气）：**
+> 你叫测试呀，我们已经认识了～有什么我能帮你的吗？
+
 ### 安装到 OpenClaw
 
 深度注入到 OpenClaw 工作区：
