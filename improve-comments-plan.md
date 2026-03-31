@@ -9,42 +9,42 @@
 ## 需要处理的文件清单
 
 ### 入口文件
-- [ ] `mcp-server/src/index.ts` - MCP 服务器主入口，工具注册和请求处理
+- [ ] `mcp_server/src/index.ts` - MCP 服务器主入口，工具注册和请求处理
 
-### 工具模块 (`mcp-server/src/tools/`)
-- [ ] `mcp-server/src/tools/soul.ts` - 人格和灵魂状态相关工具
-- [ ] `mcp-server/src/tools/memory.ts` - 分层记忆读写工具
-- [x] `mcp-server/src/tools/core-memory.ts` - 核心记忆工具
-- [ ] `mcp-server/src/tools/entity-memory.ts` - 实体记忆工具
-- [ ] `mcp-server/src/tools/kv-cache.ts` - 三级缓存工具
-- [ ] `mcp-server/src/tools/soul-board.ts` - 项目看板工具
+### 工具模块 (`mcp_server/src/tools/`)
+- [ ] `mcp_server/src/tools/soul.ts` - 人格和灵魂状态相关工具
+- [ ] `mcp_server/src/tools/memory.ts` - 分层记忆读写工具
+- [x] `mcp_server/src/tools/core-memory.ts` - 核心记忆工具
+- [ ] `mcp_server/src/tools/entity-memory.ts` - 实体记忆工具
+- [ ] `mcp_server/src/tools/kv-cache.ts` - 三级缓存工具
+- [ ] `mcp_server/src/tools/soul-board.ts` - 项目看板工具
 
-### 核心库 (`mcp-server/src/lib/`)
-- [ ] `mcp-server/src/lib/paths.ts` - 路径管理器
-- [ ] `mcp-server/src/lib/config.ts` - 配置加载
-- [ ] `mcp-server/src/lib/config.default.ts` - 默认配置
-- [ ] `mcp-server/src/lib/utils.ts` - 工具函数
-- [ ] `mcp-server/src/lib/storage.ts` - 存储工具（被 soul.ts 使用）
-- [ ] `mcp-server/src/lib/core-memory.ts` - 核心记忆引擎
-- [ ] `mcp-server/src/lib/entity-memory.ts` - 实体记忆引擎
-- [ ] `mcp-server/src/lib/soul-engine.ts` - 灵魂引擎
-- [ ] `mcp-server/src/lib/agent-registry.ts` - Agent 注册表
-- [ ] `mcp-server/src/lib/context.ts` - 上下文管理
-- [ ] `mcp-server/src/lib/intercom-log.ts` - 日志模块
+### 核心库 (`mcp_server/src/lib/`)
+- [ ] `mcp_server/src/lib/paths.ts` - 路径管理器
+- [ ] `mcp_server/src/lib/config.ts` - 配置加载
+- [ ] `mcp_server/src/lib/config.default.ts` - 默认配置
+- [ ] `mcp_server/src/lib/utils.ts` - 工具函数
+- [ ] `mcp_server/src/lib/storage.ts` - 存储工具（被 soul.ts 使用）
+- [ ] `mcp_server/src/lib/core-memory.ts` - 核心记忆引擎
+- [ ] `mcp_server/src/lib/entity-memory.ts` - 实体记忆引擎
+- [ ] `mcp_server/src/lib/soul-engine.ts` - 灵魂引擎
+- [ ] `mcp_server/src/lib/agent-registry.ts` - Agent 注册表
+- [ ] `mcp_server/src/lib/context.ts` - 上下文管理
+- [ ] `mcp_server/src/lib/intercom-log.ts` - 日志模块
 
-### KV-Cache 子模块 (`mcp-server/src/lib/kv-cache/`)
-- [ ] `mcp-server/src/lib/kv-cache/index.ts` - KV-Cache 入口
-- [ ] `mcp-server/src/lib/kv-cache/schema.ts` - 数据结构定义
-- [ ] `mcp-server/src/lib/kv-cache/tier-manager.ts` - 层级管理器
-- [ ] `mcp-server/src/lib/kv-cache/sqlite-store.ts` - SQLite 存储
-- [ ] `mcp-server/src/lib/kv-cache/compressor.ts` - 压缩器
-- [ ] `mcp-server/src/lib/kv-cache/embedding.ts` - 向量嵌入引擎
-- [ ] `mcp-server/src/lib/kv-cache/token-saver.ts` - Token 修剪器
-- [ ] `mcp-server/src/lib/kv-cache/snapshot.ts` - 快照管理
-- [ ] `mcp-server/src/lib/kv-cache/backup.ts` - 备份功能
+### KV-Cache 子模块 (`mcp_server/src/lib/kv-cache/`)
+- [ ] `mcp_server/src/lib/kv-cache/index.ts` - KV-Cache 入口
+- [ ] `mcp_server/src/lib/kv-cache/schema.ts` - 数据结构定义
+- [ ] `mcp_server/src/lib/kv-cache/tier-manager.ts` - 层级管理器
+- [ ] `mcp_server/src/lib/kv-cache/sqlite-store.ts` - SQLite 存储
+- [ ] `mcp_server/src/lib/kv-cache/compressor.ts` - 压缩器
+- [ ] `mcp_server/src/lib/kv-cache/embedding.ts` - 向量嵌入引擎
+- [ ] `mcp_server/src/lib/kv-cache/token-saver.ts` - Token 修剪器
+- [ ] `mcp_server/src/lib/kv-cache/snapshot.ts` - 快照管理
+- [ ] `mcp_server/src/lib/kv-cache/backup.ts` - 备份功能
 
 ### 类型定义
-- [ ] `mcp-server/src/types.ts` - 全局类型定义
+- [ ] `mcp_server/src/types.ts` - 全局类型定义
 
 ### Python 安装脚本
 - [ ] `install.py` - 安装向导（已经是中文注释，检查一致性）

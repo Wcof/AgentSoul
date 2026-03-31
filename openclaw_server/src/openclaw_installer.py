@@ -14,27 +14,85 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
-from common import safe_file_stem, initialize_identity
+from common import safe_file_stem, initialize_identity, get_default_pad_state
 from src.config_loader import ConfigLoader
 
 
-# Default PAD emotional state vector - created once at module load
-# Default baseline values: Pleasure=0.3, Arousal=0.2, Dominance=0.3
-_DEFAULT_PAD_STATE: Dict[str, Any] = {
-    "pleasure": 0.3,
-    "arousal": 0.2,
-    "dominance": 0.3,
-    "last_updated": None,
-    "history": [],
-}
+def detect_mcp_data(agentsoul_root: Path) -> bool:
+    """检测 MCP 服务是否已有数据存储
 
-
-def _get_default_pad_state() -> Dict[str, Any]:
-    """Get a copy of the default PAD emotional state.
-
-    Returns a copy to prevent accidental mutation of the module-level constant.
+    Checks if MCP has existing data (indicates MCP has been used before)
+    Returns True if data directory exists and has content
     """
-    return _DEFAULT_PAD_STATE.copy()
+    mcp_data_dir = agentsoul_root / "data"
+    if not mcp_data_dir.exists():
+        return False
+
+    # Check if any data exists
+    has_content = False
+    # Check soul state
+    soul_state = mcp_data_dir / "soul" / "soul_variable" / "state_vector.json"
+    if soul_state.exists():
+        has_content = True
+
+    return has_content
+
+
+def sync_mcp_data_to_openclaw(agentsoul_root: Path, openclaw_data_root: Path) -> None:
+    """同步已有 MCP 数据到 OpenClaw
+
+    Copies existing MCP data to OpenClaw installation to keep consistency
+    """
+    mcp_data_dir = agentsoul_root / "data"
+    if not mcp_data_dir.exists():
+        return
+
+    print("🔍 检测到 MCP 已有数据，正在同步到 OpenClaw...")
+
+    # Copy soul state
+    mcp_soul = mcp_data_dir / "soul"
+    oc_soul = openclaw_data_root / "soul"
+    if mcp_soul.exists():
+        oc_soul.mkdir(parents=True, exist_ok=True)
+        for item in mcp_soul.glob('**/*'):
+            if item.is_file():
+                rel = item.relative_to(mcp_soul)
+                target = oc_soul / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, target)
+        print("   ✓ soul 状态已同步")
+
+    # Copy memory
+    mcp_memory = mcp_data_dir / "memory"
+    oc_memory = openclaw_data_root / "memory"
+    if mcp_memory.exists():
+        oc_memory.mkdir(parents=True, exist_ok=True)
+        for item in mcp_memory.glob('**/*.md'):
+            if item.is_file():
+                rel = item.relative_to(mcp_memory)
+                target = oc_memory / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, target)
+        print("   ✓ 记忆数据已同步")
+
+    # Copy extended storage (core-memory, entity-memory, kv-cache)
+    for dirname in ['core-memory', 'entity-memory', 'kv-cache']:
+        mcp_dir = mcp_data_dir / dirname
+        if mcp_dir.exists():
+            oc_dir = openclaw_data_root / dirname
+            oc_dir.mkdir(parents=True, exist_ok=True)
+            for item in mcp_dir.glob('**/*'):
+                if item.is_file():
+                    rel = item.relative_to(mcp_dir)
+                    target = oc_dir / rel
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        shutil.copy2(item, target)
+                    except (PermissionError, OSError) as e:
+                        print(f"   ⚠️  无法复制 {item}: {e}")
+            print(f"   ✓ {dirname} 已同步")
+
+    print("✅ MCP 数据同步完成")
 
 
 class OpenClawInstaller:
@@ -179,7 +237,7 @@ Scope: {scope}
 
         # Only write if not exists to avoid overwriting user modifications
         if not state_path.exists():
-            default_state = _get_default_pad_state()
+            default_state = get_default_pad_state()
             state_path.write_text(json.dumps(default_state, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def install(self, scope: str) -> None:
@@ -210,9 +268,16 @@ Scope: {scope}
         self._write_marker(scope)
         print("✅ 安装标记写入完成")
 
-        # 创建默认 PAD 状态文件
-        self._create_default_soul_state()
-        print("✅ 默认情感状态初始化完成")
+        # 检测 MCP 是否已有数据，如果有则同步过来
+        if detect_mcp_data(self.agentsoul_root):
+            sync_mcp_data_to_openclaw(
+                self.agentsoul_root,
+                self.agent_path / "data"
+            )
+        else:
+            # 创建默认 PAD 状态文件（只有在没有 MCP 数据时才创建）
+            self._create_default_soul_state()
+            print("✅ 默认情感状态初始化完成")
 
         print(f"\n🎉 AgentSoul 已成功安装到 OpenClaw ({scope})！")
         print(f"   安装位置: {self.agent_path}")

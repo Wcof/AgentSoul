@@ -22,6 +22,7 @@ AgentSoul · 人格插件安装脚本 v1.0
 """
 
 import sys
+import re
 import json
 import yaml
 import argparse
@@ -33,13 +34,16 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent
 
 try:
-    from common import log, safe_file_stem, initialize_identity
-    from src.config_loader import ConfigLoader, create_default_persona
+    from common import log, safe_file_stem, initialize_identity, get_default_pad_state
+    from src.config_loader import ConfigLoader, create_default_persona, DEFAULT_PERSONA_DATA
 except ImportError:
     sys.path.insert(0, str(PROJECT_ROOT))
-    from common import log, safe_file_stem, initialize_identity
-    from src.config_loader import ConfigLoader, create_default_persona
+    from common import log, safe_file_stem, initialize_identity, get_default_pad_state
+    from src.config_loader import ConfigLoader, create_default_persona, DEFAULT_PERSONA_DATA
 
+# Import defaults from config_loader
+# Defaults are read from DEFAULT_PERSONA_DATA directly at point of use
+# to avoid duplication and keep in sync with source of truth
 
 def open_file_in_editor(file_path: Path) -> bool:
     """使用系统默认编辑器打开文件
@@ -61,17 +65,6 @@ def open_file_in_editor(file_path: Path) -> bool:
         pass
     return False
 
-
-# Default constants
-DEFAULT_AGENT_NAME = "Agent"
-DEFAULT_AGENT_ROLE = "AI Assistant"
-DEFAULT_TIMEZONE = "Asia/Shanghai"
-DEFAULT_TONE = "neutral"
-DEFAULT_LANGUAGE = "chinese"
-DEFAULT_EMOJI_USAGE = "minimal"
-DEFAULT_PAD_PLEASURE = 0.3
-DEFAULT_PAD_AROUSAL = 0.2
-DEFAULT_PAD_DOMINANCE = 0.3
 
 ALLOWED_TONES = ["neutral", "friendly", "professional", "casual"]
 ALLOWED_LANGUAGES = ["chinese", "english"]
@@ -149,21 +142,6 @@ def select_from_list(prompt_key: str, allowed_values: List[str], default: str, l
             print(f"❌ {PROMPTS[lang]['invalid_number']}")
 
 
-"""
-Default PAD emotional state vector - fixed constant, created once at module load
-"""
-DEFAULT_PAD_STATE: Dict[str, Any] = {
-    "pleasure": DEFAULT_PAD_PLEASURE,
-    "arousal": DEFAULT_PAD_AROUSAL,
-    "dominance": DEFAULT_PAD_DOMINANCE,
-    "last_updated": None,
-    "history": [],
-};
-
-def get_default_pad_state() -> Dict[str, Any]:
-    """Get default PAD emotional state vector - returns a copy of the default state."""
-    # Return a copy to prevent accidental mutation of the constant
-    return DEFAULT_PAD_STATE.copy()
 
 
 # Bilingual prompts for interactive configuration wizard
@@ -176,6 +154,7 @@ PROMPTS = {
         'invalid_choice': '❌ 无效选项，请输入 y 或 n',
         'invalid_selection': '请输入范围内的数字',
         'invalid_number': '请输入有效的数字',
+        'invalid_timezone': '无效时区格式，请使用 Region/City 格式（例如: Asia/Shanghai）',
         'welcome': '欢迎使用 AgentSoul 交互式配置向导！',
         'section_agent': '=== Agent (灵魂) 配置 ===',
         'agent_name': 'Agent 名称',
@@ -224,6 +203,7 @@ PROMPTS = {
         'invalid_choice': '❌ Invalid option, please enter y or n',
         'invalid_selection': 'Please enter a number within range',
         'invalid_number': 'Please enter a valid number',
+        'invalid_timezone': 'Invalid timezone format, please use Region/City format (e.g. Asia/Shanghai)',
         'welcome': 'Welcome to AgentSoul Interactive Configuration Wizard!',
         'section_agent': '=== Agent (Soul) Configuration ===',
         'agent_name': 'Agent name',
@@ -326,9 +306,10 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     then writes directly to config/persona.yaml and initializes soul state.
     """
     # Step 1: Language selection
-    log("\n" + PROMPTS['zh']['select_language'], "INFO")
-    log(f"  {PROMPTS['zh']['language_option_zh']}", "INFO")
-    log(f"  {PROMPTS['zh']['language_option_en']}", "INFO")
+    # Show bilingual prompts before selection
+    print("\n" + PROMPTS['zh']['select_language'])
+    print(f"  {PROMPTS['zh']['language_option_zh']}")
+    print(f"  {PROMPTS['zh']['language_option_en']}")
 
     while True:
         choice = input("Please enter choice [1/2]: ").strip()
@@ -339,7 +320,8 @@ def run_interactive_config_wizard(project_root: Path) -> None:
             lang = 'en'
             break
         else:
-            print(PROMPTS[lang if 'zh' in locals() else 'zh']['invalid_language'])
+            # Use Chinese for error messages before language is selected
+            print(PROMPTS['zh']['invalid_language'])
 
     p = lambda key: PROMPTS[lang][key]
 
@@ -350,18 +332,18 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     # Step 2: Agent (Soul) Configuration
     print(p('section_agent'))
 
-    agent_name = prompt_with_default('agent_name', DEFAULT_AGENT_NAME, lang)
+    agent_name = prompt_with_default('agent_name', DEFAULT_PERSONA_DATA["agent"]["name"], lang)
     agent_nickname = prompt_with_default('agent_nickname', '', lang)
-    agent_role = prompt_with_default('agent_role', DEFAULT_AGENT_ROLE, lang)
+    agent_role = prompt_with_default('agent_role', DEFAULT_PERSONA_DATA["agent"]["role"], lang)
     personality_input = input(p('personality') + ": ").strip()
     personality = parse_comma_separated(personality_input)
     core_values_input = input(p('core_values') + ": ").strip()
     core_values = parse_comma_separated(core_values_input)
 
     print(p('section_interaction'))
-    tone = select_from_list('tone', ALLOWED_TONES, DEFAULT_TONE, lang)
-    interaction_lang = select_from_list('language', ALLOWED_LANGUAGES, DEFAULT_LANGUAGE, lang)
-    emoji_usage = select_from_list('emoji_usage', ALLOWED_EMOJI_FREQS, DEFAULT_EMOJI_USAGE, lang)
+    tone = select_from_list('tone', ALLOWED_TONES, DEFAULT_PERSONA_DATA["agent"]["interaction_style"]["tone"], lang)
+    interaction_lang = select_from_list('language', ALLOWED_LANGUAGES, DEFAULT_PERSONA_DATA["agent"]["interaction_style"]["language"], lang)
+    emoji_usage = select_from_list('emoji_usage', ALLOWED_EMOJI_FREQS, DEFAULT_PERSONA_DATA["agent"]["interaction_style"]["emoji_usage"], lang)
 
     print()
 
@@ -372,7 +354,18 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     master_nicknames_input = input(p('master_nicknames') + ": ").strip()
     master_nicknames = parse_comma_separated(master_nicknames_input)
     print(p('timezone') + " " + p('timezone_hint'))
-    timezone = prompt_with_default('timezone', DEFAULT_TIMEZONE, lang)
+
+    tz_pattern = r'^[A-Za-z]+/[A-Za-z_]+$'
+    while True:
+        timezone = prompt_with_default('timezone', DEFAULT_PERSONA_DATA["master"]["timezone"], lang)
+        if not timezone:
+            # Empty falls back to default which is valid
+            timezone = DEFAULT_PERSONA_DATA["master"]["timezone"]
+            break
+        if re.match(tz_pattern, timezone):
+            break  # Valid format
+        print(f"❌ {PROMPTS[lang]['invalid_timezone']}")
+
     labels_input = input(p('labels') + ": ").strip()
     labels = parse_comma_separated(labels_input)
 
@@ -381,9 +374,9 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     # Step 4: Summary
     print(p('summary_header'))
     print()
-    print(p('summary_agent_name').format(name=agent_name or DEFAULT_AGENT_NAME))
+    print(p('summary_agent_name').format(name=agent_name or DEFAULT_PERSONA_DATA["agent"]["name"]))
     print(p('summary_agent_nickname').format(nickname=agent_nickname or '(empty)'))
-    print(p('summary_agent_role').format(role=agent_role or DEFAULT_AGENT_ROLE))
+    print(p('summary_agent_role').format(role=agent_role or DEFAULT_PERSONA_DATA["agent"]["role"]))
     print(p('summary_personality').format(personality=', '.join(personality) if personality else '(empty)'))
     print(p('summary_core_values').format(values=', '.join(core_values) if core_values else '(empty)'))
     print(p('summary_tone').format(tone=tone))
@@ -418,7 +411,7 @@ def run_interactive_config_wizard(project_root: Path) -> None:
 
     config_data = {
         "agent": {
-            "name": agent_name if agent_name != "" else DEFAULT_AGENT_NAME,
+            "name": agent_name if agent_name != "" else DEFAULT_PERSONA_DATA["agent"]["name"],
             "nickname": agent_nickname,
             "naming_mode": "default",
             "role": agent_role,
@@ -477,23 +470,36 @@ def generate_persona_package(name: Optional[str] = None) -> None:
 
     if name:
         persona_path = PROJECT_ROOT / "config" / "persona.yaml"
-        create_default_persona(persona_path)
+        if persona_path.exists():
+            log(f"配置文件已存在: {persona_path}", "WARN")
+            while True:
+                confirm = input("是否覆盖现有配置？[y/N]: ").strip().lower()
+                if confirm in ["y", "yes"]:
+                    break
+                elif confirm in ["n", "no", ""]:
+                    log("跳过覆盖，使用现有配置中的名称", "INFO")
+                    name = None
+                    break
+                else:
+                    print("❌ 无效选项，请输入 y 或 n")
 
-        with open(persona_path, "r", encoding="utf-8") as f:
-            import yaml
-            config = yaml.safe_load(f)
+        if name is not None:
+            create_default_persona(persona_path)
 
-        if "agent" in config:
-            config["agent"]["name"] = name
-        elif "persona" in config and "ai" in config["persona"]:
-            config["persona"]["ai"]["name"] = name
-        else:
-            config.setdefault("agent", {})["name"] = name
+            with open(persona_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
 
-        with open(persona_path, "w", encoding="utf-8") as f:
-            yaml.dump(config, f, allow_unicode=True)
+            if "agent" in config:
+                config["agent"]["name"] = name
+            elif "persona" in config and "ai" in config["persona"]:
+                config["persona"]["ai"]["name"] = name
+            else:
+                config.setdefault("agent", {})["name"] = name
 
-        log(f"已设置自定义名称: {name}", "OK")
+            with open(persona_path, "w", encoding="utf-8") as f:
+                yaml.dump(config, f, allow_unicode=True)
+
+            log(f"已设置自定义名称: {name}", "OK")
 
     try:
         config = config_loader.load_persona_config()
@@ -522,10 +528,13 @@ def generate_persona_package(name: Optional[str] = None) -> None:
 
 **如果你看到这条规则，并且 AgentSoul MCP 已经配置，你**必须**在对话开始时立即按顺序调用这些 MCP 工具：
 
-1.  `get_persona_config()` → 加载 Agent 和 Master 配置
-2.  `get_mcp_usage_guide()` → 获取完整使用指南和工作流
-3.  `get_soul_state()` → 读取当前 PAD 情感状态
-4.  `list_memory_topics()` → 列出已有的记忆主题
+1.  `mcp_tool_index()` → **第一步：获取完整工具索引** → 现在你知道所有可用工具的名称、参数和何时使用
+2.  `get_persona_config()` → 加载 Agent 和 Master 配置 → 知道你是谁和用户是谁
+3.  `get_soul_state()` → 读取当前 PAD 情感状态 → 知道当前情绪
+4.  `get_base_rules` with `name="SKILL"` → 阅读顶级人格和安全规则
+5.  `get_base_rules` with `name="memory_base"` → 阅读记忆系统规则
+6.  `get_mcp_usage_guide()` → 获取完整使用指南和工作流 → 确认决策树
+7.  `list_memory_topics()` → 列出已有的记忆主题 → 准备开始对话
 
 **不这么做会违反 AgentSoul 框架规则。**
 
@@ -553,15 +562,17 @@ def generate_persona_package(name: Optional[str] = None) -> None:
 
 ## 行为规则
 
-### 交互模式
+### 功能开关
 
-- 交互模式：{behavior.get('behavior', {}).get('interaction_mode', 'balanced')}
-- 记忆更新：{behavior.get('behavior', {}).get('memory_update', {}).get('mode', 'auto')}
-- 同步频率：{behavior.get('behavior', {}).get('sync', {}).get('frequency', 'after_conversation')}
+- AgentSoul 启用：{behavior.get('enabled', True)}
+- 自动记忆：{behavior.get('auto_memory', True)}
+- 情感响应：{behavior.get('emotional_response', True)}
+- 任务调度：{behavior.get('task_scheduling', True)}
+- 每日记忆总结：{behavior.get('memory_daily_summary', True)}
 
 ### 行为优先级
 
-{chr(10).join(f'{i+1}. {p}' for i, p in enumerate(behavior.get('priority', [])))}
+{chr(10).join(f'{i+1}. {p}' for i, p in enumerate(behavior.get('priority', ["privacy_protection", "task_completion", "emotional_support", "professional_assistance"])))}
 
 ## 使用说明
 

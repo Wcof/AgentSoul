@@ -257,7 +257,7 @@ class TestPrivacyScanner(unittest.TestCase):
 
     def test_scan_detects_personal_name(self):
         test_file = self.project_root / "test.md"
-        test_file.write_text("the master name is here", encoding="utf-8")
+        test_file.write_text("name: 张三", encoding="utf-8")
 
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from scripts.scan_privacy import PrivacyScanner
@@ -271,7 +271,7 @@ class TestPrivacyScanner(unittest.TestCase):
 
     def test_scan_detects_nickname(self):
         test_file = self.project_root / "test.md"
-        test_file.write_text("This agent is for testing", encoding="utf-8")
+        test_file.write_text("nickname: 小李", encoding="utf-8")
 
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from scripts.scan_privacy import PrivacyScanner

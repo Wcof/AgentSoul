@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 import yaml
 import json
 
+from common import get_project_root
+
 
 @dataclass
 class AgentConfig:
@@ -67,14 +69,9 @@ class ConfigLoader:
     DEFAULT_ROLE = "AI Assistant"
 
     def __init__(self, project_root: Optional[Path] = None):
-        self.project_root = project_root or self._detect_project_root()
+        self.project_root = project_root or get_project_root()
         self._config_cache: Optional[Dict] = None
         self._persona_cache: Optional[PersonaConfig] = None
-
-    def _detect_project_root(self) -> Path:
-        if "__file__" in globals():
-            return Path(__file__).parent.parent
-        return Path.cwd()
 
     def load_yaml(self, file_path: Path) -> Dict:
         if not file_path.exists():

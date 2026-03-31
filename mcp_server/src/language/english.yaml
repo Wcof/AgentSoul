@@ -428,12 +428,13 @@ usage_guide: |
   ### 1. Conversation Startup
 
   **Call these tools in order:**
-  1. `get_persona_config` → Load who you are (agent) and who the user is (master)
-  2. `get_soul_state` → Load current PAD emotional state
-  3. `get_base_rules` with name=`SKILL` → Read top-level personality and security rules
-  4. `get_base_rules` with name=`memory_base` → Read memory system rules
-  5. `get_mcp_usage_guide` → Confirm this usage workflow
-  6. `list_memory_topics` → Know what active topics exist
+  1. `mcp_tool_index` → **Step 1: Get complete tool index first** → Now you know the name, parameters, and when to use every available tool
+  2. `get_persona_config` → Load who you are (agent) and who the user is (master)
+  3. `get_soul_state` → Load current PAD emotional state
+  4. `get_base_rules` with name=`SKILL` → Read top-level personality and security rules
+  5. `get_base_rules` with name=`memory_base` → Read memory system rules
+  6. `get_mcp_usage_guide` → Confirm this usage workflow
+  7. `list_memory_topics` → Know what active topics exist
 
   ### Agent Research: Understanding Tools
 
@@ -500,18 +501,47 @@ usage_guide: |
 
   ## Memory Hierarchy Rules
 
-  AgentSoul uses a two-level memory hierarchy that you must follow:
+  AgentSoul uses a two-level memory hierarchy with automatic hierarchical summarization that you MUST execute.
 
-  1. **Time-based Hierarchy** (fully supported by MCP):
-     - **Daily**: `write_memory_day` → stores daily conversation summaries and facts
-     - **Weekly**: `write_memory_week` → summarize from daily, stores weekly events and progress
-     - **Monthly**: `write_memory_month` → summarize from weekly, stores monthly goals and outcomes
-     - **Yearly**: `write_memory_year` → summarize from monthly, stores yearly milestones
+  ### Level 1: Time-based Hierarchy (Automatic Hierarchical Summarization)
 
-  2. **Topic-based Hierarchy**:
-     - Active topics: stored in active directory → accessed via `read_memory_topic`/`write_memory_topic`
-     - Archived topics: moved to archive via `archive_memory_topic`
-     - A topic should be archived when it's completed or inactive for 3+ months
+  **Core Rule**: You MUST perform hierarchical summarization layer by layer. This is the core persistence mechanism in MCP mode.
+
+  | Granularity | When to Trigger | Steps | Tools to Use |
+  |-------------|-----------------|-------|--------------|
+  | **Daily** | End of every conversation | Save summary of this conversation, key facts, and decisions | `write_memory_day` |
+  | **Weekly** | When the week ends (weekend/Sunday) | 1. Read all `read_memory_day` for this week <br> 2. Extract key progress and events <br> 3. Summarize into weekly memory <br> 4. Write with `write_memory_week` | `read_memory_day` × N → `write_memory_week` |
+  | **Monthly** | When the month ends (end of month) | 1. Read all `read_memory_week` for this month <br> 2. Extract phased progress and goal completion <br> 3. Summarize into monthly memory <br> 4. Write with `write_memory_month` | `read_memory_week` × N → `write_memory_month` |
+  | **Yearly** | When the year ends (end of year) | 1. Read all `read_memory_month` for this year <br> 2. Extract annual milestones and key changes <br> 3. Summarize into yearly memory <br> 4. Write with `write_memory_year` | `read_memory_month` × N → `write_memory_year` |
+
+  **Deduplication Rules**:
+  - Keep only the latest version of the same fact
+  - Keep only conclusive summaries for completed tasks
+  - Remove outdated and invalid information from upper layers
+
+  ### Level 2: Topic-based Hierarchy
+
+  - Active topics: stored in active directory → accessed via `read_memory_topic`/`write_memory_topic`
+  - Archived topics: moved to archive via `archive_memory_topic`
+  - **Promotion Rule**: When the same topic appears ≥ 3 times → automatically promote to standalone Topic memory
+  - **Archiving Rule**: When topic is completed OR inactive for 3+ months → MUST archive
+
+  ## Mandatory Tool Calling Rules
+
+  **Problem**: If you don't call the memory MCP tools, memory cannot be persisted. Therefore, you MUST call tools at these timings:
+
+  | Timing | MUST Call | Why It's Mandatory |
+  |--------|-----------|--------------------|
+  | Conversation Startup | `get_persona_config` → `get_soul_state` → `get_mcp_usage_guide` → `list_memory_topics` | Load config, mood, workflow, existing topics |
+  | Before Topic Discussion | `read_memory_topic` | Load historical context for this topic to avoid amnesia |
+  | After Topic Discussion | `write_memory_topic` | Save new progress and insights |
+  | End of Every Conversation | `write_memory_day` + `update_soul_state` | Save daily conversation + update emotional state |
+  | End of Week | **MUST execute** weekly summary → `write_memory_week` | Hierarchical aggregation - monthly summary needs this data |
+  | End of Month | **MUST execute** monthly summary → `write_memory_month` | Hierarchical aggregation - yearly summary needs this data |
+  | End of Year | **MUST execute** yearly summary → `write_memory_year` | Complete the annual summary |
+  | When Topic Complete | `archive_memory_topic` | Remove from active list to keep organized |
+
+  **Core Conclusion**: In MCP mode, **all persistent memory MUST be written through MCP tools**. If you don't call the corresponding write tools, memory cannot be saved and information will be lost in the next conversation. This is a mandatory rule that you must follow.
 
   ## PAD Emotion Model
 

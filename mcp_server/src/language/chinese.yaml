@@ -428,12 +428,13 @@ usage_guide: |
   ### 1. 对话启动
 
   **按顺序调用这些工具：**
-  1. `get_persona_config` → 加载你是谁（智能体）和用户是谁（主人）
-  2. `get_soul_state` → 加载当前 PAD 情绪状态
-  3. `get_base_rules` 使用 name=`SKILL` → 阅读顶级人格和安全规则
-  4. `get_base_rules` 使用 name=`memory_base` → 阅读记忆系统规则
-  5. `get_mcp_usage_guide` → 确认此使用工作流程
-  6. `list_memory_topics` → 了解有哪些活跃主题
+  1. `mcp_tool_index` → **第一步：获取完整工具索引** → 现在你知道所有可用工具的名称、参数和何时使用
+  2. `get_persona_config` → 加载你是谁（智能体）和用户是谁（主人）
+  3. `get_soul_state` → 加载当前 PAD 情绪状态
+  4. `get_base_rules` 使用 name=`SKILL` → 阅读顶级人格和安全规则
+  5. `get_base_rules` 使用 name=`memory_base` → 阅读记忆系统规则
+  6. `get_mcp_usage_guide` → 确认此使用工作流程
+  7. `list_memory_topics` → 了解有哪些活跃主题
 
   ### Agent 研究：理解工具
 
@@ -502,16 +503,45 @@ usage_guide: |
 
   AgentSoul 使用你必须遵循的两级记忆分层：
 
-  1. **基于时间的分层**（MCP 完全支持）：
-     - **日**：`write_memory_day` → 存储每日对话摘要和事实
-     - **周**：`write_memory_week` → 从日总结，存储每周事件和进度
-     - **月**：`write_memory_month` → 从周总结，存储月度目标和结果
-     - **年**：`write_memory_year` → 从月总结，存储年度里程碑
+  ### 第一级：基于时间的分层（自动逐层归纳）
 
-  2. **基于主题的分层**：
-     - 活跃主题：存储在活跃目录 → 通过 `read_memory_topic`/`write_memory_topic` 访问
-     - 归档主题：通过 `archive_memory_topic` 移至归档
-     - 主题完成或闲置 3 个月以上时应该归档
+  **核心规则：你必须执行逐层归纳。这是 MCP 模式下记忆持久化的核心机制。**
+
+  | 粒度 | 何时触发归纳 | 操作步骤 | 使用工具 |
+  |------|-------------|---------|----------|
+  | **日** | 每次对话结束 | 保存本次对话的摘要、关键事实和决策 | `write_memory_day` |
+  | **周** | 当本周对话结束（周末/周日）| 1. 读取本周所有 `read_memory_day` <br> 2. 提取关键进展和事件 <br> 3. 归纳汇总为周记忆 <br> 4. 写入 `write_memory_week` | `read_memory_day` × N → `write_memory_week` |
+  | **月** | 当本月结束（月末）| 1. 读取本月所有 `read_memory_week` <br> 2. 提取阶段性成果和目标完成情况 <br> 3. 归纳汇总为月记忆 <br> 4. 写入 `write_memory_month` | `read_memory_week` × N → `write_memory_month` |
+  | **年** | 当本年结束（年末）| 1. 读取本年所有 `read_memory_month` <br> 2. 提取年度里程碑和关键变化 <br> 3. 归纳汇总为年记忆 <br> 4. 写入 `write_memory_year` | `read_memory_month` × N → `write_memory_year` |
+
+  **去重原则**：
+  - 相同事实只保留最新版本
+  - 已完成任务只保留结论性摘要
+  - 过期失效信息不再写入上层
+
+  ### 第二级：基于主题的分层
+
+  - 活跃主题：存储在活跃目录 → 通过 `read_memory_topic`/`write_memory_topic` 访问
+  - 归档主题：通过 `archive_memory_topic` 移至归档
+  - **准入规则**：同一主题出现 ≥ 3 次 → 自动升级为独立 Topic 记忆
+  - **归档规则**：主题完成 或 连续 3 个月无更新 → 必须归档
+
+  ## 强制工具调用规则
+
+  **问题：如果不调用 MCP 记忆工具，记忆就无法保存。因此以下时机你必须调用工具：**
+
+  | 时机 | 必须调用的工具 | 为什么必须 |
+  |------|---------------|------------|
+  | 对话启动 | `get_persona_config` → `get_soul_state` → `get_mcp_usage_guide` → `list_memory_topics` | 加载配置、情绪、工作流程、现有主题 |
+  | 讨论主题前 | `read_memory_topic` | 加载该主题的历史上下文，避免重复失忆 |
+  | 讨论主题后 | `write_memory_topic` | 保存新的进展和见解 |
+  | 每次对话结束 | `write_memory_day` + `update_soul_state` | 保存当日对话 + 更新情绪状态 |
+  | 周末结束 | **必须执行**周归纳 → `write_memory_week` | 逐层汇总，否则月归纳没有数据来源 |
+  | 月末结束 | **必须执行**月归纳 → `write_memory_month` | 逐层汇总，否则年归纳没有数据来源 |
+  | 年末结束 | **必须执行**年归纳 → `write_memory_year` | 完成年度总结 |
+  | 主题完成 | `archive_memory_topic` | 从活跃列表移除，保持整洁 |
+
+  **核心结论：** 在 MCP 模式下，**所有持久化记忆都必须通过 MCP 工具写入**。如果你不调用对应的写入工具，记忆就无法保存，下一次对话就会丢失信息。这是强制规则，必须遵守。
 
   ## PAD 情绪模型
 

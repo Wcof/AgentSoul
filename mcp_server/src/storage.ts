@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import { safePath, readFile, writeFile, sanitizeTopicName } from './lib/utils.js';
+import { safePath, readFile, writeFile, sanitizeTopicName, safeGet, toList } from './lib/utils.js';
 import { PROJECT_ROOT } from './lib/paths.js';
 import { SoulState, PersonaConfig } from './types.js';
 
@@ -25,8 +25,40 @@ interface RawPersonaConfig {
 const DATA_ROOT = path.join(PROJECT_ROOT, 'data');
 
 /**
+ * Detect if OpenClaw is installed globally
+ * Checks for ~/.openclaw/workspace/_agentsoul_installed marker file
+ * @returns The OpenClaw agent data path if installed, null otherwise
+ */
+// Cache detection result - only detect once at module load
+let cachedDetection: string | null | undefined = undefined;
+export function detectOpenClawGlobalInstall(): string | null {
+  if (cachedDetection !== undefined) {
+    return cachedDetection;
+  }
+  const homeDir = process.env.HOME || process.env.USERPROFILE;
+  if (!homeDir) {
+    cachedDetection = null;
+    return null;
+  }
+
+  const openclawWorkspace = path.join(homeDir, '.openclaw', 'workspace');
+  const markerPath = path.join(openclawWorkspace, '_agentsoul_installed');
+  if (fs.existsSync(markerPath)) {
+    // OpenClaw has AgentSoul installed, return the agent data root
+    cachedDetection = path.join(openclawWorkspace, 'agent', 'data');
+    return cachedDetection;
+  }
+  cachedDetection = null;
+  return null;
+}
+
+/**
  * Default PAD emotional state vector - created once at module load
  * Default baseline values: Pleasure=0.3, Arousal=0.2, Dominance=0.3
+ *
+ * NOTE: Keep this in sync with the same constant defined in:
+ * common/__init__.py - DEFAULT_PAD_STATE
+ * If you change the baseline here, change it there too to keep consistency across codebases.
  */
 const DEFAULT_SOUL_STATE: SoulState = {
   pleasure: 0.3,
@@ -76,41 +108,15 @@ function getDefaultPersonaConfig(): PersonaConfig {
   };
 }
 
-/**
- * 将值转换为字符串数组
- * 支持数组、逗号分隔字符串和单个字符串格式
- * @param v - 输入值
- * @returns 标准化的字符串数组
- */
-function toList(v: unknown): string[] {
-  if (Array.isArray(v)) return (v as string[]).filter(x => typeof x === 'string' && x.trim());
-  if (typeof v === 'string') {
-    if (v.includes(',')) {
-      return v.split(',').map(x => x.trim()).filter(x => x);
-    }
-    return v.trim() ? [v.trim()] : [];
-  }
-  return [];
-}
-
-/**
- * 安全地获取对象属性值
- * @param obj - 目标对象
- * @param key - 属性键
- * @param defaultValue - 默认值
- * @returns 属性值或默认值
- */
-function safeGet<T>(obj: Record<string, unknown> | undefined, key: string, defaultValue: T): T {
-  if (!obj || typeof obj !== 'object') return defaultValue;
-  const val = obj[key];
-  return val === undefined || val === null ? defaultValue : val as T;
-}
+// Import shared utilities from utils - already imported at top, duplicate import removed
 
 /**
  * 存储管理器类
  * 负责 AgentSoul 所有数据的持久化操作，包括人格配置、灵魂状态和各种记忆
  */
 export class StorageManager {
+  private readonly openclawDataRoot: string | null;
+
   /**
    * 构造函数
    * @param projectRoot - 可选的项目根目录，用于向后兼容 (unused - PROJECT_ROOT from paths.ts is used instead)
@@ -118,6 +124,52 @@ export class StorageManager {
   constructor(projectRoot?: string) {
     // Backward compatibility kept, unused parameter kept for compatibility
     void projectRoot;
+    // Detect OpenClaw installation (cached once at module level)
+    this.openclawDataRoot = detectOpenClawGlobalInstall();
+    if (this.openclawDataRoot) {
+      console.log(`[AgentSoul MCP] Detected OpenClaw global installation, will sync writes to: ${this.openclawDataRoot}`);
+    }
+  }
+
+  /**
+   * Get the detected OpenClaw data root (if any)
+   * @returns OpenClaw data root path or null if not detected
+   */
+  getOpenClawDataRoot(): string | null {
+    return this.openclawDataRoot;
+  }
+
+  /**
+   * Helper: Ensure parent directory exists and write file
+   * @param fullPath - Full path to write
+   * @param rootPath - Root path for safe path check
+   * @param content - Content to write
+   * @returns True if write was successful
+   */
+  private ensureDirAndWrite(fullPath: string, rootPath: string, content: string): boolean {
+    const checkedPath = safePath(fullPath, rootPath);
+    if (checkedPath) {
+      const parentDir = path.dirname(checkedPath);
+      // fs.mkdirSync with recursive: true is safe even if directory exists
+      // No need for prior exists check - avoids TOCTOU race
+      fs.mkdirSync(parentDir, { recursive: true });
+      return writeFile(checkedPath, content);
+    }
+    return false;
+  }
+
+  /**
+   * Sync write to OpenClaw installation if detected
+   * @param relativePath - Relative path from data root
+   * @param content - Content to write
+   * @returns True if sync was successful, false otherwise
+   */
+  private syncWriteToOpenClaw(relativePath: string, content: string): boolean {
+    if (!this.openclawDataRoot) {
+      return false;
+    }
+    const ocPath = path.join(this.openclawDataRoot, relativePath);
+    return this.ensureDirAndWrite(ocPath, this.openclawDataRoot, content);
   }
 
   /**
@@ -233,7 +285,14 @@ export class StorageManager {
       return false;
     }
 
-    return writeFile(checkedPath, JSON.stringify(state, null, 2));
+    const success = writeFile(checkedPath, JSON.stringify(state, null, 2));
+
+    // If OpenClaw is detected, sync write to it
+    if (success) {
+      this.syncWriteToOpenClaw('soul/soul_variable/state_vector.json', JSON.stringify(state, null, 2));
+    }
+
+    return success;
   }
 
   /**
@@ -280,7 +339,14 @@ export class StorageManager {
       return false;
     }
 
-    return writeFile(checkedPath, content);
+    const success = writeFile(checkedPath, content);
+
+    // If OpenClaw is detected, sync write to it
+    if (success) {
+      this.syncWriteToOpenClaw(`memory/${period}/${identifier}.md`, content);
+    }
+
+    return success;
   }
 
   /**
@@ -413,6 +479,7 @@ export class StorageManager {
    */
   writeTopicMemory(topic: string, content: string): boolean {
     const filePath = this.getTopicMemoryPath(topic);
+    const sanitized = sanitizeTopicName(topic);
 
     const checkedPath = safePath(filePath, DATA_ROOT);
     if (!checkedPath) {
@@ -420,7 +487,14 @@ export class StorageManager {
       return false;
     }
 
-    return writeFile(checkedPath, content);
+    const success = writeFile(checkedPath, content);
+
+    // If OpenClaw is detected, sync write to it
+    if (success) {
+      this.syncWriteToOpenClaw(`memory/topic/${sanitized}.md`, content);
+    }
+
+    return success;
   }
 
   /**
@@ -471,6 +545,7 @@ export class StorageManager {
   archiveTopic(topic: string): boolean {
     const activePath = this.getTopicMemoryPath(topic);
     const archivePath = this.getArchivedTopicPath(topic);
+    const sanitized = sanitizeTopicName(topic);
 
     const checkedActive = safePath(activePath, DATA_ROOT);
     const checkedArchive = safePath(archivePath, DATA_ROOT);
@@ -495,6 +570,25 @@ export class StorageManager {
       }
 
       fs.renameSync(checkedActive, checkedArchive);
+
+      // If OpenClaw is detected, sync the archive operation to it
+      if (this.openclawDataRoot) {
+        const ocActivePath = path.join(this.openclawDataRoot, 'memory', 'topic', `${sanitized}.md`);
+        const ocArchivePath = path.join(this.openclawDataRoot, 'memory', 'topic', 'archive', `${sanitized}.md`);
+        const checkedOcActive = safePath(ocActivePath, this.openclawDataRoot);
+        const checkedOcArchive = safePath(ocArchivePath, this.openclawDataRoot);
+        if (checkedOcActive && checkedOcArchive) {
+          // Ensure archive directory exists using shared helper
+          this.ensureDirAndWrite(checkedOcArchive, this.openclawDataRoot, '');
+          if (fs.existsSync(checkedOcActive)) {
+            if (fs.existsSync(checkedOcArchive)) {
+              fs.unlinkSync(checkedOcArchive);
+            }
+            fs.renameSync(checkedOcActive, checkedOcArchive);
+          }
+        }
+      }
+
       return true;
     } catch (e) {
       console.error('Failed to archive topic:', e);

@@ -24,10 +24,13 @@ DEFAULT_SCAN_TARGET = PROJECT_ROOT
 
 SENSITIVE_PATTERNS = {
     "个人姓名": [
-        r"\bmaster\b", r"\buser\b", r"\bowner\b"
+        r"(name|姓名)\s*[:：]\s*[A-Za-z\u4e00-\u9fa5]{2,}",
+        r"(master|主人)\s*[:：]",
+        r"(user|用户)\s*[:：]\s*[A-Za-z\u4e00-\u9fa5]{2,}",
     ],
     "昵称/称呼": [
-        r"\bAgent\b", r"\bassistant\b", r"\bai\b"
+        r"(nickname|昵称)\s*[:：]\s*[A-Za-z\u4e00-\u9fa5]{2,}",
+        r"(Agent|agent|助理)\s*[:：]",
     ],
     "联系方式": [
     ],

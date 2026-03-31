@@ -5,29 +5,12 @@ AgentSoul · 通用工具模块
 
 import sys
 from pathlib import Path
-from typing import Optional
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.config_loader import ConfigLoader
-    from src.path_compat import PathResolver, resolve_path
+from typing import Optional, Dict, Any
 
 __version__ = "1.0.0"
-__all__ = ["log", "icons", "load_config", "get_project_root", "safe_file_stem", "initialize_identity", "ConfigLoader", "PathResolver", "resolve_path"]
+__all__ = ["log", "icons", "load_config", "get_project_root", "safe_file_stem", "initialize_identity", "get_default_pad_state", "ConfigLoader", "PathResolver", "resolve_path"]
 
-# Re-exports from src modules done lazily to avoid circular imports
-def __getattr__(name: str):
-    if name == "ConfigLoader":
-        from src.config_loader import ConfigLoader
-        return ConfigLoader
-    if name == "PathResolver":
-        from src.path_compat import PathResolver
-        return PathResolver
-    if name == "resolve_path":
-        from src.path_compat import resolve_path
-        return resolve_path
-    raise AttributeError(f"module {__name__} has no attribute {name}")
-
+# Project root calculation - done before importing src modules to prevent circular imports
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
@@ -41,6 +24,23 @@ def get_project_root() -> Path:
         return PROJECT_ROOT
     return Path.cwd()
 
+# Default PAD emotional state vector - shared constant (module-private)
+# Default baseline values: Pleasure=0.3, Arousal=0.2, Dominance=0.3
+_DEFAULT_PAD_STATE: Dict[str, Any] = {
+    "pleasure": 0.3,
+    "arousal": 0.2,
+    "dominance": 0.3,
+    "last_updated": None,
+    "history": [],
+}
+
+
+def get_default_pad_state() -> Dict[str, Any]:
+    """Get a copy of the default PAD emotional state.
+
+    Returns a copy to prevent accidental mutation of the module-level constant.
+    """
+    return _DEFAULT_PAD_STATE.copy()
 
 # Icon constants - predefined once at module load time
 ICONS = {
@@ -179,7 +179,16 @@ def initialize_identity(
         ])
 
     for file_path, content in files_to_write:
-        file_path.write_text(content, encoding="utf-8")
-        if verbose:
-            rel_path = file_path.relative_to(output_root) if output_root.exists() else file_path
-            log(f"已注入身份档案: {rel_path}", "OK")
+        try:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(content, encoding="utf-8")
+            if verbose:
+                rel_path = file_path.relative_to(output_root) if output_root.exists() else file_path
+                log(f"已注入身份档案: {rel_path}", "OK")
+        except Exception as e:
+            log(f"写入身份档案失败 {file_path}: {e}", "ERROR")
+
+# Import src modules after all common symbols are defined
+# This breaks circular import: src/__init__.py needs common symbols like log
+from src.config_loader import ConfigLoader
+from src.path_compat import PathResolver, resolve_path
