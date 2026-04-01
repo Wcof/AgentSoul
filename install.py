@@ -677,15 +677,16 @@ def show_menu():
     print("\n╔══════════════════════════════════════════════════════════════════╗")
     print("║          AgentSoul · 人格插件安装向导                            ║")
     print("╚══════════════════════════════════════════════════════════════════╝\n")
-    print("请选择安装方式：\n")
+    print("请选择操作：\n")
     print("1. 生成人格包（通用，支持所有工具）")
     print("2. MCP 服务（安装并启动）")
     print("3. OpenClaw 人格插件（深度集成）")
+    print("4. 卸载 Claude CLI 中的 AgentSoul MCP")
     print("0. 退出\n")
 
     while True:
-        choice = input("请输入选项 [0-3]: ").strip()
-        if choice in ["0", "1", "2", "3"]:
+        choice = input("请输入选项 [0-4]: ").strip()
+        if choice in ["0", "1", "2", "3", "4"]:
             return choice
         print("❌ 无效选项，请重新输入")
 
@@ -833,21 +834,101 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
     else:
         log("未检测到源码变更，跳过编译", "OK")
 
+def is_claude_cli_installed() -> bool:
+    """Check if Claude CLI is installed on the system."""
+    try:
+        result = subprocess.run(["claude", "--version"], capture_output=True, text=True)
+        return result.returncode == 0
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def register_claude_cli(mcp_full_path: Path) -> None:
+    """Register AgentSoul MCP with Claude CLI using official command."""
+    json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
+    cmd = ["claude", "mcp", "add-json", "agentsoul", json_config]
+    log(f"使用 Claude CLI 官方命令注册 AgentSoul MCP...", "STEP")
+    result = subprocess.run(cmd, capture_output=False, text=True)
+    if result.returncode == 0:
+        log(f"已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
+    else:
+        log(f"Claude CLI 注册失败，请手动执行以下命令：\nclaude mcp add-json agentsoul '{json_config}'", "ERROR")
+
+
     print("\n✅ MCP 服务安装完成！\n")
     print("配置说明：")
     mcp_full_path = (mcp_dir / "dist" / "index.js").absolute()
     print(f"MCP 服务路径：{mcp_full_path}\n")
-    print("在 Claude Desktop 配置文件中添加（已填充绝对路径，可直接复制）：")
+
+    # Pre-compute JSON config once - reuse everywhere
+    json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
+
+    # Type definition for platform registration handler
+    from typing import Callable, Optional
+    RegistrationHandler = Optional[Callable[[Path], None]]
+
+    # 定义支持的 MCP 客户端平台
+    # 格式: (display_name, detect_command, registration_handler, config_path)
+    # - detect_command: command to check if platform is installed
+    # - registration_handler: function to handle registration, None for manual only
+    supported_platforms = [
+        ("Claude CLI", "claude --version", register_claude_cli, None),
+        # 预留: 未来可以添加 Trae, Claude Desktop 等
+        # ("Trae", "trae --version", register_trae, Path.home() / ".trae" / "config.json"),
+        # ("Claude Desktop", "", None, ...),
+    ]
+
+    # 检测已安装的平台
+    detected_platforms = []
+    for display_name, detect_cmd, reg_handler, config_path in supported_platforms:
+        if not detect_cmd:
+            continue  # Skip platforms that can't be auto-detected
+        try:
+            result = subprocess.run(detect_cmd.split(), capture_output=True, text=True)
+            if result.returncode == 0:
+                detected_platforms.append((display_name, reg_handler, config_path))
+        except (FileNotFoundError, OSError):
+            continue
+
+    # 如果检测到已安装的平台，让用户选择是否注册
+    if detected_platforms:
+        print("检测到以下 MCP 客户端平台：\n")
+        for i, (display_name, _, _) in enumerate(detected_platforms, 1):
+            print(f"  {i}. {display_name}")
+        print(f"  {len(detected_platforms) + 1}. 不注册\n")
+
+        while True:
+            choice = input(f"请选择要注册到哪个平台 [1-{len(detected_platforms) + 1}，默认 {len(detected_platforms) + 1}]: ").strip()
+            if not choice:
+                # 默认选择"不注册"
+                break
+            try:
+                idx = int(choice) - 1
+                if idx == len(detected_platforms):
+                    # 用户选择不注册
+                    break
+                elif 0 <= idx < len(detected_platforms):
+                    display_name, reg_handler, _ = detected_platforms[idx]
+                    if reg_handler is not None:
+                        reg_handler(mcp_full_path)
+                    break
+                else:
+                    print(f"❌ 无效选项，请输入 1 到 {len(detected_platforms) + 1} 之间的数字")
+            except ValueError:
+                print("❌ 请输入有效的数字")
+
+    # 输出手动配置信息
+    print("\n手动配置方式（复制到对应 MCP 客户端配置文件）：")
     print(f"""
 {{
   "mcpServers": {{
-    "agentsoul": {{
-      "command": "node",
-      "args": ["{mcp_full_path}"]
-    }}
+    "agentsoul": {json_config}
   }}
 }}
 """)
+    print("Claude CLI 手动注册命令：")
+    print(f"claude mcp add-json agentsoul '{json_config}'\n")
+
     if not run_after:
         return True
 
@@ -862,6 +943,28 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
     except KeyboardInterrupt:
         log("MCP 服务已停止", "INFO")
     return True
+
+
+def uninstall_mcp() -> bool:
+    """Uninstall AgentSoul MCP from Claude CLI"""
+    log("卸载 Claude CLI 中的 AgentSoul MCP...", "STEP")
+
+    # 检测 Claude CLI 是否安装
+    if not is_claude_cli_installed():
+        log("未检测到 Claude CLI 安装，无需卸载", "INFO")
+        return False
+
+    log("检测到 Claude CLI，执行卸载...", "OK")
+
+    # 使用官方命令卸载
+    cmd = ["claude", "mcp", "remove", "agentsoul"]
+    result = subprocess.run(cmd, capture_output=False, text=True)
+    if result.returncode == 0:
+        log("已成功从 Claude CLI 卸载 AgentSoul MCP", "OK")
+        return True
+    else:
+        log("卸载失败，请手动执行：claude mcp remove agentsoul", "ERROR")
+        return False
 
 
 def check_and_initialize_configs(project_root: Path) -> None:
@@ -977,6 +1080,7 @@ def main():
   python3 install.py --mcp --no-run         # 仅安装 MCP，不启动
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
   python3 install.py --openclaw --scope global  # OpenClaw 全局安装
+  python3 install.py --uninstall            # 卸载 Claude CLI 中的 AgentSoul MCP
 """
     parser = argparse.ArgumentParser(
         description="AgentSoul 人格插件安装脚本",
@@ -990,6 +1094,7 @@ def main():
     parser.add_argument("--log", type=str, help="MCP 日志输出路径")
     parser.add_argument("--openclaw", action="store_true", help="安装 OpenClaw 人格插件")
     parser.add_argument("--scope", type=str, choices=["current", "global"], help="OpenClaw 装载范围")
+    parser.add_argument("--uninstall", action="store_true", help="卸载 Claude CLI 中的 AgentSoul MCP")
 
     args = parser.parse_args()
 
@@ -1009,6 +1114,10 @@ def main():
         install_openclaw(scope)
         return
 
+    if args.uninstall:
+        uninstall_mcp()
+        return
+
     choice = show_menu()
 
     if choice == "0":
@@ -1024,6 +1133,8 @@ def main():
         if not confirm_install(scope):
             return
         install_openclaw(scope)
+    elif choice == "4":
+        uninstall_mcp()
 
 
 def ask_session_scope() -> str:

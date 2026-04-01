@@ -354,6 +354,47 @@ priority:                     # 行为优先级 (靠前优先级更高)
   - 记忆更新
 ```
 
+## 卸载
+
+### 卸载 MCP 服务
+
+从 Claude CLI 卸载 AgentSoul MCP：
+
+```bash
+# 使用内置卸载命令
+python3 install.py --uninstall
+```
+
+或者手动卸载：
+```bash
+claude mcp remove agentsoul
+```
+
+### 常见问题
+
+**Q: 为什么卸载后 Claude 启动时还能看到 AgentSoul 规则？**
+
+A: 这是因为你当前工作目录就在 `AgentSoul` 项目文件夹内，Claude Code 会自动读取项目根目录下的 `CLAUDE.md`。这不是 MCP 还在运行，只是项目文档被自动加载。
+
+解决方法：
+- **最简单**：`cd` 切换到其他项目目录，就不会再加载了
+- **保留源码但禁用自动加载**：重命名或删除项目根目录的 `CLAUDE.md`
+- **彻底删除**：删除整个 `AgentSoul` 项目目录
+
+**Q: 如何清理磁盘空间？**
+
+卸载后，你可以清理 npm 依赖占用的空间：
+```bash
+# 删除 MCP node_modules（约 60-70MB）
+rm -rf mcp_server/node_modules
+
+# 删除日志（如果有）
+rm -rf logs/
+
+# 删除所有本地数据（配置、记忆等）
+rm -rf data/
+```
+
 ## 开发
 
 ```bash
