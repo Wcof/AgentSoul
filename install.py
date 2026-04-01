@@ -841,7 +841,6 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
     # Pre-compute JSON config once - reuse everywhere
     json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
 
-    # Type definition for platform registration handler
     from typing import Callable, Optional
     RegistrationHandler = Optional[Callable[[Path], None]]
 
