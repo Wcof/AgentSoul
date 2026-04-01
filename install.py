@@ -36,14 +36,35 @@ PROJECT_ROOT = Path(__file__).parent
 try:
     from common import log, safe_file_stem, initialize_identity, get_default_pad_state
     from src.config_loader import ConfigLoader, create_default_persona, DEFAULT_PERSONA_DATA
+    from src.config_manager.validator import ConfigValidator
 except ImportError:
     sys.path.insert(0, str(PROJECT_ROOT))
     from common import log, safe_file_stem, initialize_identity, get_default_pad_state
     from src.config_loader import ConfigLoader, create_default_persona, DEFAULT_PERSONA_DATA
+    from src.config_manager.validator import ConfigValidator
 
 # Import defaults from config_loader
 # Defaults are read from DEFAULT_PERSONA_DATA directly at point of use
 # to avoid duplication and keep in sync with source of truth
+
+# Reuse constants from ConfigValidator to avoid duplication
+ALLOWED_TONES = ConfigValidator.ALLOWED_TONES
+ALLOWED_LANGUAGES = ConfigValidator.ALLOWED_LANGUAGES
+ALLOWED_EMOJI_FREQS = ConfigValidator.ALLOWED_EMOJI_FREQS
+
+
+def initialize_data_directories(project_root: Path) -> None:
+    """Initialize all required data directories for enhanced memory and adaptive learning."""
+    # Initialize enhanced memory directories
+    memories_dir = project_root / "data" / "memories"
+    memories_dir.mkdir(parents=True, exist_ok=True)
+    log("已初始化记忆存储目录", "OK")
+
+    # Initialize adaptive learning directories
+    learning_dir = project_root / "data" / "learning"
+    learning_dir.mkdir(parents=True, exist_ok=True)
+    log("已初始化学习数据目录", "OK")
+
 
 def open_file_in_editor(file_path: Path) -> bool:
     """使用系统默认编辑器打开文件
@@ -65,10 +86,6 @@ def open_file_in_editor(file_path: Path) -> bool:
         pass
     return False
 
-
-ALLOWED_TONES = ["neutral", "friendly", "professional", "casual"]
-ALLOWED_LANGUAGES = ["chinese", "english"]
-ALLOWED_EMOJI_FREQS = ["minimal", "moderate", "frequent"]
 
 # Display name mapping for bilingual
 DISPLAY_NAMES = {
@@ -452,7 +469,11 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     )
     log(p('soul_initialized'), "OK")
 
-    # Step 8: Update identity files
+    # Step 8: Initialize data directories for enhanced memory and adaptive learning
+    log("初始化增强记忆系统...", "STEP")
+    initialize_data_directories(project_root)
+
+    # Step 9: Update identity files
     log(p('updating_identity'), "STEP")
     initialize_identity(project_root, project_root, verbose=True)
 
@@ -934,7 +955,11 @@ def check_and_initialize_configs(project_root: Path) -> None:
     )
     log("已初始化默认 PAD 情感状态向量", "OK")
 
-    # Step 3: Re-initialize identity files
+    # Step 3: Initialize data directories for enhanced memory and adaptive learning
+    log("初始化增强记忆系统...", "STEP")
+    initialize_data_directories(project_root)
+
+    # Step 4: Re-initialize identity files
     log("更新身份档案...", "STEP")
     initialize_identity(project_root, project_root, verbose=True)
 

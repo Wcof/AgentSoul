@@ -19,6 +19,7 @@ lib64/
 # Generated identity and data
 data/
 logs/
+data/learning/
 
 # Generated persona files for editors
 agent-persona.md

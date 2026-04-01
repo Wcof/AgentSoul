@@ -9,3 +9,5 @@ export * from './core-memory.js';
 export * from './entity-memory.js';
 export * from './kv-cache.js';
 export * from './soul-board.js';
+export * from './memory_enhanced.js';
+export * from './adaptive.js';
