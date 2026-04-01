@@ -14,7 +14,7 @@ AgentSoul · 人格插件安装脚本 v1.0
     python3 install.py --mcp                       # 安装并启动 MCP
     python3 install.py --mcp --no-run             # 仅安装 MCP
     python3 install.py --openclaw                 # 安装 OpenClaw
-    python3 install.py --openclaw --scope global  # 全局模式
+    python3 install.py --openclaw --scope global  # OpenClaw 全局安装
 
 环境要求：
     - Python 3.10+
@@ -160,7 +160,6 @@ def select_from_list(prompt_key: str, allowed_values: List[str], default: str, l
 
 
 
-
 # Bilingual prompts for interactive configuration wizard
 PROMPTS = {
     'zh': {
@@ -257,7 +256,7 @@ PROMPTS = {
         'config_written': 'Configuration written to: {path}',
         'initializing_soul': 'Initializing soul PAD emotional state...',
         'soul_initialized': 'Default PAD emotional state initialized',
-        'updating_identity': 'Updating identity profiles...',
+        'updating_identity': 'Updating identity profiles',
         'complete': '✅ Interactive configuration complete!',
         'use_interactive_wizard': 'Use interactive configuration wizard to fill all fields? [Y/n]: ',
     }
@@ -834,27 +833,6 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
     else:
         log("未检测到源码变更，跳过编译", "OK")
 
-def is_claude_cli_installed() -> bool:
-    """Check if Claude CLI is installed on the system."""
-    try:
-        result = subprocess.run(["claude", "--version"], capture_output=True, text=True)
-        return result.returncode == 0
-    except (FileNotFoundError, OSError):
-        return False
-
-
-def register_claude_cli(mcp_full_path: Path) -> None:
-    """Register AgentSoul MCP with Claude CLI using official command."""
-    json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
-    cmd = ["claude", "mcp", "add-json", "agentsoul", json_config]
-    log(f"使用 Claude CLI 官方命令注册 AgentSoul MCP...", "STEP")
-    result = subprocess.run(cmd, capture_output=False, text=True)
-    if result.returncode == 0:
-        log(f"已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
-    else:
-        log(f"Claude CLI 注册失败，请手动执行以下命令：\nclaude mcp add-json agentsoul '{json_config}'", "ERROR")
-
-
     print("\n✅ MCP 服务安装完成！\n")
     print("配置说明：")
     mcp_full_path = (mcp_dir / "dist" / "index.js").absolute()
@@ -882,7 +860,7 @@ def register_claude_cli(mcp_full_path: Path) -> None:
     detected_platforms = []
     for display_name, detect_cmd, reg_handler, config_path in supported_platforms:
         if not detect_cmd:
-            continue  # Skip platforms that can't be auto-detected
+            continue  # Skip platforms that can't be detected
         try:
             result = subprocess.run(detect_cmd.split(), capture_output=True, text=True)
             if result.returncode == 0:
@@ -943,6 +921,27 @@ def register_claude_cli(mcp_full_path: Path) -> None:
     except KeyboardInterrupt:
         log("MCP 服务已停止", "INFO")
     return True
+
+
+def is_claude_cli_installed() -> bool:
+    """Check if Claude CLI is installed on the system."""
+    try:
+        result = subprocess.run(["claude", "--version"], capture_output=True, text=True)
+        return result.returncode == 0
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def register_claude_cli(mcp_full_path: Path) -> None:
+    """Register AgentSoul MCP with Claude CLI using official command."""
+    json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
+    cmd = ["claude", "mcp", "add-json", "agentsoul", json_config]
+    log(f"使用 Claude CLI 官方命令注册 AgentSoul MCP...", "STEP")
+    result = subprocess.run(cmd, capture_output=False, text=True)
+    if result.returncode == 0:
+        log(f"已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
+    else:
+        log(f"Claude CLI 注册失败，请手动执行以下命令：\nclaude mcp add-json agentsoul '{json_config}'", "ERROR")
 
 
 def uninstall_mcp() -> bool:
