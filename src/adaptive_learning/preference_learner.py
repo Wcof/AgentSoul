@@ -11,6 +11,17 @@ import json
 from common import log, get_project_root
 from .data_collector import InteractionRecord
 
+# Unicode emoji ranges (covers most common emoji) - constant defined once at module level
+EMOJI_RANGES = [
+    (0x1F600, 0x1F64F),  # Emoticons
+    (0x1F300, 0x1F5FF),  # Miscellaneous Symbols and Pictographs
+    (0x1F680, 0x1F6FF),  # Transport and Map Symbols
+    (0x1F900, 0x1F9FF),  # Supplemental Symbols and Pictographs
+    (0x2600, 0x26FF),    # Miscellaneous Symbols
+    (0x2700, 0x27BF),    # Dingbats
+    (0x1F1E6, 0x1F1FF),  # Regional Indicator Symbols (flags)
+]
+
 
 @dataclass
 class UserPreferences:
@@ -82,12 +93,27 @@ class PreferenceLearner:
             current_confidence = self._preferences.learning_confidence.get("response_length", 0.0)
             self._preferences.learning_confidence["response_length"] = max(0.0, current_confidence - 0.1)
 
+            if interaction.topics:
+                for topic in interaction.topics:
+                    if topic in self._preferences.preferred_topics:
+                        self._preferences.preferred_topics.remove(topic)
+
         self._save_preferences()
 
     def learn_from_response(self, interaction: InteractionRecord) -> None:
+        """Learn emoji usage preference from agent response.
+
+        Counts all Unicode emoji characters in the response to determine
+        the overall frequency of emoji usage.
+        """
         if interaction.agent_response:
-            emoji_count = interaction.agent_response.count("😊") + interaction.agent_response.count("👍")
-            emoji_count += interaction.agent_response.count("🎉") + interaction.agent_response.count("💡")
+            emoji_count = 0
+            for char in interaction.agent_response:
+                code = ord(char)
+                for start, end in EMOJI_RANGES:
+                    if start <= code <= end:
+                        emoji_count += 1
+                        break
 
             if emoji_count > 5:
                 self._update_emoji_preference("frequent")

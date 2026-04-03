@@ -159,6 +159,36 @@ import {
   handleLedgerRead,
 } from './tools/soul-board.js';
 
+import {
+  SearchMemorySchema,
+  handleSearchMemory,
+  TagMemorySchema,
+  handleTagMemory,
+  UntagMemorySchema,
+  handleUntagMemory,
+  GetMemoryTagsSchema,
+  handleGetMemoryTags,
+  ListTagsSchema,
+  handleListTags,
+  SetMemoryPrioritySchema,
+  handleSetMemoryPriority,
+  GetHighPriorityMemoriesSchema,
+  handleGetHighPriorityMemories,
+} from './tools/memory_enhanced.js';
+
+import {
+  GetLearningPreferencesSchema,
+  handleGetLearningPreferences,
+  SubmitFeedbackSchema,
+  handleSubmitFeedback,
+  ResetLearningSchema,
+  handleResetLearning,
+  SetLearningIntensitySchema,
+  handleSetLearningIntensity,
+  GetInteractionStatisticsSchema,
+  handleGetInteractionStatistics,
+} from './tools/adaptive.js';
+
 // 创建 MCP 服务器实例
 const server = new Server(
   {
@@ -254,6 +284,20 @@ const ALL_TOOLS: ToolMetadata[] = [
   // Ledger tools
   { name: 'ledger_list', fallbackDescription: 'List ledger entries for a project.', schema: LedgerListSchema },
   { name: 'ledger_read', fallbackDescription: 'Read a specific ledger entry by ID.', schema: LedgerReadSchema },
+  // Enhanced Memory tools
+  { name: 'enhanced_memory_search', fallbackDescription: 'Enhanced memory search with fuzzy matching, date filtering, tag filtering and priority filtering. Returns sorted results by relevance * priority.', schema: SearchMemorySchema },
+  { name: 'add_memory_tags', fallbackDescription: 'Add one or more tags to an existing enhanced memory.', schema: TagMemorySchema },
+  { name: 'remove_memory_tags', fallbackDescription: 'Remove one or more tags from an existing enhanced memory.', schema: UntagMemorySchema },
+  { name: 'get_memory_tags', fallbackDescription: 'Get all tags for a specific enhanced memory.', schema: GetMemoryTagsSchema },
+  { name: 'list_all_tags', fallbackDescription: 'List all tags with usage statistics, optionally filtered by minimum count.', schema: ListTagsSchema },
+  { name: 'set_memory_priority', fallbackDescription: 'Set the priority level (high/medium/low) for an enhanced memory. Higher priority memories get sorted first in search results.', schema: SetMemoryPrioritySchema },
+  { name: 'get_high_priority_memories', fallbackDescription: 'Get a list of all high priority enhanced memory entries.', schema: GetHighPriorityMemoriesSchema },
+  // Adaptive Learning tools
+  { name: 'get_learning_preferences', fallbackDescription: 'Get the current learned user preferences from adaptive learning.', schema: GetLearningPreferencesSchema },
+  { name: 'submit_feedback', fallbackDescription: 'Submit user feedback to improve adaptive learning of user preferences and PAD emotional state.', schema: SubmitFeedbackSchema },
+  { name: 'reset_learning', fallbackDescription: 'Reset all adaptive learning data to default values (clears all learned preferences).', schema: ResetLearningSchema },
+  { name: 'set_learning_intensity', fallbackDescription: 'Set the learning intensity (0 to 1) for adaptive adjustments. Higher intensity means faster learning.', schema: SetLearningIntensitySchema },
+  { name: 'get_interaction_statistics', fallbackDescription: 'Get statistics about collected interaction data including feedback counts.', schema: GetInteractionStatisticsSchema },
 ];
 
 /**
@@ -391,6 +435,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleLedgerList(LedgerListSchema.parse(args));
     case 'ledger_read':
       return handleLedgerRead(LedgerReadSchema.parse(args));
+
+    // Enhanced Memory tools
+    case 'enhanced_memory_search':
+      return handleSearchMemory(SearchMemorySchema.parse(args));
+    case 'add_memory_tags':
+      return handleTagMemory(TagMemorySchema.parse(args));
+    case 'remove_memory_tags':
+      return handleUntagMemory(UntagMemorySchema.parse(args));
+    case 'get_memory_tags':
+      return handleGetMemoryTags(GetMemoryTagsSchema.parse(args));
+    case 'list_all_tags':
+      return handleListTags(ListTagsSchema.parse(args));
+    case 'set_memory_priority':
+      return handleSetMemoryPriority(SetMemoryPrioritySchema.parse(args));
+    case 'get_high_priority_memories':
+      return handleGetHighPriorityMemories(GetHighPriorityMemoriesSchema.parse(args));
+
+    // Adaptive Learning tools
+    case 'get_learning_preferences':
+      return handleGetLearningPreferences();
+    case 'submit_feedback':
+      return handleSubmitFeedback(SubmitFeedbackSchema.parse(args));
+    case 'reset_learning':
+      return handleResetLearning();
+    case 'set_learning_intensity':
+      return handleSetLearningIntensity(SetLearningIntensitySchema.parse(args));
+    case 'get_interaction_statistics':
+      return handleGetInteractionStatistics();
 
     default:
       throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

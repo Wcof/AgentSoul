@@ -80,7 +80,22 @@ AgentSoul/
 │   ├── master_base.md            # User profile rules
 │   ├── secure_base.md            # Security protocol (PROTECTED level)
 │   ├── skills_base.md            # Skill system rules
-│   └── tasks_base.md             # Task scheduling rules
+│   ├── tasks_base.md             # Task scheduling rules
+│   ├── adaptive_learning/        # Adaptive learning module
+│   │   ├── __init__.py
+│   │   ├── data_collector.py     # Interaction data collector
+│   │   ├── pad_adjuster.py       # Dynamic PAD emotion adjustment
+│   │   └── preference_learner.py # User preference learner
+│   ├── config_manager/           # Configuration management module
+│   │   ├── __init__.py
+│   │   ├── cli.py                # Command-line interface
+│   │   ├── templates.py          # Preset template system
+│   │   └── validator.py          # Configuration validator
+│   └── memory_enhanced/          # Enhanced memory module
+│       ├── __init__.py
+│       ├── priority.py           # Priority management
+│       ├── retrieval.py          # Intelligent retrieval
+│       └── tags.py               # Tag system
 ├── mcp_server/                   # MCP 服务实现 (TypeScript) - 独立维护
 │   ├── src/
 │   │   ├── index.ts              # MCP service entry
@@ -96,7 +111,9 @@ AgentSoul/
 │   │   │   └── kv-cache/         # 3-tier KV-Cache with Ebbinghaus GC
 │   │   └── tools/
 │   │       ├── soul.ts           # Soul/personality tools
-│   │       ├── memory.ts         # Memory tools
+│   │       ├── memory.ts         # Hierarchical memory tools
+│   │       ├── adaptive.ts       # Adaptive learning MCP tools
+│   │       ├── memory_enhanced.ts # Enhanced memory MCP tools
 │   │       ├── core-memory.ts    # Core memory MCP tools
 │   │       ├── entity-memory.ts  # Entity memory MCP tools
 │   │       ├── kv-cache.ts       # KV-Cache MCP tools

@@ -15,13 +15,16 @@ AgentSoul · 配置加载器
 
 import os
 import copy
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional, Union, List
 from dataclasses import dataclass, field
 import yaml
 import json
 
-from common import get_project_root
+from common import get_project_root, log
+from src.common.cache import TTLCacheBase
+from src.config_manager.validator import ConfigValidator, ValidationError
 
 
 @dataclass
@@ -63,15 +66,30 @@ class PersonaConfig:
     master: MasterConfig = field(default_factory=MasterConfig)
 
 
-class ConfigLoader:
+class ConfigLoader(TTLCacheBase):
     DEFAULT_AGENT_NAME = "Agent"
     DEFAULT_MASTER_NAME = ""
     DEFAULT_ROLE = "AI Assistant"
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Optional[Path] = None, default_ttl: int = 300):
+        super().__init__(default_ttl)
         self.project_root = project_root or get_project_root()
         self._config_cache: Optional[Dict] = None
         self._persona_cache: Optional[PersonaConfig] = None
+        self._behavior_cache: Optional[BehaviorConfig] = None
+
+    def invalidate_cache(self) -> None:
+        """Invalidate all cached configuration - force reload on next load."""
+        self._config_cache = None
+        self._persona_cache = None
+        self._behavior_cache = None
+        super().invalidate_cache()
+
+    def _cache_is_valid(self) -> bool:
+        """Check if cache is still valid based on TTL."""
+        if self._persona_cache is None:
+            return False
+        return super()._cache_is_valid()
 
     def load_yaml(self, file_path: Path) -> Dict:
         if not file_path.exists():
@@ -80,7 +98,7 @@ class ConfigLoader:
             return yaml.safe_load(f) or {}
 
     def load_persona_config(self, persona_path: Optional[Path] = None) -> PersonaConfig:
-        if self._persona_cache:
+        if self._cache_is_valid():
             return self._persona_cache
 
         if persona_path is None:
@@ -115,6 +133,7 @@ class ConfigLoader:
         )
 
         self._persona_cache = PersonaConfig(ai=ai_config, master=master_config)
+        self._update_cache_timestamp()
         return self._persona_cache
 
     @staticmethod
@@ -181,6 +200,29 @@ class ConfigLoader:
         except Exception:
             return False
 
+    def validate_current_config(self, persona_path: Optional[Path] = None, log_errors: bool = True) -> List[ValidationError]:
+        """Validate current configuration and return list of validation errors.
+
+        Args:
+            persona_path: Optional custom path to persona config
+            log_errors: Whether to log errors/warnings via the logger
+
+        Returns:
+            List of ValidationError objects (empty list means valid)
+        """
+        validator = ConfigValidator()
+
+        if persona_path is None:
+            persona_path = self.project_root / "config" / "persona.yaml"
+
+        raw_config = self.load_yaml(persona_path)
+        errors = validator.validate(raw_config)
+
+        if log_errors and errors:
+            validator.print_errors(errors)
+
+        return errors
+
     def to_legacy_format(self, persona_path: Optional[Path] = None) -> Dict:
         config = self.load_persona_config(persona_path)
         return {
@@ -208,6 +250,10 @@ class ConfigLoader:
         Returns:
             验证后的 BehaviorConfig 对象
         """
+        # Use same cache TTL as persona config
+        if self._cache_is_valid() and self._behavior_cache is not None:
+            return self._behavior_cache
+
         if behavior_path is None:
             behavior_path = self.project_root / "config" / "behavior.yaml"
 
@@ -225,6 +271,9 @@ class ConfigLoader:
             custom_settings=raw_config.get("custom_settings", {}),
         )
 
+        self._behavior_cache = behavior
+        # Update cache timestamp when we reload
+        self._update_cache_timestamp()
         return behavior
 # Default persona configuration data - created once at module load
 DEFAULT_PERSONA_DATA: Dict[str, Any] = {

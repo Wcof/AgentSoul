@@ -3,6 +3,7 @@ AgentSoul · 记忆优先级管理
 提供三级优先级管理、自动调整和高优先级记忆检索功能
 """
 
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -11,6 +12,7 @@ from typing import List, Optional, Dict
 import json
 
 from common import log, get_project_root
+from src.common.cache import TTLCacheBase
 
 
 class PriorityLevel(Enum):
@@ -28,8 +30,9 @@ class MemoryPriority:
     manual_override: bool = False
 
 
-class PriorityManager:
-    def __init__(self, storage_path: Optional[Path] = None):
+class PriorityManager(TTLCacheBase):
+    def __init__(self, storage_path: Optional[Path] = None, default_ttl: int = 300):
+        super().__init__(default_ttl)
         if storage_path is None:
             storage_path = get_project_root() / "data" / "memories"
         self.storage_path = storage_path
@@ -38,24 +41,35 @@ class PriorityManager:
         self._priorities: Dict[str, MemoryPriority] = {}
         self._load_index()
 
+    def invalidate_cache(self) -> None:
+        """Invalidate the priority cache - force reload on next operation."""
+        self._priorities = {}
+        super().invalidate_cache()
+
     def _load_index(self) -> None:
+        # Return cached copy if still valid
+        if self._cache_is_valid():
+            return
+
+        self._priorities: Dict[str, MemoryPriority] = {}
+
         if self.priority_index_file.exists():
             try:
                 with open(self.priority_index_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self._priorities = {
-                        mem_id: MemoryPriority(
+                    for mem_id, info in data.get("priorities", {}).items():
+                        self._priorities[mem_id] = MemoryPriority(
                             memory_id=mem_id,
-                            level=PriorityLevel(info["level"]),
-                            access_count=info["access_count"],
-                            last_accessed=datetime.fromisoformat(info["last_accessed"]),
+                            level=PriorityLevel(info.get("level", "medium")),
+                            access_count=info.get("access_count", 0),
+                            last_accessed=datetime.fromisoformat(info.get("last_accessed", datetime.now().isoformat())),
                             manual_override=info.get("manual_override", False)
                         )
-                        for mem_id, info in data.get("priorities", {}).items()
-                    }
             except Exception as e:
                 log(f"Failed to load priority index: {e}", "WARN")
                 self._priorities = {}
+
+        self._update_cache_timestamp()
 
     def _save_index(self) -> None:
         try:
@@ -72,10 +86,12 @@ class PriorityManager:
             }
             with open(self.priority_index_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            self._update_cache_timestamp()
         except Exception as e:
             log(f"Failed to save priority index: {e}", "ERROR")
 
     def set_priority(self, memory_id: str, level: PriorityLevel) -> None:
+        self._load_index()
         if memory_id not in self._priorities:
             self._priorities[memory_id] = MemoryPriority(
                 memory_id=memory_id,
@@ -92,11 +108,13 @@ class PriorityManager:
         self._update_memory_file_priority(memory_id)
 
     def get_priority(self, memory_id: str) -> PriorityLevel:
+        self._load_index()
         if memory_id in self._priorities:
             return self._priorities[memory_id].level
         return PriorityLevel.MEDIUM
 
     def record_access(self, memory_id: str) -> None:
+        self._load_index()
         now = datetime.now()
 
         if memory_id not in self._priorities:
@@ -135,6 +153,7 @@ class PriorityManager:
                 priority.level = PriorityLevel.LOW
 
     def get_high_priority_memories(self, limit: int = 20) -> List[str]:
+        self._load_index()
         high_priority = [
             (mem_id, info.last_accessed)
             for mem_id, info in self._priorities.items()
@@ -144,6 +163,7 @@ class PriorityManager:
         return [mem_id for mem_id, _ in high_priority[:limit]]
 
     def get_all_priorities(self) -> List[MemoryPriority]:
+        self._load_index()
         return sorted(
             self._priorities.values(),
             key=lambda x: (
@@ -154,6 +174,7 @@ class PriorityManager:
         )
 
     def reset_priority(self, memory_id: str) -> None:
+        self._load_index()
         if memory_id in self._priorities:
             self._priorities[memory_id].level = PriorityLevel.MEDIUM
             self._priorities[memory_id].manual_override = False
@@ -169,7 +190,12 @@ class PriorityManager:
             with open(memory_file, "r", encoding="utf-8") as f:
                 memory = json.load(f)
 
-            memory["priority"] = self._priorities[memory_id].level.value
+            priority_info = self._priorities.get(memory_id)
+            if priority_info is not None:
+                memory["priority"] = priority_info.level.value
+            else:
+                # Default to MEDIUM if not in index
+                memory["priority"] = PriorityLevel.MEDIUM.value
 
             with open(memory_file, "w", encoding="utf-8") as f:
                 json.dump(memory, f, ensure_ascii=False, indent=2)

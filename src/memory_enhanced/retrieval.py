@@ -3,6 +3,7 @@ AgentSoul · 智能检索模块
 提供模糊匹配、时间过滤、相关度排序等高级搜索功能
 """
 
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,8 @@ import json
 import re
 
 from common import log, get_project_root
+from src.common.cache import TTLCacheBase
+from .priority import PriorityLevel
 
 
 @dataclass
@@ -23,12 +26,14 @@ class SearchResult:
     priority: str = "medium"
 
 
-class MemoryRetriever:
-    def __init__(self, storage_path: Optional[Path] = None):
+class MemoryRetriever(TTLCacheBase):
+    def __init__(self, storage_path: Optional[Path] = None, default_ttl: int = 300):
+        super().__init__(default_ttl)
         if storage_path is None:
             storage_path = get_project_root() / "data" / "memories"
         self.storage_path = storage_path
         self.storage_path.mkdir(parents=True, exist_ok=True)
+        self._cache: Optional[List[Dict[str, Any]]] = None
 
     @staticmethod
     def levenshtein_distance(s1: str, s2: str) -> int:
@@ -74,9 +79,25 @@ class MemoryRetriever:
 
         return matches / len(query_words)
 
+    def invalidate_cache(self) -> None:
+        """Invalidate the memory cache - force reload on next search."""
+        self._cache = None
+        super().invalidate_cache()
+
+    def _cache_is_valid(self) -> bool:
+        """Check if cache is still valid based on TTL."""
+        if self._cache is None:
+            return False
+        return super()._cache_is_valid()
+
     def _load_all_memories(self) -> List[Dict[str, Any]]:
+        # Return cached copy if still valid
+        if self._cache_is_valid():
+            return self._cache if self._cache is not None else []
+
         memories = []
         if not self.storage_path.exists():
+            self._cache = memories
             return memories
 
         for json_file in self.storage_path.glob("*.json"):
@@ -87,6 +108,10 @@ class MemoryRetriever:
                     memories.append(memory)
             except Exception as e:
                 log(f"Failed to load memory {json_file}: {e}", "WARN")
+
+        # Update cache
+        self._cache = memories
+        self._update_cache_timestamp()
 
         return memories
 
@@ -128,11 +153,15 @@ class MemoryRetriever:
                 continue
 
             if tags:
-                if not any(tag.lower() in (t.lower() for t in memory_tags) for tag in tags):
+                # Require ALL requested tags to be present (AND semantics)
+                # This is what users expect when searching by multiple tags
+                memory_tags_lower = [t.lower() for t in memory_tags]
+                if not all(any(tag.lower() == mt for mt in memory_tags_lower) for tag in tags):
                     continue
 
-            relevance = self.fuzzy_match_score(query, content)
-            if relevance > 0:
+            # Handle empty query - return all matching other filters
+            if not query or not query.strip():
+                relevance = 0.5  # Base relevance for all when no query
                 results.append(SearchResult(
                     memory_id=memory["memory_id"],
                     content=content,
@@ -141,8 +170,23 @@ class MemoryRetriever:
                     last_accessed=last_accessed,
                     priority=memory_priority
                 ))
+            else:
+                relevance = self.fuzzy_match_score(query, content)
+                if relevance > 0:
+                    results.append(SearchResult(
+                        memory_id=memory["memory_id"],
+                        content=content,
+                        relevance=relevance,
+                        tags=memory_tags,
+                        last_accessed=last_accessed,
+                        priority=memory_priority
+                    ))
 
-        priority_weights = {"high": 3, "medium": 2, "low": 1}
+        priority_weights = {
+            PriorityLevel.HIGH.value: 3,
+            PriorityLevel.MEDIUM.value: 2,
+            PriorityLevel.LOW.value: 1
+        }
         results.sort(
             key=lambda r: (r.relevance * priority_weights.get(r.priority, 1), r.last_accessed),
             reverse=True

@@ -9,6 +9,7 @@ import { ToolResponse } from '../types.js';
 import { readJson, writeJson } from '../lib/utils.js';
 import { PROJECT_ROOT } from '../lib/paths.js';
 import path from 'path';
+import fs from 'fs/promises';
 
 const storage = new StorageManager();
 
@@ -92,8 +93,7 @@ export async function handleSubmitFeedback(
 ): Promise<ToolResponse> {
   try {
     const dataPath = path.join(PROJECT_ROOT, 'data', 'learning');
-    const sessionsPath = path.join(dataPath, 'interactions.json');
-    const sessions = readJsonFile(sessionsPath) || [];
+    const sessionsPath = path.join(dataPath, 'interactions.jsonl');
     const sessionId = `session_${Date.now()}`;
 
     const record = {
@@ -108,10 +108,12 @@ export async function handleSubmitFeedback(
       agent_response: params.agent_response,
     };
 
-    (sessions as unknown[]).push(record);
-    const success = writeJsonFile(sessionsPath, sessions);
+    // Append as JSON Line (matches Python DataCollector format)
+    const success = fs.appendFile(sessionsPath, JSON.stringify(record, undefined, undefined) + '\n', 'utf-8')
+      .then(() => true)
+      .catch(() => false);
 
-    if (success) {
+    if (await success) {
       return {
         content: [
           {
@@ -154,11 +156,23 @@ export const ResetLearningSchema = z.object({});
 export async function handleResetLearning(): Promise<ToolResponse> {
   try {
     const dataPath = path.join(PROJECT_ROOT, 'data', 'learning');
-    const interactionsPath = path.join(dataPath, 'interactions.json');
+    const interactionsPath = path.join(dataPath, 'interactions.jsonl');
     const preferencesPath = path.join(dataPath, 'preferences.json');
+    const padStatePath = path.join(dataPath, 'pad_state.json');
+    const settingsPath = path.join(dataPath, 'settings.json');
 
-    writeJsonFile(interactionsPath, []);
+    // Truncate interactions file to empty (JSONL)
+    await fs.writeFile(interactionsPath, '', 'utf-8');
+    // Reset preferences to empty defaults
     writeJsonFile(preferencesPath, {});
+    // Reset PAD state to defaults
+    writeJsonFile(padStatePath, {
+      pleasure: 0.3,
+      arousal: 0.2,
+      dominance: 0.3,
+      last_updated: null
+    });
+    // Keep learning intensity setting
 
     return {
       content: [
@@ -247,16 +261,39 @@ export const GetInteractionStatisticsSchema = z.object({});
 export async function handleGetInteractionStatistics(): Promise<ToolResponse> {
   try {
     const dataPath = path.join(PROJECT_ROOT, 'data', 'learning');
-    const sessionsPath = path.join(dataPath, 'interactions.json');
-    const sessions = readJsonFile(sessionsPath) || [];
+    const sessionsPath = path.join(dataPath, 'interactions.jsonl');
 
-    const sessionsArray = sessions as unknown[];
-    const stats = {
-      total_interactions: sessionsArray.length,
-      positive_feedback: sessionsArray.filter((s: any) => s.feedback === 'positive').length,
-      negative_feedback: sessionsArray.filter((s: any) => s.feedback === 'negative').length,
-      neutral_feedback: sessionsArray.filter((s: any) => s.feedback === 'neutral').length,
+    let stats = {
+      total_interactions: 0,
+      positive_feedback: 0,
+      negative_feedback: 0,
+      neutral_feedback: 0,
     };
+
+    try {
+      const content = await fs.readFile(sessionsPath, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+
+      stats.total_interactions = lines.length;
+
+      for (const line of lines) {
+        try {
+          const session = JSON.parse(line);
+          if (session.feedback === 'positive') {
+            stats.positive_feedback++;
+          } else if (session.feedback === 'negative') {
+            stats.negative_feedback++;
+          } else if (session.feedback === 'neutral') {
+            stats.neutral_feedback++;
+          }
+        } catch {
+          // Skip malformed lines
+          continue;
+        }
+      }
+    } catch {
+      // File doesn't exist yet, return zeros
+    }
 
     return {
       content: [

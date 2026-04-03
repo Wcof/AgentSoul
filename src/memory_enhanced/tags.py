@@ -3,6 +3,7 @@ AgentSoul · 记忆标签系统
 提供标签管理、标签统计和自动标签建议功能
 """
 
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ import json
 import re
 
 from common import log, get_project_root
+from src.common.cache import TTLCacheBase
 
 
 @dataclass
@@ -20,8 +22,9 @@ class TagInfo:
     last_used: datetime
 
 
-class TagManager:
-    def __init__(self, storage_path: Optional[Path] = None):
+class TagManager(TTLCacheBase):
+    def __init__(self, storage_path: Optional[Path] = None, default_ttl: int = 300):
+        super().__init__(default_ttl)
         if storage_path is None:
             storage_path = get_project_root() / "data" / "memories"
         self.storage_path = storage_path
@@ -31,7 +34,20 @@ class TagManager:
         self._memory_tags: Dict[str, Set[str]] = {}
         self._load_index()
 
+    def invalidate_cache(self) -> None:
+        """Invalidate the tags cache - force reload on next operation."""
+        self._tags_cache = {}
+        self._memory_tags = {}
+        super().invalidate_cache()
+
     def _load_index(self) -> None:
+        # Return cached copy if still valid
+        if self._cache_is_valid():
+            return
+
+        self._tags_cache = {}
+        self._memory_tags = {}
+
         if self.tags_index_file.exists():
             try:
                 with open(self.tags_index_file, "r", encoding="utf-8") as f:
@@ -53,6 +69,8 @@ class TagManager:
                 self._tags_cache = {}
                 self._memory_tags = {}
 
+        self._update_cache_timestamp()
+
     def _save_index(self) -> None:
         try:
             data = {
@@ -70,10 +88,12 @@ class TagManager:
             }
             with open(self.tags_index_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            self._update_cache_timestamp()
         except Exception as e:
             log(f"Failed to save tags index: {e}", "ERROR")
 
     def add_tags(self, memory_id: str, tags: List[str]) -> None:
+        self._load_index()
         if memory_id not in self._memory_tags:
             self._memory_tags[memory_id] = set()
 
@@ -99,6 +119,7 @@ class TagManager:
         self._update_memory_file_tags(memory_id)
 
     def remove_tags(self, memory_id: str, tags: List[str]) -> None:
+        self._load_index()
         if memory_id not in self._memory_tags:
             return
 
@@ -121,9 +142,11 @@ class TagManager:
         self._update_memory_file_tags(memory_id)
 
     def get_tags(self, memory_id: str) -> List[str]:
+        self._load_index()
         return list(self._memory_tags.get(memory_id, set()))
 
     def list_all_tags(self, min_count: int = 1) -> List[TagInfo]:
+        self._load_index()
         tags = [
             info for info in self._tags_cache.values()
             if info.count >= min_count
@@ -131,6 +154,7 @@ class TagManager:
         return sorted(tags, key=lambda t: (-t.count, -t.last_used.timestamp()))
 
     def suggest_tags(self, content: str, limit: int = 5) -> List[str]:
+        self._load_index()
         words = re.findall(r"[\w\u4e00-\u9fff]+", content.lower())
         suggestions: Dict[str, int] = {}
 

@@ -35,14 +35,14 @@ AgentSoul/
 ├── config/
 │   └── persona.yaml              # 通用人格配置
 ├── src/
-│   ├── __init__.py               # 模块初始化
-│   ├── config_loader.py          # 配置加载器（dataclass）
+│   ├── __init__.py               # 模块初始化，版本信息
+│   ├── config_loader.py          # 配置加载器（dataclass 模型）
 │   ├── path_compat.py            # 路径兼容性工具
 │   ├── SKILL.md                  # 人格核心规则 & 安全策略
-│   ├── soul_base.md              # PAD 情感计算引擎
-│   ├── memory_base.md            # 记忆系统规则
+│   ├── soul_base.md              # PAD 情感计算引擎规则
+│   ├── memory_base.md            # 分层记忆系统规则
 │   ├── master_base.md            # 用户档案规则
-│   ├── secure_base.md            # 安全协议（PROTECTED）
+│   ├── secure_base.md            # 安全协议（PROTECTED 级别）
 │   ├── skills_base.md            # 技能系统规则
 │   ├── tasks_base.md             # 任务调度规则
 │   ├── adaptive_learning/        # 自适应学习模块
@@ -95,6 +95,9 @@ AgentSoul/
 │   └── test_agent_soul.py        # 单元测试
 ├── common/
 │   └── __init__.py               # 通用工具（日志等）
+├── src/
+│   └── common/
+│       └── cache.py              # 通用 TTL 缓存基类
 ├── install.py                    # 安装脚本
 └── README.md
 ```

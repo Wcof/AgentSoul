@@ -20,12 +20,14 @@ class ConfigValidator:
     ALLOWED_TONES = ["neutral", "friendly", "professional", "casual"]
     ALLOWED_LANGUAGES = ["chinese", "english"]
     ALLOWED_EMOJI_FREQS = ["minimal", "moderate", "frequent"]
+    ALLOWED_BOOLEAN_FIELDS = ["enabled", "auto_memory", "emotional_response", "task_scheduling", "memory_daily_summary"]
 
     def validate(self, config: Dict[str, Any]) -> List[ValidationError]:
         errors = []
         errors.extend(self._validate_agent_config(config))
         errors.extend(self._validate_master_config(config))
         errors.extend(self._validate_interaction_style(config))
+        errors.extend(self._validate_behavior_config(config))
         return errors
 
     def is_valid(self, config: Dict[str, Any]) -> bool:
@@ -59,6 +61,46 @@ class ConfigValidator:
 
         if not agent.get("name"):
             self._add_error(errors, "agent.name", "Agent 名称不能为空", "error")
+
+        # Check personality is a list
+        personality = agent.get("personality")
+        if personality is not None:
+            if not isinstance(personality, list):
+                self._add_error(
+                    errors,
+                    "agent.personality",
+                    f"personality 必须是列表类型，当前类型: {type(personality).__name__}",
+                    "error"
+                )
+            else:
+                for item in personality:
+                    if not isinstance(item, str):
+                        self._add_error(
+                            errors,
+                            "agent.personality",
+                            f"personality 列表元素必须是字符串类型，当前: {type(item).__name__}",
+                            "warning"
+                        )
+
+        # Check core_values is a list
+        core_values = agent.get("core_values")
+        if core_values is not None:
+            if not isinstance(core_values, list):
+                self._add_error(
+                    errors,
+                    "agent.core_values",
+                    f"core_values 必须是列表类型，当前类型: {type(core_values).__name__}",
+                    "error"
+                )
+            else:
+                for item in core_values:
+                    if not isinstance(item, str):
+                        self._add_error(
+                            errors,
+                            "agent.core_values",
+                            f"core_values 列表元素必须是字符串类型，当前: {type(item).__name__}",
+                            "warning"
+                        )
 
         return errors
 
@@ -150,6 +192,90 @@ class ConfigValidator:
                 f"{label} '{value}' 无效，有效值: {', '.join(allowed_values)}",
                 "error"
             )
+
+    def _validate_behavior_config(self, config: Dict[str, Any]) -> List[ValidationError]:
+        """Validate behavior configuration structure.
+
+        Handles both cases:
+        - Behavior config embedded inside a full persona config (under 'behavior' key)
+        - Standalone behavior config (root is the behavior dict)
+        """
+        errors = []
+
+        # Check if behavior config exists
+        if "behavior" in config:
+            # Embedded in full persona config
+            behavior = config["behavior"]
+        elif "enabled" in config and isinstance(config["enabled"], bool):
+            # This looks like a standalone behavior config, use root
+            behavior = config
+        else:
+            behavior = None
+
+        if behavior is None:
+            self._add_error(errors, "behavior", "缺少 behavior 配置", "warning")
+            return errors
+
+        if not isinstance(behavior, dict):
+            self._add_error(errors, "behavior", "behavior 必须是字典类型", "error")
+            return errors
+
+        # Check boolean fields
+        for field_name in self.ALLOWED_BOOLEAN_FIELDS:
+            if field_name in behavior:
+                value = behavior[field_name]
+                if not isinstance(value, bool):
+                    self._add_error(
+                        errors,
+                        f"behavior.{field_name}",
+                        f"{field_name} 必须是布尔类型 (true/false)，当前类型: {type(value).__name__}",
+                        "error"
+                    )
+
+        # Check priority field
+        priority = behavior.get("priority")
+        if priority is not None:
+            if not isinstance(priority, list):
+                self._add_error(
+                    errors,
+                    "behavior.priority",
+                    f"priority 必须是列表类型，当前类型: {type(priority).__name__}",
+                    "error"
+                )
+            else:
+                for item in priority:
+                    if not isinstance(item, str):
+                        self._add_error(
+                            errors,
+                            "behavior.priority",
+                            f"priority 列表元素必须是字符串类型，当前: {type(item).__name__}",
+                            "warning"
+                        )
+
+        # Check forbidden_topics and allowed_topics
+        for field_name in ["forbidden_topics", "allowed_topics"]:
+            if field_name in behavior:
+                value = behavior[field_name]
+                if not isinstance(value, list):
+                    self._add_error(
+                        errors,
+                        f"behavior.{field_name}",
+                        f"{field_name} 必须是列表类型，当前类型: {type(value).__name__}",
+                        "error"
+                    )
+
+        # Check response_length_limit
+        if "response_length_limit" in behavior:
+            value = behavior["response_length_limit"]
+            if not isinstance(value, (int, float)) or value < 0:
+                self._add_error(
+                    errors,
+                    "behavior.response_length_limit",
+                    f"response_length_limit 必须是非负数字，当前值: {value}",
+                    "error"
+                )
+
+        return errors
 
     def _is_valid_timezone_format(self, timezone: str) -> bool:
         if not timezone:

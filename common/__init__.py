@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 __version__ = "1.0.0"
-__all__ = ["log", "icons", "load_config", "get_project_root", "safe_file_stem", "initialize_identity", "get_default_pad_state", "ConfigLoader", "PathResolver", "resolve_path"]
+__all__ = ["log", "icons", "load_config", "get_project_root", "safe_file_stem", "initialize_identity", "get_default_pad_state", "read_last_n_lines", "ConfigLoader", "PathResolver", "resolve_path"]
 
 # Project root calculation - done before importing src modules to prevent circular imports
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -187,6 +187,73 @@ def initialize_identity(
                 log(f"已注入身份档案: {rel_path}", "OK")
         except Exception as e:
             log(f"写入身份档案失败 {file_path}: {e}", "ERROR")
+
+def read_last_n_lines(file_path: Path, n: int, buffer_size: int = 4096) -> list[str]:
+    """Read last n lines from a large file without loading the entire file.
+
+    Args:
+        file_path: Path to the file to read
+        n: Number of lines to read from the end
+        buffer_size: Buffer size for reading backwards
+
+    Returns:
+        List of last n lines in correct order (first line to last)
+    """
+    from typing import List
+    lines: List[str] = []
+    with open(file_path, "rb") as f:
+        file_size = f.seek(0, 2)
+        current_position = max(0, file_size - buffer_size)
+        f.seek(current_position)
+        buffer = f.read(buffer_size)
+
+        # Count newlines from the end
+        newline_char = b'\n'
+        while len(lines) < n and current_position > 0:
+            new_lines = buffer.count(newline_char)
+            if new_lines > 0:
+                # Split buffer into lines and take from the end
+                parts = buffer.split(newline_char)
+                # Add lines from end until we have enough
+                for part in reversed(parts[:-1]):
+                    if part:  # Skip empty lines from consecutive newlines
+                        # Try to decode - handle potential multi-byte character splitting
+                        try:
+                            lines.append(part.decode('utf-8'))
+                        except UnicodeDecodeError:
+                            # If we get a decode error, it means a multi-byte character
+                            # was split between buffer chunks. Since we're moving backwards,
+                            # the next iteration will include the complete character when it reads more bytes.
+                            # So we skip this incomplete part.
+                            pass
+                        if len(lines) >= n:
+                            break
+                if len(lines) >= n:
+                    break
+            # Move back and read more
+            step = min(buffer_size, current_position)
+            current_position -= step
+            f.seek(current_position)
+            buffer = f.read(step) + buffer
+
+        # If we still don't have enough lines but reached start
+        if len(lines) < n and current_position == 0:
+            # Split whatever we have
+            parts = buffer.split(newline_char)
+            for part in reversed(parts):
+                if part:
+                    try:
+                        lines.append(part.decode('utf-8'))
+                    except UnicodeDecodeError:
+                        # Skip incomplete multi-byte character at start of buffer
+                        pass
+                    if len(lines) >= n:
+                        break
+
+    # Reverse to get correct order (we collected from end to start)
+    lines.reverse()
+    return lines[:n]
+
 
 # Import src modules after all common symbols are defined
 # This breaks circular import: src/__init__.py needs common symbols like log

@@ -28,7 +28,7 @@ import yaml
 import argparse
 import subprocess
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
 
 PROJECT_ROOT = Path(__file__).parent
@@ -841,23 +841,11 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
     # Pre-compute JSON config once - reuse everywhere
     json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
 
-    from typing import Callable, Optional
-    RegistrationHandler = Optional[Callable[[Path], None]]
-
-    # 定义支持的 MCP 客户端平台
-    # 格式: (display_name, detect_command, registration_handler, config_path)
-    # - detect_command: command to check if platform is installed
-    # - registration_handler: function to handle registration, None for manual only
-    supported_platforms = [
-        ("Claude CLI", "claude --version", register_claude_cli, None),
-        # 预留: 未来可以添加 Trae, Claude Desktop 等
-        # ("Trae", "trae --version", register_trae, Path.home() / ".trae" / "config.json"),
-        # ("Claude Desktop", "", None, ...),
-    ]
+    RegistrationHandler = Optional[Callable[[Path, str], None]]
 
     # 检测已安装的平台
     detected_platforms = []
-    for display_name, detect_cmd, reg_handler, config_path in supported_platforms:
+    for display_name, detect_cmd, reg_handler, config_path in SUPPORTED_PLATFORMS:
         if not detect_cmd:
             continue  # Skip platforms that can't be detected
         try:
@@ -887,7 +875,7 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
                 elif 0 <= idx < len(detected_platforms):
                     display_name, reg_handler, _ = detected_platforms[idx]
                     if reg_handler is not None:
-                        reg_handler(mcp_full_path)
+                        reg_handler(mcp_full_path, json_config)
                     break
                 else:
                     print(f"❌ 无效选项，请输入 1 到 {len(detected_platforms) + 1} 之间的数字")
@@ -931,16 +919,144 @@ def is_claude_cli_installed() -> bool:
         return False
 
 
-def register_claude_cli(mcp_full_path: Path) -> None:
+def has_agentsoul_hook(settings: Dict[str, Any]) -> bool:
+    """Check if AgentSoul startup hook already exists in settings."""
+    if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
+        return False
+    for hook in settings["hooks"]["SessionStart"]:
+        if "matcher" in hook and "hooks" in hook:
+            for subhook in hook["hooks"]:
+                if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
+                    return True
+    return False
+
+
+def remove_agentsoul_hooks(settings: Dict[str, Any]) -> bool:
+    """Remove all AgentSoul startup hooks from settings. Returns True if any were removed."""
+    if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
+        return False
+    new_hooks = []
+    removed = False
+    for hook in settings["hooks"]["SessionStart"]:
+        if "matcher" in hook and "hooks" in hook:
+            is_agentsoul = False
+            for subhook in hook["hooks"]:
+                if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
+                    is_agentsoul = True
+                    break
+            if not is_agentsoul:
+                new_hooks.append(hook)
+            else:
+                removed = True
+        else:
+            new_hooks.append(hook)
+    settings["hooks"]["SessionStart"] = new_hooks
+    return removed
+
+
+def count_remaining_agentsoul_hooks(settings: Dict[str, Any]) -> int:
+    """Count how many AgentSoul startup hooks remain after removal."""
+    if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
+        return 0
+    count = 0
+    for hook in settings["hooks"]["SessionStart"]:
+        if "matcher" in hook and "hooks" in hook:
+            for subhook in hook["hooks"]:
+                if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
+                    count += 1
+    return count
+
+
+def register_claude_cli(mcp_full_path: Path, json_config: str) -> None:
     """Register AgentSoul MCP with Claude CLI using official command."""
-    json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
     cmd = ["claude", "mcp", "add-json", "agentsoul", json_config]
     log(f"使用 Claude CLI 官方命令注册 AgentSoul MCP...", "STEP")
-    result = subprocess.run(cmd, capture_output=False, text=True)
+
+    # Capture output to check if it's "already exists" vs real error
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
     if result.returncode == 0:
-        log(f"已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
+        log(f"✅ 已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
     else:
-        log(f"Claude CLI 注册失败，请手动执行以下命令：\nclaude mcp add-json agentsoul '{json_config}'", "ERROR")
+        # Check if it's just "already exists" which isn't really an error
+        output = (result.stdout + result.stderr).lower()
+        if "already exists" in output or "already registered" in output:
+            log(f"✅ AgentSoul MCP 已经在 Claude CLI 中注册过，无需重复注册", "OK")
+        else:
+            log(f"❌ Claude CLI 注册失败，请手动执行以下命令：\nclaude mcp add-json agentsoul '{json_config}'", "ERROR")
+    return
+
+    # Auto-configure SessionStart hook to ensure Claude automatically calls AgentSoul MCP on startup
+    settings_path = Path.home() / ".claude" / "settings.json"
+    if not settings_path.exists():
+        log(f"Claude settings.json not found at {settings_path}, skipping auto-hook configuration", "WARN")
+        return
+
+    try:
+        import json
+        with open(settings_path, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+
+        # Check if hooks section exists
+        if "hooks" not in settings:
+            settings["hooks"] = {}
+        if "SessionStart" not in settings["hooks"]:
+            settings["hooks"]["SessionStart"] = []
+
+        # Check if AgentSoul hook already exists
+        agentsoul_hook_exists = has_agentsoul_hook(settings)
+        hook_content = """
+
+=== AGENTSOUL PERSONALITY FRAMEWORK ===
+AgentSoul MCP is already configured for this project. YOU MUST follow this startup sequence at the BEGINNING of EVERY conversation:
+
+1.  Call `mcp__agentsoul__mcp_tool_index()` → Get complete tool index
+2.  Call `mcp__agentsoul__get_persona_config()` → Load who you are (AI) and who the user is (master)
+3.  Call `mcp__agentsoul__get_soul_state()` → Read current PAD emotion state
+4.  Call `mcp__agentsoul__get_base_rules` with `name="SKILL"` → Read top-level personality and security rules
+5.  Call `mcp__agentsoul__get_base_rules` with `name="memory_base"` → Read memory system rules
+6.  Call `mcp__agentsoul__get_mcp_usage_guide()` → Confirm workflow
+7.  Call `mcp__agentsoul__list_memory_topics()` → Get active memory topics
+
+Failure to follow this sequence violates AgentSoul framework rules.
+========================================
+"""
+
+        if not agentsoul_hook_exists:
+            # Add the AgentSoul hook
+            settings["hooks"]["SessionStart"].append({
+                "id": "agentsoul-startup",
+                "matcher": ".*",
+                "hooks": [
+                    {
+                        "type": "prompt",
+                        "prompt": hook_content
+                    }
+                ]
+            })
+            # Write back
+            with open(settings_path, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            log(f"✅ 已自动配置 SessionStart hook 到 {settings_path}", "OK")
+            log(f" Claude 会在每次对话开始自动调用 AgentSoul MCP 工具", "INFO")
+        else:
+            log(f"✅ AgentSoul SessionStart hook 已存在，跳过", "INFO")
+
+    except Exception as e:
+        log(f"自动配置 SessionStart hook 失败：{e}，请手动配置", "WARN")
+        log(f"提示：在 ~/.claude/settings.json 中添加 SessionStart hook 如：\n{json.dumps({'hooks': {'SessionStart': [{'matcher': '.*', 'hooks': [{'type': 'prompt', 'prompt': '...'}]}]}}, indent=2)}", "INFO")
+
+
+# Supported MCP client platforms
+# Format: (display_name, detect_command, registration_handler, config_path)
+# - detect_command: command to check if platform is installed
+# - registration_handler: function to handle registration, None for manual only
+SUPPORTED_PLATFORMS = [
+    ("Claude CLI", "claude --version", register_claude_cli, None),
+    # Reserved: future platforms can be added here
+    # ("Trae", "trae --version", register_trae, Path.home() / ".trae" / "config.json"),
+    # ("Claude Desktop", "", None, ...),
+]
 
 
 def uninstall_mcp() -> bool:
@@ -957,12 +1073,104 @@ def uninstall_mcp() -> bool:
     # 使用官方命令卸载
     cmd = ["claude", "mcp", "remove", "agentsoul"]
     result = subprocess.run(cmd, capture_output=False, text=True)
-    if result.returncode == 0:
-        log("已成功从 Claude CLI 卸载 AgentSoul MCP", "OK")
-        return True
-    else:
-        log("卸载失败，请手动执行：claude mcp remove agentsoul", "ERROR")
+    if result.returncode != 0:
+        log("MCP 卸载失败，请手动执行：claude mcp remove agentsoul", "ERROR")
         return False
+
+    # Auto-remove the SessionStart hook from settings.json
+    def remove_agentsoul_hook_file(settings_path: Path) -> bool:
+        """Remove AgentSoul SessionStart hook from given settings file."""
+        if not settings_path.exists():
+            return False
+
+        import json
+        with open(settings_path, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+
+        removed = remove_agentsoul_hooks(settings)
+
+        # Write back if we removed anything
+        if removed:
+            with open(settings_path, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            log(f"✅ 已自动移除 SessionStart hook 从 {settings_path}", "OK")
+
+        # Post-check: verify all AgentSoul hooks are gone
+        # Check again in case there were multiple hooks
+        remaining = count_remaining_agentsoul_hooks(settings)
+        if remaining > 0:
+            log(f"⚠️  仍有 {remaining} 个 AgentSoul hook 残留在 {settings_path}，请手动移除", "WARN")
+
+        return removed
+
+    # Remove from global settings
+    global_settings = Path.home() / ".claude" / "settings.json"
+    removed_global = False
+    if global_settings.exists():
+        try:
+            removed_global = remove_agentsoul_hook_file(global_settings)
+        except Exception as e:
+            log(f"移除全局 SessionStart hook 失败：{e}，请手动移除", "WARN")
+
+    # Remove from project local settings (if we're running from the project directory)
+    local_settings = Path.cwd() / ".claude" / "settings.json"
+    removed_local = False
+    if local_settings.exists():
+        try:
+            removed_local = remove_agentsoul_hook(local_settings)
+        except Exception as e:
+            log(f"移除项目本地 SessionStart hook 失败：{e}，请手动移除", "WARN")
+
+    if not removed_global and not removed_local:
+        log("✅ 未找到 AgentSoul SessionStart hook，跳过", "INFO")
+
+    # Final verification check - count any remaining AgentSoul hooks
+    def count_remaining_hooks(settings_path: Path) -> int:
+        """Count how many AgentSoul hooks remain after removal."""
+        if not settings_path.exists():
+            return 0
+        import json
+        try:
+            with open(settings_path, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            count = 0
+            if "hooks" in settings and "SessionStart" in settings["hooks"]:
+                for hook in settings["hooks"]["SessionStart"]:
+                    if "matcher" in hook and "hooks" in hook:
+                        for subhook in hook["hooks"]:
+                            if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
+                                count += 1
+            return count
+        except Exception:
+            return -1  # Error reading file
+
+    remaining_global = count_remaining_hooks(global_settings)
+    remaining_local = count_remaining_hooks(local_settings)
+    total_remaining = (remaining_global if remaining_global > 0 else 0) + (remaining_local if remaining_local > 0 else 0)
+
+    if total_remaining > 0:
+        log(f"⚠️  检测到仍有 {total_remaining} 个 AgentSoul hook 未移除，请手动检查清理：", "WARN")
+        if remaining_global > 0:
+            log(f"   - 全局: {global_settings}", "WARN")
+        if remaining_local > 0:
+            log(f"   - 本地: {local_settings}", "WARN")
+    else:
+        log("✅ 所有 AgentSoul hook 已清理干净", "OK")
+
+    # Clean up empty .claude directory in project if it's empty after removal
+    local_claude_dir = Path.cwd() / ".claude"
+    if local_claude_dir.exists():
+        # Check if directory is empty
+        try:
+            if not any(local_claude_dir.iterdir()):
+                local_claude_dir.rmdir()
+                log(f"✅ 已删除空项目目录 {local_claude_dir}", "OK")
+        except Exception:
+            # Ignore errors if directory isn't empty
+            pass
+
+    log("✅ MCP 卸载完成", "OK")
+    return True
 
 
 def check_and_initialize_configs(project_root: Path) -> None:

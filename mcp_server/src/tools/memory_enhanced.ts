@@ -1,6 +1,7 @@
 /**
  * @fileoverview 增强记忆工具模块
  * @description 提供智能记忆管理功能，包括高级搜索、标签管理和优先级控制
+ * Aligned with Python memory_enhanced module data structure
  */
 
 import { z } from 'zod';
@@ -8,477 +9,618 @@ import { ToolResponse } from '../types.js';
 import { readJson, writeJson } from '../lib/utils.js';
 import { PROJECT_ROOT } from '../lib/paths.js';
 import path from 'path';
+import fs from 'fs';
 
-/** 优先级类型定义 */
+/** Priority level type */
 type PriorityLevel = 'low' | 'medium' | 'high';
 
-/** 记忆索引条目 */
-interface MemoryIndexEntry {
+/** Memory data structure (Python format) */
+interface MemoryData {
   memory_id: string;
   content: string;
-  relevance: number;
-  tags: string[];
+  tags?: string[];
+  priority?: PriorityLevel;
+  created_at: string;
   last_accessed: string;
-  priority: PriorityLevel;
-  created: string;
 }
 
-/** 标签统计条目 */
-interface TagStat {
+/** Tags index (Python format) */
+interface TagsIndex {
+  tags: { [name: string]: { count: number; last_used: string } };
+  memory_tags: { [memory_id: string]: string[] };
+}
+
+/** Priority index (Python format) */
+interface PriorityIndex {
+  priorities: { [memory_id: string]: { level: PriorityLevel; access_count: number; last_accessed: string; manual_override: boolean } };
+}
+
+/** TagStat output type */
+interface TagStatOutput {
   name: string;
   count: number;
   last_used: string;
 }
 
 /**
- * 读取 JSON 文件工具函数
+ * Read JSON file tool function
  */
 const readJsonFile = readJson;
 
 /**
- * 写入 JSON 文件工具函数
+ * Write JSON file tool function
  */
 const writeJsonFile = writeJson;
 
 /**
- * 搜索记忆 Schema
+ * Search memory Schema
  */
 export const SearchMemorySchema = z.object({
-  /** 搜索关键词 */
+  /** Search query keywords */
   query: z.string(),
-  /** 起始日期 (YYYY-MM-DD) */
+  /** Start date (YYYY-MM-DD) */
   start_date: z.string().optional(),
-  /** 结束日期 (YYYY-MM-DD) */
+  /** End date (YYYY-MM-DD) */
   end_date: z.string().optional(),
-  /** 标签过滤 */
+  /** Tags filter (AND semantics - all tags must match) */
   tags: z.array(z.string()).optional(),
-  /** 优先级过滤 */
+  /** Priority filter */
   priority: z.enum(['low', 'medium', 'high']).optional(),
-  /** 返回结果限制 */
+  /** Max results limit */
   limit: z.number().optional(),
 });
 
 /**
- * 搜索增强记忆
- * @param params 搜索参数
- * @returns 搜索结果
+ * Search enhanced memory (aligned with Python data format)
+ * @param params Search parameters
+ * @returns Search results
  */
 export async function handleSearchMemory(
   params: z.infer<typeof SearchMemorySchema>
 ): Promise<ToolResponse> {
   try {
     const { query, start_date, end_date, tags, priority, limit = 10 } = params;
-    const indexPath = path.join(PROJECT_ROOT, 'data', 'memories', 'index.json');
-    const index = readJsonFile<MemoryIndexEntry[]>(indexPath) || [];
+    const memoriesDir = path.join(PROJECT_ROOT, 'data', 'memories');
 
-    // 简单过滤搜索（实际模糊搜索由 Python 逻辑处理，这里只做基本过滤）
-    let results = [...index];
+    // Load all memory files from directory (Python stores each memory as separate JSON)
+    let results: any[] = [];
 
-    // 日期过滤
-    if (start_date) {
-      results = results.filter(r => r.created >= start_date);
-    }
-    if (end_date) {
-      results = results.filter(r => r.created <= end_date);
-    }
-
-    // 标签过滤
-    if (tags && tags.length > 0) {
-      results = results.filter(r => tags.every(t => r.tags?.includes(t)));
+    if (!fs.existsSync(memoriesDir)) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ success: true, total: 0, data: [] }),
+        }],
+      };
     }
 
-    // 优先级过滤
-    if (priority) {
-      results = results.filter(r => r.priority === priority);
+    // Read all JSON memory files, skip index files
+    const files = fs.readdirSync(memoriesDir).filter(
+      f => f.endsWith('.json') && !f.includes('_index') && f !== 'tags.json' && f !== 'index.json'
+    );
+
+    for (const file of files) {
+      try {
+        const memoryPath = path.join(memoriesDir, file);
+        const memory = readJsonFile<MemoryData>(memoryPath);
+        if (!memory) continue;
+
+        const memoryId = file.replace('.json', '');
+        const memoryTags: string[] = memory.tags || [];
+        const memoryPriority: PriorityLevel = memory.priority || 'medium';
+        const createdAt = memory.created_at || '';
+        const lastAccessed = memory.last_accessed || createdAt;
+
+        // Date filtering
+        if (start_date && createdAt && createdAt < start_date) continue;
+        if (end_date && createdAt && createdAt > end_date) continue;
+
+        // Priority filtering
+        if (priority && memoryPriority !== priority) continue;
+
+        // Tags filtering (AND semantics - all tags must match)
+        if (tags && tags.length > 0) {
+          const memoryTagsLower = memoryTags.map(t => t.toLowerCase());
+          const allMatch = tags.every(tag =>
+            memoryTagsLower.includes(tag.toLowerCase())
+          );
+          if (!allMatch) continue;
+        }
+
+        // Simple keyword search (full-text matching)
+        let matchesQuery = true;
+        if (query) {
+          const queryLower = query.toLowerCase();
+          const contentLower = (memory.content || '').toLowerCase();
+          if (!contentLower.includes(queryLower) && !memoryTags.some(t => t.toLowerCase().includes(queryLower))) {
+            matchesQuery = false;
+          }
+        }
+
+        if (matchesQuery) {
+          results.push({
+            memory_id: memoryId,
+            content: memory.content,
+            relevance: 1.0,
+            tags: memoryTags,
+            last_accessed: lastAccessed,
+            priority: memoryPriority,
+            created: createdAt,
+          });
+        }
+      } catch (e) {
+        // Skip corrupted files
+        continue;
+      }
     }
 
-    // 关键词简单搜索
-    if (query) {
-      const queryLower = query.toLowerCase();
-      results = results.filter(r =>
-        r.content?.toLowerCase().includes(queryLower) ||
-        r.tags?.some(t => t.toLowerCase().includes(queryLower))
-      );
-    }
+    // Sort by priority and last accessed (newer/higher priority first)
+    const priorityWeights: Record<PriorityLevel, number> = { high: 3, medium: 2, low: 1 };
+    results.sort((a, b) => {
+      const priorityDiff = priorityWeights[b.priority as PriorityLevel] - priorityWeights[a.priority as PriorityLevel];
+      if (priorityDiff !== 0) return priorityDiff;
+      return (b.last_accessed || '').localeCompare(a.last_accessed || '');
+    });
 
-    // 限制结果数量
+    // Limit results
     results = results.slice(0, limit);
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            total: results.length,
-            data: results.map(r => ({
-              memory_id: r.memory_id,
-              content: r.content,
-              relevance: r.relevance || 1.0,
-              tags: r.tags || [],
-              last_accessed: r.last_accessed || r.created,
-              priority: r.priority || 'medium',
-            })),
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          total: results.length,
+          data: results,
+        }),
+      }],
     };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: (error as Error).message,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: (error as Error).message,
+        }),
+      }],
     };
   }
 }
 
 /**
- * 添加标签 Schema
+ * Add tags Schema
  */
 export const TagMemorySchema = z.object({
-  /** 记忆 ID */
+  /** Memory ID */
   memoryId: z.string(),
-  /** 要添加的标签列表 */
+  /** List of tags to add */
   tags: z.array(z.string()),
 });
 
 /**
- * 为记忆添加标签
- * @param params 参数
- * @returns 操作结果
+ * Add tags to memory (aligned with Python format)
+ * @param params Parameters
+ * @returns Operation result
  */
 export async function handleTagMemory(
   params: z.infer<typeof TagMemorySchema>
 ): Promise<ToolResponse> {
   try {
     const { memoryId, tags } = params;
-    const indexPath = path.join(PROJECT_ROOT, 'data', 'memories', 'index.json');
-    const index = readJsonFile<MemoryIndexEntry[]>(indexPath) || [];
+    const memoriesDir = path.join(PROJECT_ROOT, 'data', 'memories');
+    const tagsIndexPath = path.join(memoriesDir, 'tags_index.json');
+    const memoryPath = path.join(memoriesDir, `${memoryId}.json`);
 
-    const memoryIndex = index.findIndex(m => m.memory_id === memoryId);
-    if (memoryIndex >= 0) {
-      // 添加标签（去重）
-      const existingTags = index[memoryIndex].tags || [];
-      const newTags = [...new Set([...existingTags, ...tags])];
-      index[memoryIndex].tags = newTags;
-      writeJsonFile(indexPath, index);
+    // Load tags index (Python format)
+    let tagsIndex: TagsIndex = { tags: {}, memory_tags: {} };
+    if (fs.existsSync(tagsIndexPath)) {
+      tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+    }
 
-      // 更新标签统计
-      const tagsPath = path.join(PROJECT_ROOT, 'data', 'memories', 'tags.json');
-      const tagStats = readJsonFile<TagStat[]>(tagsPath) || [];
-      tags.forEach(tag => {
-        const existing = tagStats.find(t => t.name === tag);
-        if (existing) {
-          existing.count += 1;
-          existing.last_used = new Date().toISOString();
-        } else {
-          tagStats.push({
-            name: tag,
-            count: 1,
-            last_used: new Date().toISOString(),
-          });
+    // Ensure memory_tags entry exists
+    if (!tagsIndex.memory_tags[memoryId]) {
+      tagsIndex.memory_tags[memoryId] = [];
+    }
+
+    const existingTags = tagsIndex.memory_tags[memoryId];
+    const now = new Date().toISOString();
+
+    // Add new tags (avoid duplicates)
+    tags.forEach(tag => {
+      const tagLower = tag.trim().toLowerCase();
+      if (tagLower && !existingTags.includes(tagLower)) {
+        existingTags.push(tagLower);
+
+        if (!tagsIndex.tags[tagLower]) {
+          tagsIndex.tags[tagLower] = { count: 0, last_used: now };
         }
-      });
-      writeJsonFile(tagsPath, tagStats);
+        tagsIndex.tags[tagLower].count += 1;
+        tagsIndex.tags[tagLower].last_used = now;
+      }
+    });
+
+    // Save updated tags index
+    writeJsonFile(tagsIndexPath, tagsIndex);
+
+    // Update tags in the memory file itself
+    if (fs.existsSync(memoryPath)) {
+      const memory = readJsonFile<MemoryData>(memoryPath);
+      if (memory) {
+        // Merge existing tags with new tags
+        const currentMemoryTags = memory.tags || [];
+        const allTags = [...new Set([...currentMemoryTags, ...tags.map(t => t.trim().toLowerCase())])];
+        memory.tags = allTags;
+        writeJsonFile(memoryPath, memory);
+      }
     }
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            message: `成功为记忆 ${memoryId} 添加标签: ${tags.join(', ')}`,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          message: `Successfully added tags to memory ${memoryId}: ${tags.join(', ')}`,
+        }),
+      }],
     };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: (error as Error).message,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: (error as Error).message,
+        }),
+      }],
     };
   }
 }
 
 /**
- * 移除标签 Schema
+ * Remove tags Schema
  */
 export const UntagMemorySchema = z.object({
-  /** 记忆 ID */
+  /** Memory ID */
   memoryId: z.string(),
-  /** 要移除的标签列表 */
+  /** List of tags to remove */
   tags: z.array(z.string()),
 });
 
 /**
- * 从记忆移除标签
- * @param params 参数
- * @returns 操作结果
+ * Remove tags from memory
+ * @param params Parameters
+ * @returns Operation result
  */
 export async function handleUntagMemory(
   params: z.infer<typeof UntagMemorySchema>
 ): Promise<ToolResponse> {
   try {
     const { memoryId, tags } = params;
-    const indexPath = path.join(PROJECT_ROOT, 'data', 'memories', 'index.json');
-    const index = readJsonFile<MemoryIndexEntry[]>(indexPath) || [];
+    const memoriesDir = path.join(PROJECT_ROOT, 'data', 'memories');
+    const tagsIndexPath = path.join(memoriesDir, 'tags_index.json');
+    const memoryPath = path.join(memoriesDir, `${memoryId}.json`);
 
-    const memoryIndex = index.findIndex(m => m.memory_id === memoryId);
-    if (memoryIndex >= 0) {
-      // 移除标签
-      const existingTags = index[memoryIndex].tags || [];
-      index[memoryIndex].tags = existingTags.filter(t => !tags.includes(t));
-      writeJsonFile(indexPath, index);
-    }
-
-    return {
-      content: [
-        {
+    // Load tags index
+    if (!fs.existsSync(tagsIndexPath)) {
+      return {
+        content: [{
           type: 'text',
           text: JSON.stringify({
             success: true,
-            message: `成功从记忆 ${memoryId} 移除标签: ${tags.join(', ')}`,
+            message: `No tags found for memory ${memoryId}`,
           }),
-        },
-      ],
+        }],
+      };
+    }
+
+    const tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+    const memoryTags = tagsIndex.memory_tags[memoryId];
+
+    if (!memoryTags) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            message: `No tags found for memory ${memoryId}`,
+          }),
+        }],
+      };
+    }
+
+    // Remove requested tags
+    tags.forEach(tag => {
+      const tagLower = tag.trim().toLowerCase();
+      const index = memoryTags.indexOf(tagLower);
+      if (index >= 0) {
+        memoryTags.splice(index, 1);
+        // Decrement count in tag index, remove if count reaches zero
+        if (tagsIndex.tags[tagLower]) {
+          tagsIndex.tags[tagLower].count -= 1;
+          if (tagsIndex.tags[tagLower].count <= 0) {
+            delete tagsIndex.tags[tagLower];
+          }
+        }
+      }
+    });
+
+    // Clean up empty memory entry
+    if (memoryTags.length === 0) {
+      delete tagsIndex.memory_tags[memoryId];
+    }
+
+    // Save updated index
+    writeJsonFile(tagsIndexPath, tagsIndex);
+
+    // Update memory file
+    if (fs.existsSync(memoryPath)) {
+      const memory = readJsonFile<MemoryData>(memoryPath);
+      if (memory && memory.tags) {
+        const remainingTags = memory.tags.filter(t => !tags.map(tag => tag.trim().toLowerCase()).includes(t.toLowerCase()));
+        memory.tags = remainingTags;
+        writeJsonFile(memoryPath, memory);
+      }
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          message: `Successfully removed tags from memory ${memoryId}: ${tags.join(', ')}`,
+        }),
+      }],
     };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: (error as Error).message,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: (error as Error).message,
+        }),
+      }],
     };
   }
 }
 
 /**
- * 获取记忆标签 Schema
+ * Get memory tags Schema
  */
 export const GetMemoryTagsSchema = z.object({
-  /** 记忆 ID */
+  /** Memory ID */
   memoryId: z.string(),
 });
 
 /**
- * 获取记忆的所有标签
- * @param params 参数
- * @returns 标签列表
+ * Get all tags for a memory
+ * @param params Parameters
+ * @returns Tag list
  */
 export async function handleGetMemoryTags(
   params: z.infer<typeof GetMemoryTagsSchema>
 ): Promise<ToolResponse> {
   try {
     const { memoryId } = params;
-    const indexPath = path.join(PROJECT_ROOT, 'data', 'memories', 'index.json');
-    const index = readJsonFile<MemoryIndexEntry[]>(indexPath) || [];
+    const memoriesDir = path.join(PROJECT_ROOT, 'data', 'memories');
+    const tagsIndexPath = path.join(memoriesDir, 'tags_index.json');
 
-    const memory = index.find(m => m.memory_id === memoryId);
-    const tags = memory?.tags || [];
+    let tags: string[] = [];
+
+    if (fs.existsSync(tagsIndexPath)) {
+      const tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+      tags = tagsIndex.memory_tags[memoryId] || [];
+    }
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            data: tags,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          data: tags,
+        }),
+      }],
     };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: (error as Error).message,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: (error as Error).message,
+        }),
+      }],
     };
   }
 }
 
 /**
- * 列出所有标签 Schema
+ * List all tags Schema
  */
 export const ListTagsSchema = z.object({
-  /** 最小使用次数 */
+  /** Minimum usage count */
   min_count: z.number().optional(),
 });
 
 /**
- * 列出所有标签及其统计
- * @param params 参数
- * @returns 标签列表
+ * List all tags with statistics
+ * @param params Parameters
+ * @returns Tag list
  */
 export async function handleListTags(
   params: z.infer<typeof ListTagsSchema>
 ): Promise<ToolResponse> {
   try {
     const { min_count = 1 } = params;
-    const tagsPath = path.join(PROJECT_ROOT, 'data', 'memories', 'tags.json');
-    const tags = readJsonFile<TagStat[]>(tagsPath) || [];
+    const memoriesDir = path.join(PROJECT_ROOT, 'data', 'memories');
+    const tagsIndexPath = path.join(memoriesDir, 'tags_index.json');
 
-    let filteredTags = tags;
-    if (min_count > 1) {
-      filteredTags = tags.filter(t => t.count >= min_count);
+    let tags: TagStatOutput[] = [];
+
+    if (fs.existsSync(tagsIndexPath)) {
+      const tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+
+      tags = Object.entries(tagsIndex.tags)
+        .filter(([_, info]) => info.count >= min_count)
+        .map(([name, info]) => ({
+          name,
+          count: info.count,
+          last_used: info.last_used,
+        }))
+        .sort((a, b) => b.count - a.count || b.last_used.localeCompare(a.last_used));
     }
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            data: filteredTags.map(t => ({
-              name: t.name,
-              count: t.count,
-              last_used: t.last_used,
-            })),
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          data: tags,
+        }),
+      }],
     };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: (error as Error).message,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: (error as Error).message,
+        }),
+      }],
     };
   }
 }
 
 /**
- * 设置记忆优先级 Schema
+ * Set memory priority Schema
  */
 export const SetMemoryPrioritySchema = z.object({
-  /** 记忆 ID */
+  /** Memory ID */
   memoryId: z.string(),
-  /** 优先级 */
+  /** Priority level */
   priority: z.enum(['high', 'medium', 'low']),
 });
 
 /**
- * 设置记忆优先级
- * @param params 参数
- * @returns 操作结果
+ * Set memory priority
+ * @param params Parameters
+ * @returns Operation result
  */
 export async function handleSetMemoryPriority(
   params: z.infer<typeof SetMemoryPrioritySchema>
 ): Promise<ToolResponse> {
   try {
     const { memoryId, priority } = params;
-    const indexPath = path.join(PROJECT_ROOT, 'data', 'memories', 'index.json');
-    const index = readJsonFile<MemoryIndexEntry[]>(indexPath) || [];
+    const memoriesDir = path.join(PROJECT_ROOT, 'data', 'memories');
+    const priorityIndexPath = path.join(memoriesDir, 'priority_index.json');
+    const memoryPath = path.join(memoriesDir, `${memoryId}.json`);
 
-    const memoryIndex = index.findIndex(m => m.memory_id === memoryId);
-    if (memoryIndex >= 0) {
-      index[memoryIndex].priority = priority;
-      writeJsonFile(indexPath, index);
+    // Load priority index
+    let priorityIndex: PriorityIndex = { priorities: {} };
+    if (fs.existsSync(priorityIndexPath)) {
+      priorityIndex = readJsonFile<PriorityIndex>(priorityIndexPath) || { priorities: {} };
+    }
+
+    // Update priority
+    priorityIndex.priorities[memoryId] = {
+      level: priority,
+      access_count: priorityIndex.priorities[memoryId]?.access_count || 0,
+      last_accessed: new Date().toISOString(),
+      manual_override: true,
+    };
+
+    // Save priority index
+    writeJsonFile(priorityIndexPath, priorityIndex);
+
+    // Update memory file
+    if (fs.existsSync(memoryPath)) {
+      const memory = readJsonFile<MemoryData>(memoryPath);
+      if (memory) {
+        memory.priority = priority;
+        writeJsonFile(memoryPath, memory);
+      }
     }
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            message: `成功将记忆 ${memoryId} 的优先级设置为 ${priority}`,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          message: `Successfully set priority ${priority} for memory ${memoryId}`,
+        }),
+      }],
     };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: (error as Error).message,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: (error as Error).message,
+        }),
+      }],
     };
   }
 }
 
 /**
- * 获取高优先级记忆 Schema
+ * Get high priority memories Schema
  */
 export const GetHighPriorityMemoriesSchema = z.object({
-  /** 返回结果限制 */
+  /** Result limit */
   limit: z.number().optional(),
 });
 
 /**
- * 获取高优先级记忆列表
- * @param params 参数
- * @returns 高优先级记忆列表
+ * Get list of high priority memories
+ * @param params Parameters
+ * @returns List of high priority memories
  */
 export async function handleGetHighPriorityMemories(
   params: z.infer<typeof GetHighPriorityMemoriesSchema>
 ): Promise<ToolResponse> {
   try {
     const { limit = 20 } = params;
-    const indexPath = path.join(PROJECT_ROOT, 'data', 'memories', 'index.json');
-    const index = readJsonFile<MemoryIndexEntry[]>(indexPath) || [];
+    const memoriesDir = path.join(PROJECT_ROOT, 'data', 'memories');
+    const priorityIndexPath = path.join(memoriesDir, 'priority_index.json');
 
-    const highPriority = index
-      .filter(m => m.priority === 'high')
-      .slice(0, limit);
+    let highPriority: any[] = [];
+
+    if (fs.existsSync(priorityIndexPath)) {
+      const priorityIndex = readJsonFile<PriorityIndex>(priorityIndexPath) || { priorities: {} };
+
+      highPriority = Object.entries(priorityIndex.priorities)
+        .filter(([_, info]) => info.level === 'high')
+        .map(([memoryId, info]) => ({
+          memory_id: memoryId,
+          level: info.level,
+          access_count: info.access_count,
+          last_accessed: info.last_accessed,
+        }))
+        .sort((a, b) => b.last_accessed.localeCompare(a.last_accessed))
+        .slice(0, limit);
+    }
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            data: highPriority,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          data: highPriority,
+        }),
+      }],
     };
   } catch (error) {
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: (error as Error).message,
-          }),
-        },
-      ],
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: (error as Error).message,
+        }),
+      }],
     };
   }
 }

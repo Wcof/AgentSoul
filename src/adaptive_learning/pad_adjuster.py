@@ -102,6 +102,51 @@ class PADAdjuster:
         self._save_state()
         log("PAD state reset to defaults", "OK")
 
+    def adjust_from_interaction(self, user_input_length: int, response_length: int) -> PADState:
+        """Automatically adjust PAD state based on interaction size.
+
+        Longer interactions increase arousal slightly to reflect engagement.
+        Very short interactions keep arousal neutral.
+
+        Args:
+            user_input_length: Character count of user input
+            response_length: Character count of agent response
+
+        Returns:
+            New adjusted PAD state
+        """
+        total_length = user_input_length + response_length
+        current_state = self._state
+
+        # Adjust arousal based on interaction length
+        # - Very short (< 100 chars): small decrease
+        # - Medium (100-1000 chars): no change
+        # - Long (> 1000 chars): small increase
+        if total_length < 100:
+            delta_arousal = -0.05
+        elif total_length > 1000:
+            delta_arousal = 0.05
+        else:
+            delta_arousal = 0.0
+
+        actual_delta = delta_arousal * self.learning_intensity
+        new_arousal = max(-1.0, min(1.0, current_state.arousal + actual_delta))
+
+        # Only save if something actually changed
+        if new_arousal == current_state.arousal and actual_delta == 0:
+            return current_state
+
+        new_state = PADState(
+            pleasure=current_state.pleasure,
+            arousal=new_arousal,
+            dominance=current_state.dominance,
+            last_updated=datetime.now()
+        )
+
+        self._state = new_state
+        self._save_state()
+        return new_state
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "pleasure": self._state.pleasure,

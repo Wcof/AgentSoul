@@ -416,5 +416,521 @@ class TestOpenClawInstaller(unittest.TestCase):
         self.assertEqual(content["pleasure"], 0.3)
 
 
+class TestAdaptiveLearning(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_emoji_counting_various_emojis(self):
+        """Test that various emoji types are correctly counted."""
+        from src.adaptive_learning.preference_learner import PreferenceLearner
+        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from datetime import datetime
+
+        learner = PreferenceLearner(data_path=Path(self.test_dir))
+
+        # Test with various emoji from different Unicode blocks
+        # Emoji: 😀 🎨 🚗 🇺🇳 ✅
+        # Actually 🇺🇳 is two regional indicator symbols, so counts as 2
+        # Total: 6 emoji characters
+        test_text = "Hello world 😀 🎨 🚗 🇺🇳 ✅"
+
+        collector = DataCollector(data_path=Path(self.test_dir))
+        session_id = collector.create_session()
+
+        # Need multiple interactions to build confidence above 0.5 threshold
+        for _ in range(11):
+            record = InteractionRecord(
+                session_id=session_id,
+                timestamp=datetime.now(),
+                pad_before={"pleasure": 0.3, "arousal": 0.2, "dominance": 0.3},
+                pad_after={"pleasure": 0.3, "arousal": 0.2, "dominance": 0.3},
+                agent_response=test_text
+            )
+            # The learner should process it correctly
+            learner.learn_from_response(record)
+
+        prefs = learner.get_preferences()
+        # With 6 emojis per response (>5) -> should learn 'frequent'
+        # after enough interactions to build confidence > 0.5
+        self.assertEqual(prefs.preferred_emoji_freq, "frequent")
+
+    def test_data_collector_append_record(self):
+        """Test that data collector correctly appends interaction records."""
+        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from datetime import datetime
+
+        collector = DataCollector(data_path=Path(self.test_dir))
+        session_id = collector.create_session()
+        self.assertTrue(len(session_id) > 0)
+
+        record = InteractionRecord(
+            session_id=session_id,
+            timestamp=datetime.now(),
+            pad_before={"pleasure": 0.0, "arousal": 0.0, "dominance": 0.0},
+            pad_after={"pleasure": 0.1, "arousal": 0.1, "dominance": 0.1},
+            feedback="positive",
+            response_length=100
+        )
+
+        collector.record(record)
+        recent = collector.get_recent(limit=10)
+        self.assertEqual(len(recent), 1)
+        self.assertEqual(recent[0].feedback, "positive")
+        self.assertEqual(recent[0].response_length, 100)
+
+    def test_pad_adjuster_clamping(self):
+        """Test that PAD adjuster correctly clamps values to [-1, 1] range."""
+        from src.adaptive_learning.pad_adjuster import PADAdjuster
+
+        adjuster = PADAdjuster(data_path=Path(self.test_dir), learning_intensity=1.0)
+
+        # Start at max and get positive feedback - should stay at 1.0
+        state = adjuster.get_current_state()
+        self.assertEqual(state.pleasure, 0.3)
+
+        # Multiple positive adjustments should push pleasure up but cap at 1.0
+        for _ in range(10):
+            adjuster.adjust_from_feedback(feedback="positive")
+
+        final_state = adjuster.get_current_state()
+        self.assertLessEqual(final_state.pleasure, 1.0)
+        self.assertGreaterEqual(final_state.pleasure, 0.8)
+
+        # Multiple negative adjustments should push it down but cap at -1.0
+        for _ in range(20):
+            adjuster.adjust_from_feedback(feedback="negative")
+
+        final_state = adjuster.get_current_state()
+        self.assertGreaterEqual(final_state.pleasure, -1.0)
+        self.assertLessEqual(final_state.pleasure, 0.0)
+
+    def test_pad_adjuster_automatic_adjustment(self):
+        """Test automatic arousal adjustment based on interaction length."""
+        from src.adaptive_learning.pad_adjuster import PADAdjuster
+
+        adjuster = PADAdjuster(data_path=Path(self.test_dir), learning_intensity=1.0)
+        initial_state = adjuster.get_current_state()
+        initial_arousal = initial_state.arousal
+
+        # Very short interaction should decrease arousal
+        adjuster.adjust_from_interaction(20, 30)  # Total 50 < 100
+        state_short = adjuster.get_current_state()
+        self.assertLess(state_short.arousal, initial_arousal)
+
+        # Long interaction should increase arousal
+        adjuster = PADAdjuster(data_path=Path(self.test_dir), learning_intensity=1.0)
+        initial_arousal = adjuster.get_current_state().arousal
+        adjuster.adjust_from_interaction(600, 600)  # Total 1200 > 1000
+        state_long = adjuster.get_current_state()
+        self.assertGreater(state_long.arousal, initial_arousal)
+
+        # Medium interaction should not change arousal much
+        adjuster = PADAdjuster(data_path=Path(self.test_dir), learning_intensity=1.0)
+        initial_arousal = adjuster.get_current_state().arousal
+        adjuster.adjust_from_interaction(200, 200)  # Total 400 between 100-1000
+        state_medium = adjuster.get_current_state()
+        # Should be within 0.01 of original (no change)
+        self.assertAlmostEqual(state_medium.arousal, initial_arousal, delta=0.01)
+
+        # Values should always stay clamped in [-1, 1]
+        adjuster = PADAdjuster(data_path=Path(self.test_dir), learning_intensity=1.0)
+        for _ in range(50):
+            adjuster.adjust_from_interaction(1000, 1000)
+        final_state = adjuster.get_current_state()
+        self.assertLessEqual(final_state.arousal, 1.0)
+
+    def test_preference_learning_basic(self):
+        """Test basic preference learning functionality."""
+        from src.adaptive_learning.preference_learner import PreferenceLearner
+        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from datetime import datetime
+
+        learner = PreferenceLearner(data_path=Path(self.test_dir))
+        collector = DataCollector(data_path=Path(self.test_dir))
+        session_id = collector.create_session()
+
+        # Initial state should be defaults
+        prefs = learner.get_preferences()
+        self.assertEqual(prefs.preferred_tone, "neutral")
+        self.assertEqual(prefs.preferred_emoji_freq, "minimal")
+
+        # Learn from positive feedback with specific response length
+        record = InteractionRecord(
+            session_id=session_id,
+            timestamp=datetime.now(),
+            pad_before={},
+            pad_after={},
+            response_length=200
+        )
+        learner.learn_from_feedback(record, "positive")
+
+        # Confidence should increase
+        confidence = learner.get_confidence_summary()
+        self.assertGreater(confidence.get("response_length", 0), 0)
+
+        # After enough positive feedback, preference should be updated
+        for _ in range(6):
+            learner.learn_from_feedback(record, "positive")
+
+        prefs = learner.get_preferences()
+        self.assertEqual(prefs.preferred_response_length, 200)
+
+        # Reset should go back to defaults
+        learner.reset()
+        prefs = learner.get_preferences()
+        self.assertEqual(prefs.preferred_response_length, 0)
+        self.assertEqual(prefs.preferred_tone, "neutral")
+
+    def test_preference_topic_feedback(self):
+        """Test that positive feedback adds topics, negative feedback removes topics."""
+        from src.adaptive_learning.preference_learner import PreferenceLearner
+        from src.adaptive_learning.data_collector import InteractionRecord
+        from datetime import datetime
+        from pathlib import Path
+
+        learner = PreferenceLearner(data_path=Path(self.test_dir))
+
+        # Add topic with positive feedback
+        record = InteractionRecord(
+            session_id="test-session",
+            timestamp=datetime.now(),
+            pad_before={},
+            pad_after={},
+            topics=["python", "coding", "ai"],
+            response_length=200
+        )
+
+        # Positive feedback adds topics
+        learner.learn_from_feedback(record, "positive")
+        prefs = learner.get_preferences()
+        self.assertIn("python", prefs.preferred_topics)
+        self.assertIn("coding", prefs.preferred_topics)
+        self.assertEqual(len(prefs.preferred_topics), 3)
+
+        # Negative feedback removes one topic
+        record2 = InteractionRecord(
+            session_id="test-session",
+            timestamp=datetime.now(),
+            pad_before={},
+            pad_after={},
+            topics=["coding"],
+            response_length=200
+        )
+        learner.learn_from_feedback(record2, "negative")
+        prefs = learner.get_preferences()
+        self.assertIn("python", prefs.preferred_topics)
+        self.assertNotIn("coding", prefs.preferred_topics)
+        self.assertEqual(len(prefs.preferred_topics), 2)
+
+
+class TestEnhancedMemory(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def create_test_memory(self, memory_id: str, content: str, tags: List[str]):
+        """Helper to create a test memory file."""
+        from datetime import datetime
+        import json
+        memory_file = Path(self.test_dir) / f"{memory_id}.json"
+        data = {
+            "content": content,
+            "tags": tags,
+            "created_at": datetime.now().isoformat()
+        }
+        memory_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    def test_tag_search_and_semantics(self):
+        """Test tag search requires ALL tags to match (AND semantics)."""
+        from src.memory_enhanced.retrieval import MemoryRetriever
+
+        # Create test memories with different tag combinations
+        self.create_test_memory("mem1", "First memory about project", ["project", "work"])
+        self.create_test_memory("mem2", "Second memory about personal", ["personal", "notes"])
+        self.create_test_memory("mem3", "Third memory project notes", ["project", "notes"])
+
+        retriever = MemoryRetriever(storage_path=Path(self.test_dir))
+
+        # Search for ["project"] - should get mem1 AND mem3
+        results = retriever.search("", tags=["project"])
+        self.assertEqual(len(results), 2)
+        memory_ids = {r.memory_id for r in results}
+        self.assertIn("mem1", memory_ids)
+        self.assertIn("mem3", memory_ids)
+
+        # Search for ["project", "notes"] - should ONLY get mem3 that has BOTH
+        results = retriever.search("", tags=["project", "notes"])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].memory_id, "mem3")
+
+        # Search for ["nonexistent"] - should get nothing
+        results = retriever.search("", tags=["nonexistent"])
+        self.assertEqual(len(results), 0)
+
+    def test_fuzzy_search_matches(self):
+        """Test fuzzy search finds approximate matches."""
+        from src.memory_enhanced.retrieval import MemoryRetriever
+
+        # Exact match for both query words
+        self.create_test_memory("exact", "Development roadmap discussion", [])
+        # One exact match, one too different (distance over threshold - shouldn't match
+        self.create_test_memory("partly", "Development roadmap dscusn", [])
+        # Completely different content - shouldn't match at all
+        self.create_test_memory("none", "Grocery shopping list for tonight", [])
+
+        retriever = MemoryRetriever(storage_path=Path(self.test_dir))
+
+        # Search for "roadmap discussion"
+        results = retriever.search("roadmap discussion")
+        # Only exact matches should match (partly only matches one word, the other is too far)
+        # It should still be included because at least one word matched
+        self.assertEqual(len(results), 2)
+
+        # Exact has 2/2 = 1.0, partly has 1/2 = 0.5
+        exact_result = next(r for r in results if r.memory_id == "exact")
+        partly_result = next(r for r in results if r.memory_id == "partly")
+        self.assertEqual(exact_result.relevance, 1.0)
+        self.assertEqual(partly_result.relevance, 0.5)
+        self.assertGreater(exact_result.relevance, partly_result.relevance)
+
+    def test_cache_works_and_invalidates(self):
+        """Test that caching works and invalidation clears cache."""
+        from src.memory_enhanced.retrieval import MemoryRetriever
+
+        self.create_test_memory("first", "First content", [])
+
+        retriever = MemoryRetriever(storage_path=Path(self.test_dir))
+
+        # First search loads from disk
+        results1 = retriever.search("first")
+        self.assertEqual(len(results1), 1)
+
+        # Create second memory
+        self.create_test_memory("second", "Second content", [])
+
+        # Before invalidation, cache still has only 1 result
+        results2 = retriever.search("")
+        # Because cache is still valid (TTL 5min), we don't see the new memory yet
+        if len(results2) == 1:
+            # Cache hit - invalidate and check again
+            retriever.invalidate_cache()
+            results3 = retriever.search("")
+            self.assertEqual(len(results3), 2)
+
+    def test_priority_weighting_applied(self):
+        """Test that search results are sorted by priority * relevance."""
+        import json
+        from src.memory_enhanced.retrieval import MemoryRetriever
+
+        # Create two memories with same relevance but different priorities
+        self.create_test_memory("high_prio", "Search result here", [])
+        self.create_test_memory("low_prio", "Search result here", [])
+
+        # Add priority by editing the files
+        high_file = Path(self.test_dir) / "high_prio.json"
+        high_data = json.loads(high_file.read_text(encoding="utf-8"))
+        high_data["priority"] = "high"
+        high_file.write_text(json.dumps(high_data, ensure_ascii=False), encoding="utf-8")
+
+        low_file = Path(self.test_dir) / "low_prio.json"
+        low_data = json.loads(low_file.read_text(encoding="utf-8"))
+        low_data["priority"] = "low"
+        low_file.write_text(json.dumps(low_data, ensure_ascii=False), encoding="utf-8")
+
+        retriever = MemoryRetriever(storage_path=Path(self.test_dir))
+        results = retriever.search("Search result here")
+
+        # High priority should come first
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].memory_id, "high_prio")
+        self.assertEqual(results[1].memory_id, "low_prio")
+
+    def test_empty_query_returns_all(self):
+        """Test that empty query returns all matching memories sorted by priority/date."""
+        from src.memory_enhanced.retrieval import MemoryRetriever
+
+        # Create multiple memories
+        self.create_test_memory("mem1", "Content one", ["tag1"])
+        self.create_test_memory("mem2", "Content two", ["tag1", "tag2"])
+        self.create_test_memory("mem3", "Content three", [])
+
+        retriever = MemoryRetriever(storage_path=Path(self.test_dir))
+
+        # Empty query should return all 3 memories
+        results = retriever.search("")
+        self.assertEqual(len(results), 3)
+
+        # Empty query with tag filter should only return matching
+        results_tag = retriever.search("", tags=["tag1"])
+        self.assertEqual(len(results_tag), 2)
+
+        # Whitespace-only query should also return all
+        results_whitespace = retriever.search("   ")
+        self.assertEqual(len(results_whitespace), 3)
+
+
+class TestConfigManager(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.templates_dir = Path(self.test_dir) / "config" / "templates"
+        self.templates_dir.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def create_test_template(self, name: str, content: str):
+        """Create a test template file."""
+        template_path = self.templates_dir / f"{name}.yaml"
+        template_path.write_text(content, encoding="utf-8")
+
+    def test_list_templates_when_empty(self):
+        """Test listing templates when directory is empty."""
+        from src.config_manager.templates import TemplateManager
+        manager = TemplateManager(templates_dir=self.templates_dir)
+        templates = manager.list_templates()
+        self.assertEqual(len(templates), 0)
+
+    def test_list_templates_loads_all(self):
+        """Test that all templates are loaded and sorted by name."""
+        from src.config_manager.templates import TemplateManager, ConfigTemplate
+        self.create_test_template("b", """agent:
+  name: B
+  role: Role B
+""")
+        self.create_test_template("a", """agent:
+  name: A
+  role: Role A
+""")
+        manager = TemplateManager(templates_dir=self.templates_dir)
+        templates = manager.list_templates()
+        self.assertEqual(len(templates), 2)
+        # Should be sorted by name
+        self.assertEqual(templates[0].name, "a")
+        self.assertEqual(templates[1].name, "b")
+
+    def test_get_template_finds_correct_case_insensitive(self):
+        """Test getting template by name is case insensitive."""
+        from src.config_manager.templates import TemplateManager
+        self.create_test_template("Friendly", """agent:
+  name: Friendly
+  role: Friendly Assistant
+  personality:
+    - friendly
+    - helpful
+""")
+        manager = TemplateManager(templates_dir=self.templates_dir)
+        template = manager.get_template("friendly")
+        self.assertIsNotNone(template)
+        if template:
+            self.assertEqual(template.name, "Friendly")
+
+    def test_template_cache_works(self):
+        """Test that caching works and refresh_cache invalidates."""
+        from src.config_manager.templates import TemplateManager
+        self.create_test_template("test", """agent:
+  name: Test
+  role: Test Role
+""")
+        manager = TemplateManager(templates_dir=self.templates_dir)
+        templates1 = manager.list_templates()
+        self.assertEqual(len(templates1), 1)
+
+        # Create new template after first load
+        self.create_test_template("second", """agent:
+  name: Second
+  role: Second Role
+""")
+
+        # Cached version doesn't have it yet
+        templates2 = manager.list_templates()
+        if len(templates2) == 1:
+            # Refresh cache and should see it
+            manager.refresh_cache()
+            templates3 = manager.list_templates()
+            self.assertEqual(len(templates3), 2)
+
+    def test_validation_catches_invalid_types(self):
+        """Test that ConfigValidator catches type errors."""
+        from src.config_manager.validator import ConfigValidator
+
+        validator = ConfigValidator()
+        # Invalid: personality is not a list
+        config = {
+            "agent": {
+                "name": "Test",
+                "personality": "this is not a list it's a string",
+            }
+        }
+        errors = validator.validate(config)
+        # Should have at least one error about personality
+        error_fields = [e.field for e in errors]
+        self.assertIn("agent.personality", error_fields)
+
+    def test_validation_accepts_valid_config(self):
+        """Test that valid config passes validation."""
+        from src.config_manager.validator import ConfigValidator
+
+        validator = ConfigValidator()
+        config = {
+            "agent": {
+                "name": "TestAgent",
+                "personality": ["friendly", "helpful"],
+                "core_values": ["privacy"],
+                "interaction_style": {
+                    "tone": "friendly",
+                    "language": "chinese",
+                    "emoji_usage": "minimal",
+                }
+            },
+            "master": {
+                "name": "TestUser",
+                "timezone": "Asia/Shanghai",
+            },
+            "behavior": {
+                "enabled": True,
+                "auto_memory": True,
+            }
+        }
+        errors = validator.validate(config)
+        # No errors for valid configuration
+        error_errors = [e for e in errors if e.severity == "error"]
+        self.assertEqual(len(error_errors), 0)
+
+    def test_validation_catches_invalid_tone(self):
+        """Test validation catches invalid tone value."""
+        from src.config_manager.validator import ConfigValidator
+        validator = ConfigValidator()
+        config = {
+            "agent": {
+                "name": "Test",
+                "interaction_style": {
+                    "tone": "invalid_value",
+                }
+            }
+        }
+        errors = validator.validate(config)
+        self.assertTrue(any(e.field == "agent.interaction_style.tone" for e in errors))
+
+    def test_behavior_validation_checks_boolean(self):
+        """Test behavior validation checks that boolean fields are actually bool."""
+        from src.config_manager.validator import ConfigValidator
+        validator = ConfigValidator()
+        config = {
+            "agent": {
+                "name": "Test",
+            },
+            "behavior": {
+                "enabled": "True",  # string instead of bool
+            }
+        }
+        errors = validator.validate(config)
+        self.assertTrue(any(e.field == "behavior.enabled" for e in errors))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

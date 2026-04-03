@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any
 import json
 import uuid
 
-from common import log, get_project_root
+from common import log, get_project_root, read_last_n_lines
 
 
 @dataclass
@@ -61,12 +61,25 @@ class DataCollector:
             return records
 
         try:
-            with open(self.interactions_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+            file_size = self.interactions_file.stat().st_size
+            if file_size == 0:
+                return records
 
-            for line in lines[-limit:]:
+            # For small files, read all at once
+            if file_size < 100 * 1024:  # Less than 100KB
+                with open(self.interactions_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                lines_to_process = lines[-limit:]
+            else:
+                # For large files, read from the end to avoid loading entire file
+                lines_to_process = read_last_n_lines(self.interactions_file, limit)
+
+            for line in lines_to_process:
+                line = line.strip()
+                if not line:
+                    continue
                 try:
-                    data = json.loads(line.strip())
+                    data = json.loads(line)
                     record = InteractionRecord(
                         session_id=data["session_id"],
                         timestamp=datetime.fromisoformat(data["timestamp"]),

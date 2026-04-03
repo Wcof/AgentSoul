@@ -3,6 +3,7 @@ AgentSoul · 配置模板管理
 提供配置模板的加载、预览和应用功能
 """
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -11,7 +12,7 @@ import shutil
 from datetime import datetime
 
 from common import log, get_project_root
-from src.config_loader import ConfigLoader
+from src.common.cache import TTLCacheBase
 
 
 @dataclass
@@ -22,20 +23,23 @@ class ConfigTemplate:
     file_path: Path
 
 
-class TemplateManager:
-    def __init__(self, templates_dir: Optional[Path] = None):
+class TemplateManager(TTLCacheBase):
+    def __init__(self, templates_dir: Optional[Path] = None, default_ttl: int = 300):
+        super().__init__(default_ttl)
         if templates_dir is None:
             templates_dir = get_project_root() / "config" / "templates"
         self.templates_dir = templates_dir
         self._templates_cache: Optional[List[ConfigTemplate]] = None
 
     def list_templates(self, use_cache: bool = True) -> List[ConfigTemplate]:
-        if use_cache and self._templates_cache is not None:
-            return self._templates_cache
-        
+        # Return cached copy if still valid
+        if use_cache and self._cache_is_valid():
+            return self._templates_cache if self._templates_cache is not None else []
+
         templates = []
         if not self.templates_dir.exists():
             self._templates_cache = templates
+            self._update_cache_timestamp()
             return templates
 
         for yaml_file in self.templates_dir.glob("*.yaml"):
@@ -47,6 +51,7 @@ class TemplateManager:
                 log(f"Failed to load template {yaml_file}: {e}", "WARN")
 
         self._templates_cache = sorted(templates, key=lambda t: t.name)
+        self._update_cache_timestamp()
         return self._templates_cache
 
     def get_template(self, name: str) -> Optional[ConfigTemplate]:
@@ -55,9 +60,21 @@ class TemplateManager:
             if template.name.lower() == name.lower():
                 return template
         return None
-    
-    def refresh_cache(self) -> None:
+
+    def invalidate_cache(self) -> None:
+        """Invalidate the templates cache - force reload on next list."""
         self._templates_cache = None
+        super().invalidate_cache()
+
+    def refresh_cache(self) -> None:
+        """Alias for invalidate_cache for backward compatibility."""
+        self.invalidate_cache()
+
+    def _cache_is_valid(self) -> bool:
+        """Check if cache is still valid based on TTL."""
+        if self._templates_cache is None:
+            return False
+        return super()._cache_is_valid()
 
     def preview_template(self, name: str) -> str:
         template = self.get_template(name)
@@ -102,6 +119,7 @@ class TemplateManager:
             return None
 
         try:
+            from src.config_loader import ConfigLoader
             loader = ConfigLoader()
             config = loader.load_yaml(file_path)
 
@@ -126,3 +144,24 @@ class TemplateManager:
         if personality:
             return f"{role} - {', '.join(personality[:3])}"
         return role
+
+
+# === Convenience module-level functions for backward compatibility and easy access ===
+
+# Pre-defined persona templates (will be populated from disk on access)
+PERSONA_TEMPLATES: List[str] = []
+
+
+def get_template(name: str) -> Optional[ConfigTemplate]:
+    """Get a template by name (convenience function)."""
+    manager = TemplateManager()
+    return manager.get_template(name)
+
+
+def list_templates() -> List[ConfigTemplate]:
+    """List all available templates (convenience function)."""
+    global PERSONA_TEMPLATES
+    manager = TemplateManager()
+    templates = manager.list_templates()
+    PERSONA_TEMPLATES = sorted([t.name for t in templates])
+    return templates
