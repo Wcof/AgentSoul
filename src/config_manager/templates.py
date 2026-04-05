@@ -36,7 +36,7 @@ class TemplateManager(TTLCacheBase):
         if use_cache and self._cache_is_valid():
             return self._templates_cache if self._templates_cache is not None else []
 
-        templates = []
+        templates: List[ConfigTemplate] = []
         if not self.templates_dir.exists():
             self._templates_cache = templates
             self._update_cache_timestamp()
@@ -142,7 +142,9 @@ class TemplateManager(TTLCacheBase):
         personality = agent.get("personality", [])
 
         if personality:
+            assert isinstance(role, str)
             return f"{role} - {', '.join(personality[:3])}"
+        assert isinstance(role, str)
         return role
 
 

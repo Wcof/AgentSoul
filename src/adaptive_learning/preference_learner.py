@@ -39,7 +39,7 @@ class PreferenceLearner:
         self.data_path = data_path
         self.data_path.mkdir(parents=True, exist_ok=True)
         self.preferences_file = data_path / "preferences.json"
-        self._preferences: Optional[UserPreferences] = None
+        self._preferences: UserPreferences
         self._load_preferences()
 
     def _load_preferences(self) -> None:
@@ -139,6 +139,7 @@ class PreferenceLearner:
             self._save_preferences()
 
     def get_preferences(self) -> UserPreferences:
+        assert self._preferences is not None
         return self._preferences
 
     def reset(self) -> None:

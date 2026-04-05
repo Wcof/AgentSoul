@@ -55,7 +55,7 @@ class DataCollector:
             log(f"Failed to record interaction: {e}", "ERROR")
 
     def get_recent(self, limit: int = 100) -> List[InteractionRecord]:
-        records = []
+        records: List[InteractionRecord] = []
 
         if not self.interactions_file.exists():
             return records

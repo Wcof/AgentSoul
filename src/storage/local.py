@@ -133,7 +133,8 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
 
         try:
             with open(self.state_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                result: Dict[str, Any] = json.load(f)
+                return result
         except Exception as e:
             log(f"Failed to read soul state: {e}, using defaults", level="ERROR")
             return {

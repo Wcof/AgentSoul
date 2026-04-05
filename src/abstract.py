@@ -194,7 +194,7 @@ class InjectionRollback:
     支持在注入过程失败时回滚到之前的状态
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._snapshots: Dict[str, Tuple[str, Any]] = {}
 
     def snapshot(self, storage: BaseSoulStateStorage, snapshot_name: str) -> None:

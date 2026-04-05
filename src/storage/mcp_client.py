@@ -133,7 +133,7 @@ class McpPersonaStorage(BasePersonaStorage):
                 if not response_line:
                     raise McpRequestError("Empty response from MCP server")
 
-                response = json.loads(response_line)
+                response: Dict[str, Any] = json.loads(response_line)
                 return response
 
             except Exception as e:
@@ -176,8 +176,9 @@ class McpPersonaStorage(BasePersonaStorage):
     def read_persona_config(self) -> Dict[str, Any]:
         result = self._call_tool("get_persona_config", {})
         if isinstance(result, str):
-            return json.loads(result)
-        return result
+            config: Dict[str, Any] = json.loads(result)
+            return config
+        return result if isinstance(result, dict) else {}
 
     def write_persona_config(self, config: Dict[str, Any]) -> bool:
         # MCP 服务器端不支持直接写入，需要通过文件系统
@@ -209,7 +210,7 @@ class McpPersonaStorage(BasePersonaStorage):
             self._connected = False
             self._process = None
 
-    def __del__(self):
+    def __del__(self) -> None:
         """析构时关闭连接"""
         self._close()
 
@@ -221,18 +222,23 @@ class McpSoulStateStorage(BaseSoulStateStorage):
         self.client = client
 
     def read_soul_state(self) -> Dict[str, Any]:
-        return client._call_tool("get_soul_state", {})
+        result = self.client._call_tool("get_soul_state", {})
+        assert isinstance(result, dict)
+        return result
 
     def write_soul_state(self, state: Dict[str, Any]) -> bool:
         # 需要使用 update_soul_state，但参数是增量更新
         # 这里为了兼容接口，转换为增量更新
-        result = client._call_tool("update_soul_state", {
+        result = self.client._call_tool("update_soul_state", {
             "pleasure": state.get("pleasure"),
             "arousal": state.get("arousal"),
             "dominance": state.get("dominance"),
             "trigger": "full_state_update"
         })
-        return result.get("success", False)
+        assert isinstance(result, dict)
+        success = result.get("success", False)
+        assert isinstance(success, bool)
+        return success
 
     def rollback(self, to_version: str) -> bool:
         # MCP 服务端版本回滚需要本地存储支持
@@ -247,51 +253,51 @@ class McpMemoryStorage(BaseMemoryStorage):
         self.client = client
 
     def read_daily_memory(self, date: str) -> Optional[str]:
-        result = client._call_tool("read_memory_day", {"date": date})
+        result = self.client._call_tool("read_memory_day", {"date": date})
         return result if isinstance(result, str) else None
 
     def write_daily_memory(self, date: str, content: str, append: bool = False) -> bool:
-        result = client._call_tool("write_memory_day", {"date": date, "content": content})
+        result = self.client._call_tool("write_memory_day", {"date": date, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
     def read_weekly_memory(self, year_week: str) -> Optional[str]:
-        result = client._call_tool("read_memory_week", {"year_week": year_week})
+        result = self.client._call_tool("read_memory_week", {"year_week": year_week})
         return result if isinstance(result, str) else None
 
     def write_weekly_memory(self, year_week: str, content: str, append: bool = False) -> bool:
-        result = client._call_tool("write_memory_week", {"year_week": year_week, "content": content})
+        result = self.client._call_tool("write_memory_week", {"year_week": year_week, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
     def read_monthly_memory(self, year_month: str) -> Optional[str]:
-        result = client._call_tool("read_memory_month", {"year_month": year_month})
+        result = self.client._call_tool("read_memory_month", {"year_month": year_month})
         return result if isinstance(result, str) else None
 
     def write_monthly_memory(self, year_month: str, content: str, append: bool = False) -> bool:
-        result = client._call_tool("write_memory_month", {"year_month": year_month, "content": content})
+        result = self.client._call_tool("write_memory_month", {"year_month": year_month, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
     def read_yearly_memory(self, year: str) -> Optional[str]:
-        result = client._call_tool("read_memory_year", {"year": year})
+        result = self.client._call_tool("read_memory_year", {"year": year})
         return result if isinstance(result, str) else None
 
     def write_yearly_memory(self, year: str, content: str, append: bool = False) -> bool:
-        result = client._call_tool("write_memory_year", {"year": year, "content": content})
+        result = self.client._call_tool("write_memory_year", {"year": year, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
     def read_topic_memory(self, topic: str) -> Optional[str]:
-        result = client._call_tool("read_memory_topic", {"topic": topic})
+        result = self.client._call_tool("read_memory_topic", {"topic": topic})
         return result if isinstance(result, str) else None
 
     def write_topic_memory(self, topic: str, content: str, append: bool = False) -> bool:
-        result = client._call_tool("write_memory_topic", {"topic": topic, "content": content})
+        result = self.client._call_tool("write_memory_topic", {"topic": topic, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
     def list_topics(self, status: str = "active") -> List[Dict[str, str]]:
-        result = client._call_tool("list_memory_topics", {"status": status})
+        result = self.client._call_tool("list_memory_topics", {"status": status})
         return result if isinstance(result, list) else []
 
     def archive_topic(self, topic: str) -> bool:
-        result = client._call_tool("archive_memory_topic", {"topic": topic})
+        result = self.client._call_tool("archive_memory_topic", {"topic": topic})
         return result.get("success", False) if isinstance(result, dict) else False
 
     def detect_conflict(self, topic: str, new_content: str) -> Optional[MemoryConflict]:
@@ -329,7 +335,7 @@ class McpSkillStorage(BaseSkillStorage):
         self.client = client
 
     def read_base_rule(self, name: str) -> Optional[str]:
-        result = client._call_tool("get_base_rules", {"name": name})
+        result = self.client._call_tool("get_base_rules", {"name": name})
         return result if isinstance(result, str) else None
 
     def list_available_rules(self) -> List[str]:

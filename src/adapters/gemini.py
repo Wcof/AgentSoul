@@ -293,7 +293,8 @@ class GeminiInjectionAdapter:
         用于兼容旧版本 Gemini API，直接将系统提示作为 system 角色插入消息列表。
         """
         result = self.inject_context(messages, use_system_instruction=False)
-        return result["messages"]
+        msg_list: List[Dict[str, Any]] = result["messages"]
+        return msg_list
 
     def save_daily_summary(
         self,

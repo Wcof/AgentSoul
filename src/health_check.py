@@ -420,7 +420,7 @@ class HealthChecker:
         print("=" * 60 + "\n")
 
 
-def main():
+def main() -> None:
     """CLI 入口"""
     checker = HealthChecker()
     report = checker.run_check()

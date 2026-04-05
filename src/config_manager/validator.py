@@ -23,7 +23,7 @@ class ConfigValidator:
     ALLOWED_BOOLEAN_FIELDS = ["enabled", "auto_memory", "emotional_response", "task_scheduling", "memory_daily_summary"]
 
     def validate(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors = []
+        errors: List[ValidationError] = []
         errors.extend(self._validate_agent_config(config))
         errors.extend(self._validate_master_config(config))
         errors.extend(self._validate_interaction_style(config))
@@ -52,7 +52,7 @@ class ConfigValidator:
             log(f"{prefix} [{error.field}] {error.message}", error.severity.upper())
 
     def _validate_agent_config(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors = []
+        errors: List[ValidationError] = []
         agent = config.get("agent", config.get("ai", {}))
 
         if not agent:
@@ -105,7 +105,7 @@ class ConfigValidator:
         return errors
 
     def _validate_master_config(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors = []
+        errors: List[ValidationError] = []
         master = config.get("master", {})
 
         if not master:
@@ -124,7 +124,7 @@ class ConfigValidator:
         return errors
 
     def _validate_interaction_style(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors = []
+        errors: List[ValidationError] = []
         agent = config.get("agent", config.get("ai", {}))
         style = agent.get("interaction_style", {})
 
@@ -157,7 +157,7 @@ class ConfigValidator:
 
         return errors
 
-    def validate_pad_value(self, value: float, field_name: str) -> Optional[ValidationError]:
+    def validate_pad_value(self, value: Any, field_name: str) -> Optional[ValidationError]:
         if not isinstance(value, (int, float)):
             return ValidationError(
                 field=field_name,
@@ -165,7 +165,8 @@ class ConfigValidator:
                 severity="error"
             )
 
-        if not (-1.0 <= value <= 1.0):
+        float_value = float(value)
+        if not (-1.0 <= float_value <= 1.0):
             return ValidationError(
                 field=field_name,
                 message=f"值必须在 -1.0 到 1.0 之间，当前值: {value}",
@@ -200,7 +201,7 @@ class ConfigValidator:
         - Behavior config embedded inside a full persona config (under 'behavior' key)
         - Standalone behavior config (root is the behavior dict)
         """
-        errors = []
+        errors: List[ValidationError] = []
 
         # Check if behavior config exists
         if "behavior" in config:

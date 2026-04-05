@@ -99,6 +99,7 @@ class ConfigLoader(TTLCacheBase):
 
     def load_persona_config(self, persona_path: Optional[Path] = None) -> PersonaConfig:
         if self._cache_is_valid():
+            assert self._persona_cache is not None
             return self._persona_cache
 
         if persona_path is None:
@@ -137,7 +138,7 @@ class ConfigLoader(TTLCacheBase):
         return self._persona_cache
 
     @staticmethod
-    def _safe_get(data: Dict, key: str, default: Any) -> Any:
+    def _safe_get(data: Any, key: str, default: Any) -> Any:
         if not isinstance(data, dict):
             return default
         if key not in data:
@@ -150,7 +151,7 @@ class ConfigLoader(TTLCacheBase):
         return value
 
     @staticmethod
-    def _to_list(value: Union[str, list, tuple]) -> list:
+    def _to_list(value: Any) -> list:
         if isinstance(value, (list, tuple)):
             return list(value)
         if isinstance(value, str):
@@ -187,6 +188,7 @@ class ConfigLoader(TTLCacheBase):
     ) -> str:
         nicknames = self.get_master_nicknames(persona_path)
         if nicknames and nicknames[0] != "主人":
+            assert isinstance(nicknames[0], str)
             return nicknames[0]
         return self.get_master_name(persona_path)
 

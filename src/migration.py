@@ -12,7 +12,7 @@ import json
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Callable
 from dataclasses import dataclass
 
 import sys
@@ -279,7 +279,7 @@ class CrossPlatformMigrator:
         identifier: str,
         new_content: str,
         skip_existing: bool,
-        read_func,
+        read_func: Callable[[str], Optional[str]],
     ) -> bool:
         """检查是否已存在并且需要跳过"""
         if not skip_existing:

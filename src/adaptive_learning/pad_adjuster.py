@@ -28,7 +28,7 @@ class PADAdjuster:
         self.data_path.mkdir(parents=True, exist_ok=True)
         self.state_file = data_path / "pad_state.json"
         self.learning_intensity = max(0.0, min(1.0, learning_intensity))
-        self._state: Optional[PADState] = None
+        self._state: PADState
         self._load_state()
 
     def _load_state(self) -> None:

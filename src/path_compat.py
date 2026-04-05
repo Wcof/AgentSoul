@@ -153,7 +153,7 @@ class PathResolver:
     def resolve_many(self, paths: List[str]) -> Dict[str, ResolveResult]:
         return {p: self.resolve(p) for p in paths}
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         self._cache.clear()
 
 

@@ -51,7 +51,7 @@ class PriorityManager(TTLCacheBase):
         if self._cache_is_valid():
             return
 
-        self._priorities: Dict[str, MemoryPriority] = {}
+        self._priorities.clear()
 
         if self.priority_index_file.exists():
             try:

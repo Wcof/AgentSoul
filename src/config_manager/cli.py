@@ -66,7 +66,7 @@ def preview_template(name: str) -> None:
 def apply_template(name: str, target_path: Optional[str] = None, no_backup: bool = False) -> None:
     """应用配置模板"""
     manager = TemplateManager()
-    target = _resolve_path(target_path, None)
+    target = _resolve_path(target_path, get_project_root() / "config" / "persona.yaml")
 
     success = manager.apply_template(
         name=name,
@@ -81,10 +81,10 @@ def apply_template(name: str, target_path: Optional[str] = None, no_backup: bool
 
 def validate_config(config_path: Optional[str] = None) -> None:
     """验证配置文件"""
-    config_path = _resolve_path(config_path, get_project_root() / "config" / "persona.yaml")
-    _check_file_exists(config_path, f"配置文件不存在: {config_path}")
+    resolved_config_path = _resolve_path(config_path, get_project_root() / "config" / "persona.yaml")
+    _check_file_exists(resolved_config_path, f"配置文件不存在: {resolved_config_path}")
 
-    config = _load_config(config_path)
+    config = _load_config(resolved_config_path)
     validator = ConfigValidator()
     errors = validator.validate(config)
 
@@ -99,13 +99,13 @@ def validate_config(config_path: Optional[str] = None) -> None:
 def export_config(output_path: Optional[str] = None) -> None:
     """导出当前配置"""
     source_path = get_project_root() / "config" / "persona.yaml"
-    output_path = _resolve_path(output_path, get_project_root() / "exported_config.yaml")
+    resolved_output_path = _resolve_path(output_path, get_project_root() / "exported_config.yaml")
 
     _check_file_exists(source_path, f"配置文件不存在: {source_path}")
 
     try:
-        shutil.copy2(source_path, output_path)
-        log(f"配置已导出到: {output_path}", "OK")
+        shutil.copy2(source_path, resolved_output_path)
+        log(f"配置已导出到: {resolved_output_path}", "OK")
     except Exception as e:
         log(f"导出配置失败: {e}", "ERROR")
         sys.exit(1)

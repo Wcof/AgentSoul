@@ -43,7 +43,7 @@ class MemoryRetriever(TTLCacheBase):
         if len(s2) == 0:
             return len(s1)
 
-        previous_row = range(len(s2) + 1)
+        previous_row: List[int] = list(range(len(s2) + 1))
         for i, c1 in enumerate(s1):
             current_row = [i + 1]
             for j, c2 in enumerate(s2):
@@ -95,7 +95,7 @@ class MemoryRetriever(TTLCacheBase):
         if self._cache_is_valid():
             return self._cache if self._cache is not None else []
 
-        memories = []
+        memories: List[Dict[str, Any]] = []
         if not self.storage_path.exists():
             self._cache = memories
             return memories
