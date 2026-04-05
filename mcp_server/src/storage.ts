@@ -322,6 +322,284 @@ export class StorageManager {
   }
 
   /**
+   * 运行完整的健康检查
+   * @param includeMemorySamples - 是否包含记忆文件抽样检查
+   * @returns 健康检查报告
+   */
+  runHealthCheck(includeMemorySamples: boolean): {
+    timestamp: string;
+    total_checks: number;
+    errors: number;
+    warnings: number;
+    issues: Array<{
+      level: 'error' | 'warning' | 'info';
+      category: string;
+      message: string;
+      location?: string;
+      fix_suggestion?: string;
+    }>;
+    is_healthy: boolean;
+    soul_version: string | null;
+  } {
+    const allIssues: Array<{
+      level: 'error' | 'warning' | 'info';
+      category: string;
+      message: string;
+      location?: string;
+      fix_suggestion?: string;
+    }> = [];
+
+    // 1. 检查必需目录结构
+    const requiredDirs = [
+      'data',
+      'data/soul',
+      'data/soul/soul_variable',
+      'data/memory',
+      'data/memory/day',
+      'data/memory/week',
+      'data/memory/month',
+      'data/memory/year',
+      'data/memory/topic',
+      'data/memory/topic/archive',
+      'data/entity-memory',
+      'data/core-memory',
+      'data/kv-cache',
+      'config',
+    ];
+
+    for (const dirPath of requiredDirs) {
+      const fullPath = path.join(PROJECT_ROOT, dirPath);
+      if (!fs.existsSync(fullPath)) {
+        allIssues.push({
+          level: 'info',
+          category: 'directory',
+          message: `Optional directory doesn't exist: ${dirPath}`,
+          location: fullPath,
+          fix_suggestion: 'Will be created automatically on first write',
+        });
+      } else {
+        try {
+          fs.accessSync(fullPath, fs.constants.W_OK);
+        } catch {
+          allIssues.push({
+            level: 'error',
+            category: 'permission',
+            message: `Directory not writable: ${dirPath}`,
+            location: fullPath,
+            fix_suggestion: `Check permissions: chmod -R u+w ${dirPath}`,
+          });
+        }
+      }
+    }
+
+    // 2. 检查配置文件
+    const personaPath = path.join(PROJECT_ROOT, 'config', 'persona.yaml');
+    if (!fs.existsSync(personaPath)) {
+      allIssues.push({
+        level: 'error',
+        category: 'config',
+        message: 'persona.yaml not found',
+        location: personaPath,
+        fix_suggestion: 'Run installation to generate default config',
+      });
+    } else {
+      try {
+        const content = readFile(personaPath);
+        if (content === null) {
+          allIssues.push({
+            level: 'error',
+            category: 'config',
+            message: 'Cannot read persona.yaml',
+            location: personaPath,
+          });
+        } else {
+          // Just check YAML parseability
+          yaml.load(content);
+        }
+      } catch (e) {
+        allIssues.push({
+          level: 'error',
+          category: 'config',
+          message: `Failed to parse config: ${(e as Error).message}`,
+          location: personaPath,
+          fix_suggestion: 'Check YAML syntax',
+        });
+      }
+    }
+
+    const behaviorPath = path.join(PROJECT_ROOT, 'config', 'behavior.yaml');
+    if (!fs.existsSync(behaviorPath)) {
+      allIssues.push({
+        level: 'warning',
+        category: 'config',
+        message: 'behavior.yaml not found (using defaults)',
+        location: behaviorPath,
+        fix_suggestion: 'Copy from default template if you need custom behavior settings',
+      });
+    }
+
+    // 3. 检查灵魂状态
+    const statePath = path.join(DATA_ROOT, 'soul', 'soul_variable', 'state_vector.json');
+    let soulVersion: string | null = null;
+    if (!fs.existsSync(statePath)) {
+      allIssues.push({
+        level: 'warning',
+        category: 'soul_state',
+        message: 'Soul state file doesn\'t exist yet',
+        location: statePath,
+        fix_suggestion: 'Will be created automatically on first update_soul_state call',
+      });
+    } else {
+      try {
+        const content = readFile(statePath);
+        if (content === null) {
+          allIssues.push({
+            level: 'error',
+            category: 'soul_state',
+            message: 'Cannot read soul state file',
+            location: statePath,
+          });
+        } else {
+          const state = JSON.parse(content) as {
+            pleasure?: unknown;
+            arousal?: unknown;
+            dominance?: unknown;
+            version?: string;
+          };
+          const requiredFields = ['pleasure', 'arousal', 'dominance'];
+          for (const field of requiredFields) {
+            if (!(field in state)) {
+              allIssues.push({
+                level: 'error',
+                category: 'soul_state',
+                message: `Missing required field: ${field}`,
+                location: statePath,
+                fix_suggestion: 'Delete the file to reset to defaults',
+              });
+            } else {
+              const val = (state as Record<string, unknown>)[field];
+              if (typeof val !== 'number' || val < -1 || val > 1) {
+                allIssues.push({
+                  level: 'error',
+                  category: 'soul_state',
+                  message: `Invalid value for ${field}: ${val} (must be between -1 and 1)`,
+                  location: statePath,
+                  fix_suggestion: 'Delete the file to reset to defaults',
+                });
+              }
+            }
+          }
+          if (state.version) {
+            soulVersion = state.version;
+          }
+        }
+      } catch (e) {
+        allIssues.push({
+          level: 'error',
+          category: 'soul_state',
+          message: `Invalid JSON: ${(e as Error).message}`,
+          location: statePath,
+          fix_suggestion: 'Delete the file to reset to defaults',
+        });
+      }
+    }
+
+    // 4. 抽样检查记忆文件
+    if (includeMemorySamples) {
+      const memoryDirs = [
+        { path: 'data/memory/day', desc: 'day' },
+        { path: 'data/memory/week', desc: 'week' },
+        { path: 'data/memory/month', desc: 'month' },
+        { path: 'data/memory/year', desc: 'year' },
+        { path: 'data/memory/topic', desc: 'topic' },
+      ];
+
+      for (const { path: dirPath, desc } of memoryDirs) {
+        const fullPath = path.join(PROJECT_ROOT, dirPath);
+        if (!fs.existsSync(fullPath)) continue;
+
+        try {
+          const files = fs.readdirSync(fullPath);
+          const sampled = files.slice(0, 10);
+
+          for (const file of sampled) {
+            const filePath = path.join(fullPath, file);
+            try {
+              const content = readFile(filePath);
+              if (content === null) continue;
+              if (content.length === 0 && !file.startsWith('.gitkeep')) {
+                allIssues.push({
+                  level: 'info',
+                  category: 'memory',
+                  message: `Empty memory file: ${file}`,
+                  location: filePath,
+                });
+              }
+            } catch (e) {
+              allIssues.push({
+                level: 'warning',
+                category: 'memory',
+                message: `Failed to read: ${(e as Error).message}`,
+                location: filePath,
+              });
+            }
+          }
+        } catch (e) {
+          allIssues.push({
+            level: 'warning',
+            category: 'memory',
+            message: `Failed to scan directory: ${(e as Error).message}`,
+            location: fullPath,
+          });
+        }
+      }
+    }
+
+    // 5. 权限检查
+    const configRoot = path.join(PROJECT_ROOT, 'config');
+    if (fs.existsSync(configRoot)) {
+      try {
+        fs.accessSync(configRoot, fs.constants.W_OK);
+      } catch {
+        allIssues.push({
+          level: 'error',
+          category: 'permission',
+          message: 'Config directory not writable',
+          location: configRoot,
+          fix_suggestion: 'chmod u+w config/',
+        });
+      }
+    }
+    const dataRoot = DATA_ROOT;
+    if (fs.existsSync(dataRoot)) {
+      try {
+        fs.accessSync(dataRoot, fs.constants.W_OK);
+      } catch {
+        allIssues.push({
+          level: 'error',
+          category: 'permission',
+          message: 'Data directory not writable',
+          location: dataRoot,
+          fix_suggestion: 'chmod -R u+w data/',
+        });
+      }
+    }
+
+    const errors = allIssues.filter(i => i.level === 'error').length;
+    const warnings = allIssues.filter(i => i.level === 'warning').length;
+
+    return {
+      timestamp: new Date().toISOString(),
+      total_checks: allIssues.length + 1,
+      errors,
+      warnings,
+      issues: allIssues,
+      is_healthy: errors === 0,
+      soul_version: soulVersion || null,
+    };
+  }
+
+  /**
    * 读取基础规则文件
    * @param filename - 规则文件名
    * @returns 文件内容或 null

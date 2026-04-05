@@ -38,6 +38,10 @@ tool_descriptions:
     响应前调用此工具，了解你当前的情绪状态。
   update_soul_state: >
     根据交互结果在对话后更新 PAD 情感状态向量。
+  health_check: >
+    运行完整的 AgentSoul 安装健康检查。
+    检查目录结构、配置文件、灵魂状态、记忆文件和权限。
+    返回完整的健康报告，包含发现的问题和修复建议。
   get_base_rules: >
     获取基础规则文档（SKILL、soul_base、memory_base、master_base 等）。
     需要重新阅读系统规则时调用。

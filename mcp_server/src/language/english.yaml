@@ -38,6 +38,10 @@ tool_descriptions:
     Call this before responding to understand your current emotional state.
   update_soul_state: >
     Update the PAD affective state vector after the conversation based on the interaction outcome.
+  health_check: >
+    Run a full health check on the AgentSoul installation.
+    Checks directory structure, config files, soul state, memory files, and permissions.
+    Returns a complete health report with any issues found and fix suggestions.
   get_base_rules: >
     Get the base rules documentation (SKILL, soul_base, memory_base, master_base, etc.).
     Call this when you need to re-read the system rules.

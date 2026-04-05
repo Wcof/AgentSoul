@@ -20,6 +20,7 @@ const TOOL_TO_CATEGORY: Record<string, string> = {
   write_persona_config: 'soul',
   get_soul_state: 'soul',
   update_soul_state: 'soul',
+  health_check: 'soul',
   get_base_rules: 'soul',
   get_mcp_usage_guide: 'soul',
   mcp_tool_index: 'soul',
@@ -546,6 +547,50 @@ export async function handleWritePersonaConfig(
         success: true,
         version,
       }, null, 2),
+    }],
+  };
+}
+
+/** 健康检查的输入参数Schema */
+export const HealthCheckSchema = z.object({
+  /** 是否包含记忆文件抽样检查 */
+  include_memory_samples: z.boolean().optional(),
+});
+
+/** 健康检查结果接口 */
+interface HealthIssue {
+  level: 'error' | 'warning' | 'info';
+  category: string;
+  message: string;
+  location?: string;
+  fix_suggestion?: string;
+}
+
+/** 健康检查报告接口 */
+interface HealthReport {
+  timestamp: string;
+  total_checks: number;
+  errors: number;
+  warnings: number;
+  issues: HealthIssue[];
+  is_healthy: boolean;
+  soul_version: string | null;
+}
+
+/**
+ * 运行完整的灵魂健康检查
+ * @param params - 检查参数
+ * @returns 健康检查报告
+ */
+export async function handleHealthCheck(
+  params: z.infer<typeof HealthCheckSchema>
+): Promise<ToolResponse> {
+  const includeMemorySamples = params.include_memory_samples ?? true;
+  const report = storage.runHealthCheck(includeMemorySamples);
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify(report, null, 2),
     }],
   };
 }
