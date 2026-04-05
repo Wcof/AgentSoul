@@ -36,3 +36,7 @@ jobs:
         cd mcp_server
         npm install
         npm run build
+
+    - name: Lint with ruff
+      run: |
+        python -m ruff check src/ --output-format=github
