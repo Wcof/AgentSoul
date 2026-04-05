@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentSoul - 记忆与情绪历史查看器</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+        }
+
+        .health-chart-container {
+            width: 100%;
+            height: 300px;
+            overflow-x: auto;
+        }
+
+        .health-chart {
+            width: 100%;
+            height: 100%;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2980b9;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+
+        .memory-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .memory-item {
+            padding: 10px;
+            border-bottom: 1px solid #ecf0f1;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .memory-item:hover {
+            background: #f8f9fa;
+        }
+
+        .memory-item.active {
+            background: #e3f2fd;
+        }
+
+        .memory-date {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 0.9rem;
+        }
+
+        .memory-preview {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .memory-detail {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .pad-emotion {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .emotion-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .emotion-label {
+            width: 80px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .emotion-bar-container {
+            flex: 1;
+            height: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .emotion-bar {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s;
+        }
+
+        .emotion-value {
+            width: 50px;
+            text-align: right;
+            font-family: monospace;
+            color: #7f8c8d;
+        }
+
+        .file-input-section {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .file-input-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .file-input-section input[type="file"] {
+            display: block;
+            width: 100%;
+        }
+
+        .help-text {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AgentSoul 控制面板</h1>
+            <p class="subtitle">查看记忆、健康度历史和情绪状态</p>
+        </header>
+
+        <div class="file-input-section">
+            <label for="healthFile">导入健康度历史文件 (.soul_health.md)</label>
+            <input type="file" id="healthFile" accept=".md,text/plain">
+            <p class="help-text">文件位置: AgentSoul/.soul_health.md</p>
+        </div>
+
+        <div class="file-input-section">
+            <label for="memoryFile">选择日记记忆文件 (YYYY-MM-DD)</label>
+            <input type="file" id="memoryFile" accept=".md,text/plain">
+            <p class="help-text">文件位置: AgentSoul/data/memory/daily/</p>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>健康度历史趋势</h2>
+                <div class="health-chart-container">
+                    <svg class="health-chart" id="healthChart"></svg>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-box">
+                        <div class="stat-value" id="totalIterations">-</div>
+                        <div class="stat-label">总迭代次数</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="avgHealth">-</div>
+                        <div class="stat-label">平均健康度</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="currentHealth">-</div>
+                        <div class="stat-label">当前健康度</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="perfectStreak">-</div>
+                        <div class="stat-label">满分连续次数</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>当前 PAD 情绪状态</h2>
+                <div class="pad-emotion" id="padEmotion">
+                    <div class="emotion-row">
+                        <div class="emotion-label">愉悦度 (P)</div>
+                        <div class="emotion-bar-container">
+                            <div class="emotion-bar" id="barPleasure" style="background: #2ecc71;"></div>
+                        </div>
+                        <div class="emotion-value" id="valPleasure">-</div>
+                    </div>
+                    <div class="emotion-row">
+                        <div class="emotion-label">唤醒度 (A)</div>
+                        <div class="emotion-bar-container">
+                            <div class="emotion-bar" id="barArousal" style="background: #3498db;"></div>
+                        </div>
+                        <div class="emotion-value" id="valArousal">-</div>
+                    </div>
+                    <div class="emotion-row">
+                        <div class="emotion-label">支配度 (D)</div>
+                        <div class="emotion-bar-container">
+                            <div class="emotion-bar" id="barDominance" style="background: #9b59b6;"></div>
+                        </div>
+                        <div class="emotion-value" id="valDominance">-</div>
+                    </div>
+                </div>
+                <p class="help-text" style="margin-top: 15px;">
+                    PAD 模型范围: -1.0 ~ +1.0<br>
+                    愉悦度: 负值表示负面情绪，正值表示正面情绪<br>
+                    唤醒度: 负值表示平静，正值表示兴奋<br>
+                    支配度: 负值表示顺从，正值表示支配
+                </p>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>记忆列表</h2>
+                <div class="memory-list" id="memoryList"></div>
+            </div>
+            <div class="card">
+                <h2>记忆详情</h2>
+                <div class="memory-detail" id="memoryDetail">点击左侧记忆项查看详情</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>AgentSoul - 跨平台 Agent 灵魂注入框架</p>
+        </div>
+    </div>
+
+    <script>
+        // 解析健康度历史
+        function parseHealthHistory(text) {
+            const lines = text.trim().split('\n');
+            const data = [];
+
+            lines.forEach(line => {
+                const healthMatch = line.match(/健康度[:：]\[?(\d+)\]?/);
+                const iterationMatch = line.match(/迭代[:：]\[?(\d+)\]?/);
+                const passMatch = line.match(/通过率[:：]\[?(\d+)+\]?%?/);
+                const modeMatch = line.match(/模式[:：]\[?([^\]]+)\]?/);
+
+                if (healthMatch && iterationMatch) {
+                    data.push({
+                        iteration: parseInt(iterationMatch[1]),
+                        health: parseInt(healthMatch[1]),
+                        passRate: passMatch ? parseInt(passMatch[1]) : null,
+                        mode: modeMatch ? modeMatch[1] : 'normal'
+                    });
+                }
+            });
+
+            return data.sort((a, b) => a.iteration - b.iteration);
+        }
+
+        // 计算统计数据
+        function calculateStats(data) {
+            if (data.length === 0) return null;
+
+            const total = data.length;
+            const sum = data.reduce((acc, d) => acc + d.health, 0);
+            const avg = (sum / total).toFixed(1);
+            const current = data[data.length - 1].health;
+
+            // 计算满分连续次数
+            let streak = 0;
+            for (let i = data.length - 1; i >= 0; i--) {
+                if (data[i].health === 100) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+
+            return {
+                totalIterations: total,
+                averageHealth: avg,
+                currentHealth: current,
+                perfectStreak: streak
+            };
+        }
+
+        // 绘制健康度图表
+        function drawHealthChart(data) {
+            const svg = document.getElementById('healthChart');
+            const container = svg.parentElement;
+            const width = Math.max(container.clientWidth, data.length * 30);
+            const height = 280;
+            const padding = { top: 20, right: 20, bottom: 40, left: 40 };
+
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
+
+            // 清空
+            svg.innerHTML = '';
+
+            if (data.length === 0) return;
+
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            // X轴
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${padding.left}, ${padding.top})`);
+
+            // 网格线
+            for (let i = 0; i <= 10; i++) {
+                const y = chartHeight - (i * chartHeight / 10);
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', '0');
+                line.setAttribute('y1', y);
+                line.setAttribute('x2', chartWidth);
+                line.setAttribute('y2', y);
+                line.setAttribute('stroke', '#ecf0f1');
+                line.setAttribute('stroke-width', '1');
+                g.appendChild(line);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', '-10');
+                text.setAttribute('y', y + 4);
+                text.setAttribute('text-anchor', 'end');
+                text.setAttribute('fill', '#7f8c8d');
+                text.setAttribute('font-size', '10');
+                text.textContent = i * 10;
+                g.appendChild(text);
+            }
+
+            // 绘制数据线
+            const stepX = chartWidth / Math.max(data.length - 1, 1);
+
+            const pathData = data.map((d, i) => {
+                const x = i * stepX;
+                const y = chartHeight - (d.health * chartHeight / 100);
+                return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+            }).join(' ');
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathData);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', '#2980b9');
+            path.setAttribute('stroke-width', '2');
+            g.appendChild(path);
+
+            // 绘制数据点
+            data.forEach((d, i) => {
+                const x = i * stepX;
+                const y = chartHeight - (d.health * chartHeight / 100);
+
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', x);
+                circle.setAttribute('cy', y);
+                circle.setAttribute('r', d.health === 100 ? 5 : 4);
+                circle.setAttribute('fill', d.health === 100 ? '#27ae60' : '#e74c3c');
+                g.appendChild(circle);
+
+                // 每 5 个迭代显示刻度
+                if (i % 5 === 0) {
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', x);
+                    text.setAttribute('y', chartHeight + 20);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('fill', '#7f8c8d');
+                    text.setAttribute('font-size', '10');
+                    text.textContent = d.iteration;
+                    g.appendChild(text);
+                }
+            });
+
+            svg.appendChild(g);
+        }
+
+        // 更新统计显示
+        function updateStats(stats) {
+            if (!stats) return;
+            document.getElementById('totalIterations').textContent = stats.totalIterations;
+            document.getElementById('avgHealth').textContent = stats.averageHealth;
+            document.getElementById('currentHealth').textContent = stats.currentHealth;
+            document.getElementById('perfectStreak').textContent = stats.perfectStreak;
+        }
+
+        // 处理健康度文件上传
+        document.getElementById('healthFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const text = event.target.result;
+                const data = parseHealthHistory(text);
+                const stats = calculateStats(data);
+                drawHealthChart(data);
+                updateStats(stats);
+            };
+            reader.readAsText(file);
+        });
+
+        // 设置 PAD 情绪值
+        function setEmotionValue(name, value) {
+            // value from -1 to 1
+            const percentage = ((value + 1) / 2) * 100;
+            document.getElementById(`bar${name}`).style.width = percentage + '%';
+            document.getElementById(`val${name}`).textContent = value.toFixed(2);
+        }
+
+        // 尝试从 MCP 获取情绪状态（如果在 MCP 环境中运行）
+        // 如果是本地打开文件，用户可以手动导入
+        // 这里留空，由用户手动导入
+
+        // 处理记忆文件列表
+        let memoryCache = {};
+
+        document.getElementById('memoryFile').addEventListener('change', function(e) {
+            // 实际上浏览器不允许选择目录，这里用户需要选择单个文件查看
+            const file = e.target.files[0];
+            if (!file) return;
+
+            loadMemoryFile(file);
+        });
+
+        function loadMemoryFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const content = event.target.result;
+                const name = file.name.replace('.md', '');
+                memoryCache[name] = { name: name, content: content };
+                renderMemoryList();
+                selectMemory(name);
+            };
+            reader.readAsText(file);
+        }
+
+        function renderMemoryList() {
+            const container = document.getElementById('memoryList');
+            container.innerHTML = '';
+
+            const names = Object.keys(memoryCache).sort().reverse();
+            names.forEach(name => {
+                const item = document.createElement('div');
+                item.className = 'memory-item';
+                item.dataset.name = name;
+                const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
+                item.innerHTML = `
+                    <div class="memory-date">${name}</div>
+                    <div class="memory-preview">${preview}</div>
+                `;
+                item.addEventListener('click', () => selectMemory(name));
+                container.appendChild(item);
+            });
+        }
+
+        function selectMemory(name) {
+            // 移除 active 类
+            document.querySelectorAll('.memory-item').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // 添加 active 类
+            const selected = document.querySelector(`.memory-item[data-name="${name}"]`);
+            if (selected) {
+                selected.classList.add('active');
+            }
+
+            // 显示详情
+            const detail = document.getElementById('memoryDetail');
+            detail.textContent = memoryCache[name].content;
+        }
+
+        // 初始化：设置默认 PAD 值
+        setEmotionValue('Pleasure', 0.3);
+        setEmotionValue('Arousal', 0.2);
+        setEmotionValue('Dominance', 0.3);
+    </script>
+</body>
+</html>
