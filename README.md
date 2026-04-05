@@ -1,5 +1,10 @@
 # AgentSoul · 项目说明
 
+[![Tests](https://github.com/ldhuan/AgentSoul/actions/workflows/tests.yml/badge.svg)](https://github.com/ldhuan/AgentSoul/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 ## 概述
 
 AgentSoul 是一个通用化的 AI Agent 人格框架。它为 AI 助手提供可配置的人格系统，包括：

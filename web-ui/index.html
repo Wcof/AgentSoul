@@ -158,6 +158,68 @@
             font-size: 0.85rem;
         }
 
+        .search-section {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #2980b9;
+            box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.1);
+        }
+
+        .search-stats {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        .search-highlight {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .search-highlight {
+                background-color: #ffc107;
+                color: #000;
+            }
+        }
+            .search-section {
+                background: #383838;
+            }
+
+            .search-input {
+                background: #444;
+                border-color: #555;
+                color: #e0e0e0;
+            }
+
+            .search-input:focus {
+                border-color: #64b5f6;
+            }
+
+            .search-stats {
+                color: #999;
+            }
+
+            .search-highlight {
+                background-color: #ffc107;
+                color: #000;
+            }
+        }
+
         .pad-emotion {
             display: flex;
             flex-direction: column;
@@ -329,6 +391,12 @@
             <label for="memoryFile">选择日记记忆文件 (YYYY-MM-DD)</label>
             <input type="file" id="memoryFile" accept=".md,text/plain">
             <p class="help-text">文件位置: AgentSoul/data/memory/daily/</p>
+        </div>
+
+        <div class="search-section">
+            <label for="searchInput">全文搜索（已加载记忆中）</label>
+            <input type="text" id="searchInput" class="search-input" placeholder="输入关键词搜索...">
+            <div class="search-stats" id="searchStats"></div>
         </div>
 
         <div class="grid">
@@ -587,6 +655,28 @@
 
         // 处理记忆文件列表
         let memoryCache = {};
+        let searchResults = [];
+
+        // 全文搜索
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.trim().toLowerCase();
+            if (!query) {
+                document.getElementById('searchStats').textContent = '';
+                renderMemoryList();
+                return;
+            }
+
+            searchResults = [];
+            Object.keys(memoryCache).forEach(name => {
+                const content = memoryCache[name].content.toLowerCase();
+                if (content.includes(query)) {
+                    searchResults.push(name);
+                }
+            });
+
+            document.getElementById('searchStats').textContent = `找到 ${searchResults.length} 个包含"${query}"的记忆`;
+            renderMemoryList();
+        });
 
         document.getElementById('memoryFile').addEventListener('change', function(e) {
             // 实际上浏览器不允许选择目录，这里用户需要选择单个文件查看
@@ -612,7 +702,18 @@
             const container = document.getElementById('memoryList');
             container.innerHTML = '';
 
-            const names = Object.keys(memoryCache).sort().reverse();
+            let names = Object.keys(memoryCache).sort().reverse();
+
+            // 如果有搜索结果，只显示搜索结果
+            if (searchResults.length > 0 && document.getElementById('searchInput').value.trim()) {
+                names = names.filter(name => searchResults.includes(name));
+            }
+
+            if (names.length === 0) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">没有找到匹配的记忆</div>';
+                return;
+            }
+
             names.forEach(name => {
                 const item = document.createElement('div');
                 item.className = 'memory-item';
@@ -641,7 +742,17 @@
 
             // 显示详情
             const detail = document.getElementById('memoryDetail');
-            detail.textContent = memoryCache[name].content;
+            const content = memoryCache[name].content;
+            const query = document.getElementById('searchInput').value.trim();
+
+            // 如果有搜索关键词，高亮匹配
+            if (query) {
+                const regex = new RegExp(`(${query})`, 'gi');
+                const highlighted = content.replace(regex, '<mark class="search-highlight">$1</mark>');
+                detail.innerHTML = highlighted;
+            } else {
+                detail.textContent = content;
+            }
         }
 
         // 初始化：设置默认 PAD 值
