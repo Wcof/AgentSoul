@@ -149,6 +149,9 @@ tool_descriptions:
   get_interaction_statistics: >
     获取收集的交互统计信息。
     包括总交互次数和各种反馈类型的分布。
+  get_health_history: >
+    获取项目迭代健康度历史记录。
+    返回每次迭代的健康度、通过率、模式和改动描述，可用于趋势分析和可视化。
 
 # 工具索引的分类描述
 categories:
@@ -469,6 +472,12 @@ tool_index:
     whenToUse: "需要查看已收集的交互数据统计时调用"
     required: false
     example: "{}"
+  get_health_history:
+    description: "获取项目迭代健康度历史记录"
+    parameters: "{ limit?: number (最近多少条，默认 20) }"
+    whenToUse: "需要查看健康度变化趋势生成可视化或进行趋势分析时调用"
+    required: false
+    example: '{ "limit": 20 }'
 
 # 完整使用指南 Markdown 内容
 usage_guide: |

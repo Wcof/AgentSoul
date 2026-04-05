@@ -3,10 +3,14 @@
  * @description 该模块处理人格配置和 PAD 情感状态的管理，包括获取人格配置、获取和更新灵魂状态、获取基础规则文档以及获取 MCP 使用指南
  */
 
+import fs from 'fs';
+import path from 'path';
 import { z } from 'zod';
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { StorageManager } from '../storage.js';
 import { ToolResponse } from '../types.js';
+import { readFile } from '../lib/utils.js';
+import { PROJECT_ROOT } from '../lib/paths.js';
 import { getLanguageResources, LanguageResources, CategoryIndex, ToolIndexEntry } from '../language/index.js';
 import { triggerEvent } from './subscription.js';
 
@@ -67,6 +71,7 @@ const TOOL_TO_CATEGORY: Record<string, string> = {
   get_persona_version: 'soul',
   list_soul_versions: 'soul',
   rollback_soul: 'soul',
+  get_health_history: 'soul',
 };
 
 /**
@@ -555,6 +560,12 @@ export async function handleWritePersonaConfig(
 /** 获取灵魂成长曲线数据的输入参数Schema */
 export const GetGrowthCurveSchema = z.object({});
 
+/** 获取健康度历史记录的输入参数Schema */
+export const GetHealthHistorySchema = z.object({
+  /** 获取最近多少条记录，默认 20 */
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
 /** 健康检查的输入参数Schema */
 export const HealthCheckSchema = z.object({
   /** 是否包含记忆文件抽样检查 */
@@ -627,6 +638,94 @@ export async function handleGetGrowthCurve(): Promise<ToolResponse> {
       text: JSON.stringify({
         success: true,
         data: stats,
+      }, null, 2),
+    }],
+  };
+}
+
+/**
+ * 健康历史记录条目接口
+ */
+interface HealthHistoryEntry {
+  timestamp: string;
+  iteration: number;
+  health: number;
+  pass_rate: number;
+  mode: string;
+  description: string;
+}
+
+/**
+ * 获取项目迭代健康度历史记录
+ * @param params 查询参数（可选 limit）
+ * @returns 解析后的健康度历史记录数组
+ */
+export async function handleGetHealthHistory(
+  params: z.infer<typeof GetHealthHistorySchema>
+): Promise<ToolResponse> {
+  const limit = params.limit ?? 20;
+  const healthPath = path.join(PROJECT_ROOT, '.soul_health.md');
+
+  if (!fs.existsSync(healthPath)) {
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          data: [],
+          total_records: 0,
+          message: 'No health history file found',
+        }, null, 2),
+      }],
+    };
+  }
+
+  const content = readFile(healthPath);
+  if (content === null) {
+    throw new McpError(ErrorCode.InternalError, 'Failed to read health history file');
+  }
+
+  const lines = content.trim().split('\n').filter(line => line.trim().length > 0);
+  const entries: HealthHistoryEntry[] = [];
+
+  // Parse each line - format: [timestamp] | iteration[N] | 健康度:[score] | 通过率:[rate] | 模式:[mode] | [description]
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Extract parts between | separators
+    const parts = trimmed.split('|').map(p => p.replace(/^\[|\]$/g, '').trim());
+    if (parts.length >= 6) {
+      const timestamp = parts[0];
+      const iterationMatch = parts[1].match(/迭代\s*\[?(\d+)\]?/);
+      const healthMatch = parts[2].match(/健康度\s*\[?(\d+)\]?/);
+      const rateMatch = parts[3].match(/通过率\s*\[?(\d+)%\]?/);
+      const modeMatch = parts[4].match(/\s*模式:\s*\[?([^\]]+)\]?/);
+
+      const entry: HealthHistoryEntry = {
+        timestamp: timestamp,
+        iteration: iterationMatch ? parseInt(iterationMatch[1], 10) : 0,
+        health: healthMatch ? parseInt(healthMatch[1], 10) : 0,
+        pass_rate: rateMatch ? parseInt(rateMatch[1], 10) : 0,
+        mode: modeMatch ? modeMatch[1].trim() : parts[4].trim(),
+        description: parts.slice(5).join('|').trim(),
+      };
+      entries.push(entry);
+    }
+  }
+
+  // Sort by iteration ascending, then take last N
+  entries.sort((a, b) => a.iteration - b.iteration);
+  const recent = entries.slice(-limit);
+
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        success: true,
+        total_records: entries.length,
+        returned_records: recent.length,
+        data: recent,
       }, null, 2),
     }],
   };

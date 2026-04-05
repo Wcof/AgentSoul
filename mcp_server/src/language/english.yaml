@@ -149,6 +149,9 @@ tool_descriptions:
   get_interaction_statistics: >
     Get collected interaction statistics.
     Includes total interaction count and distribution of feedback types.
+  get_health_history: >
+    Get project iteration health history records.
+    Returns health score, pass rate, mode, and change description for each iteration, useful for trend analysis and visualization.
 
 # Category descriptions for tool index
 categories:
@@ -469,6 +472,12 @@ tool_index:
     whenToUse: "Call when you need to view statistics about collected interaction data"
     required: false
     example: "{}"
+  get_health_history:
+    description: "Get project iteration health history records"
+    parameters: "{ limit?: number (how many recent records, default 20) }"
+    whenToUse: "Call when you need to view health score trend for visualization or trend analysis"
+    required: false
+    example: '{ "limit": 20 }'
 
 # Complete usage guide markdown content
 usage_guide: |
