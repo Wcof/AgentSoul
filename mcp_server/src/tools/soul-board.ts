@@ -86,6 +86,36 @@ const LedgerReadSchema = z.object({
   entry_id: z.string(),
 });
 
+/** 添加项目标签输入参数模式 */
+const BoardAddLabelsSchema = z.object({
+  /** 项目名称 */
+  project: z.string(),
+  /** 标签数组 */
+  labels: z.array(z.string()),
+});
+
+/** 删除项目标签输入参数模式 */
+const BoardRemoveLabelsSchema = z.object({
+  /** 项目名称 */
+  project: z.string(),
+  /** 标签数组 */
+  labels: z.array(z.string()),
+});
+
+/** 列出项目标签输入参数模式 */
+const BoardListLabelsSchema = z.object({
+  /** 项目名称 */
+  project: z.string(),
+});
+
+/** 按标签搜索决策输入参数模式 */
+const BoardSearchDecisionsSchema = z.object({
+  /** 项目名称 */
+  project: z.string(),
+  /** 标签数组 - 返回匹配任一标签的决策 */
+  labels: z.array(z.string()),
+});
+
 /** 读取看板输入类型 */
 type BoardReadInput = z.infer<typeof BoardReadSchema>;
 /** 更新看板摘要输入类型 */
@@ -245,10 +275,76 @@ export async function handleLedgerList(input: LedgerListInput): Promise<ToolResp
  * @returns 错误信息的工具响应
  */
 export async function handleLedgerRead(input: LedgerReadInput): Promise<ToolResponse> {
+  const engine = getSoulEngine();
+  const entry = engine.readLedgerEntry(input.project, input.entry_id);
   return {
     content: [{
       type: 'text',
-      text: JSON.stringify({ error: 'Ledger read not yet implemented' }),
+      text: JSON.stringify(entry),
+    }],
+  };
+}
+
+/**
+ * 处理添加项目标签请求
+ * @param input - 包含项目名称和标签数组的输入参数
+ * @returns 添加结果的工具响应
+ */
+export async function handleBoardAddLabels(input: z.infer<typeof BoardAddLabelsSchema>): Promise<ToolResponse> {
+  const engine = getSoulEngine();
+  const added = engine.addLabels(input.project, input.labels);
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({ added, success: added > 0 }),
+    }],
+  };
+}
+
+/**
+ * 处理删除项目标签请求
+ * @param input - 包含项目名称和标签数组的输入参数
+ * @returns 删除结果的工具响应
+ */
+export async function handleBoardRemoveLabels(input: z.infer<typeof BoardRemoveLabelsSchema>): Promise<ToolResponse> {
+  const engine = getSoulEngine();
+  const removed = engine.removeLabels(input.project, input.labels);
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({ removed, success: removed > 0 }),
+    }],
+  };
+}
+
+/**
+ * 处理列出项目所有标签请求
+ * @param input - 包含项目名称的输入参数
+ * @returns 标签列表的工具响应
+ */
+export async function handleBoardListLabels(input: z.infer<typeof BoardListLabelsSchema>): Promise<ToolResponse> {
+  const engine = getSoulEngine();
+  const labels = engine.listLabels(input.project);
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({ labels, count: labels.length }),
+    }],
+  };
+}
+
+/**
+ * 处理按标签搜索决策请求
+ * @param input - 包含项目名称和标签数组的输入参数
+ * @returns 匹配决策列表的工具响应
+ */
+export async function handleBoardSearchDecisions(input: z.infer<typeof BoardSearchDecisionsSchema>): Promise<ToolResponse> {
+  const engine = getSoulEngine();
+  const decisions = engine.searchDecisionsByLabels(input.project, input.labels);
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({ decisions, count: decisions.length }),
     }],
   };
 }
@@ -262,4 +358,8 @@ export {
   BoardSetActiveWorkSchema,
   LedgerListSchema,
   LedgerReadSchema,
+  BoardAddLabelsSchema,
+  BoardRemoveLabelsSchema,
+  BoardListLabelsSchema,
+  BoardSearchDecisionsSchema,
 };

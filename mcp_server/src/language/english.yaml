@@ -152,6 +152,18 @@ tool_descriptions:
   get_health_history: >
     Get project iteration health history records.
     Returns health score, pass rate, mode, and change description for each iteration, useful for trend analysis and visualization.
+  board_add_labels: >
+    Add custom labels to the project for categorization.
+    Supports batch adding multiple labels to help organize project decisions by topic.
+  board_remove_labels: >
+    Remove custom labels from the project.
+    Supports batch removing labels that are no longer needed.
+  board_list_labels: >
+    List all custom labels defined for the project.
+    Returns the array of labels and total count.
+  board_search_decisions: >
+    Search project decisions by custom labels.
+    Returns all decisions that match any of the requested labels.
 
 # Category descriptions for tool index
 categories:
@@ -472,6 +484,30 @@ tool_index:
     whenToUse: "Call when you need to view statistics about collected interaction data"
     required: false
     example: "{}"
+  board_add_labels:
+    description: "Add custom labels to the project for categorization"
+    parameters: "{ project: string, labels: string[] }"
+    whenToUse: "Call when you need to add classification labels to help organize project decisions"
+    required: true
+    example: '{ "project": "AgentSoul", "labels": ["feature", "mcp"] }'
+  board_remove_labels:
+    description: "Remove custom labels from the project"
+    parameters: "{ project: string, labels: string[] }"
+    whenToUse: "Call when you need to remove classification labels that are no longer needed"
+    required: true
+    example: '{ "project": "AgentSoul", "labels": ["old-feature"] }'
+  board_list_labels:
+    description: "List all custom labels for the project"
+    parameters: "{ project: string }"
+    whenToUse: "Call when you need to see what labels are defined on the project"
+    required: false
+    example: '{ "project": "AgentSoul" }'
+  board_search_decisions:
+    description: "Search project decisions by custom labels"
+    parameters: "{ project: string, labels: string[] }"
+    whenToUse: "Call when you need to find all decisions that have specific labels"
+    required: true
+    example: '{ "project": "AgentSoul", "labels": ["bug"] }'
   get_health_history:
     description: "Get project iteration health history records"
     parameters: "{ limit?: number (how many recent records, default 20) }"

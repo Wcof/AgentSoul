@@ -169,6 +169,14 @@ import {
   handleLedgerList,
   LedgerReadSchema,
   handleLedgerRead,
+  BoardAddLabelsSchema,
+  handleBoardAddLabels,
+  BoardRemoveLabelsSchema,
+  handleBoardRemoveLabels,
+  BoardListLabelsSchema,
+  handleBoardListLabels,
+  BoardSearchDecisionsSchema,
+  handleBoardSearchDecisions,
 } from './tools/soul-board.js';
 
 import {
@@ -310,6 +318,10 @@ const ALL_TOOLS: ToolMetadata[] = [
   { name: 'board_read', fallbackDescription: 'Read the complete project board state including active work, file ownership, and recent decisions.', schema: BoardReadSchema },
   { name: 'board_update_summary', fallbackDescription: 'Update the project summary in the board.', schema: BoardUpdateSummarySchema },
   { name: 'board_add_decision', fallbackDescription: 'Record a decision made during this project.', schema: BoardAddDecisionSchema },
+  { name: 'board_add_labels', fallbackDescription: 'Add custom labels to the project for categorization.', schema: BoardAddLabelsSchema },
+  { name: 'board_remove_labels', fallbackDescription: 'Remove custom labels from the project.', schema: BoardRemoveLabelsSchema },
+  { name: 'board_list_labels', fallbackDescription: 'List all custom labels defined for the project.', schema: BoardListLabelsSchema },
+  { name: 'board_search_decisions', fallbackDescription: 'Search project decisions by custom labels.', schema: BoardSearchDecisionsSchema },
   { name: 'board_claim_file', fallbackDescription: 'Claim file ownership to prevent conflicts in multi-agent environments.', schema: BoardClaimFileSchema },
   { name: 'board_release_file', fallbackDescription: 'Release all files claimed by this agent.', schema: BoardReleaseFileSchema },
   { name: 'board_set_active_work', fallbackDescription: 'Set the current active work task for this agent.', schema: BoardSetActiveWorkSchema },
@@ -469,6 +481,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleBoardUpdateSummary(BoardUpdateSummarySchema.parse(args));
     case 'board_add_decision':
       return handleBoardAddDecision(BoardAddDecisionSchema.parse(args));
+    case 'board_add_labels':
+      return handleBoardAddLabels(BoardAddLabelsSchema.parse(args));
+    case 'board_remove_labels':
+      return handleBoardRemoveLabels(BoardRemoveLabelsSchema.parse(args));
+    case 'board_list_labels':
+      return handleBoardListLabels(BoardListLabelsSchema.parse(args));
+    case 'board_search_decisions':
+      return handleBoardSearchDecisions(BoardSearchDecisionsSchema.parse(args));
     case 'board_claim_file':
       return handleBoardClaimFile(BoardClaimFileSchema.parse(args));
     case 'board_release_file':
