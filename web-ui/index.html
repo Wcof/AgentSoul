@@ -229,6 +229,87 @@
             color: #7f8c8d;
             font-size: 0.8rem;
         }
+
+        /* 深色模式支持 */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #1a1a1a;
+                color: #e0e0e0;
+            }
+
+            header, .card {
+                background: #2d2d2d;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            }
+
+            h1, h2, .emotion-label, .memory-date {
+                color: #e0e0e0;
+            }
+
+            .subtitle, .stat-label, .memory-preview, .help-text, .emotion-value, .footer {
+                color: #999;
+            }
+
+            .stat-box, .memory-detail, .file-input-section {
+                background: #383838;
+            }
+
+            .card h2 {
+                border-bottom-color: #444;
+            }
+
+            .memory-item {
+                border-bottom-color: #444;
+            }
+
+            .memory-item:hover {
+                background: #404040;
+            }
+
+            .memory-item.active {
+                background: #0d47a1;
+            }
+
+            .emotion-bar-container {
+                background: #444;
+            }
+        }
+
+        /* 美化滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .memory-detail::-webkit-scrollbar-thumb,
+        .memory-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .memory-detail::-webkit-scrollbar-thumb:hover,
+        .memory-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            ::-webkit-scrollbar-track {
+                background: #333;
+            }
+
+            ::-webkit-scrollbar-thumb {
+                background: #555;
+            }
+
+            ::-webkit-scrollbar-thumb:hover {
+                background: #777;
+            }
+        }
     </style>
 </head>
 <body>
