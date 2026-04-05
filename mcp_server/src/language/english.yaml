@@ -131,6 +131,21 @@ tool_descriptions:
     Cancel an event subscription, remove a previously registered Webhook push.
   list_subscriptions: >
     List all currently active subscriptions, view subscription IDs and configuration information.
+  get_learning_preferences: >
+    Get the current learned user preference configuration.
+    The adaptive learning system automatically learns user preferences based on feedback.
+  submit_feedback: >
+    Submit user feedback for adaptive learning.
+    Adjust the learning model and PAD emotional state based on user feedback.
+  reset_learning: >
+    Reset all adaptive learning data to default values.
+    Clears all collected interaction data and learned preferences.
+  set_learning_intensity: >
+    Set the adaptive learning intensity (0 to 1).
+    Higher intensity means faster learning but also larger fluctuations.
+  get_interaction_statistics: >
+    Get collected interaction statistics.
+    Includes total interaction count and distribution of feedback types.
 
 # Category descriptions for tool index
 categories:
@@ -141,6 +156,7 @@ categories:
   kv_cache: "3-tier KV-Cache with Ebbinghaus forgetting curve (session snapshots)"
   soul_board: "Project state management and multi-agent safety (Soul Board & Ledger)"
   subscription: "Event subscription push (Webhook)"
+  adaptive: "Adaptive learning and user preference learning"
 
 # Full tool index entries (detailed tool metadata)
 tool_index:
@@ -412,6 +428,36 @@ tool_index:
     description: "List all currently active subscriptions, view subscription IDs and configuration"
     parameters: "{}"
     whenToUse: "Call when you need to see what subscriptions exist and get their IDs"
+    required: false
+    example: "{}"
+  get_learning_preferences:
+    description: "Get the current learned user preference configuration"
+    parameters: "None"
+    whenToUse: "Call when you need to see what preferences the adaptive learning system has learned"
+    required: false
+    example: "{}"
+  submit_feedback:
+    description: "Submit user feedback for adaptive learning"
+    parameters: "{ feedback: enum<positive|negative|neutral>, pad_before?: object, pad_after?: object, response_length?: number, topics?: string[], user_input?: string, agent_response?: string }"
+    whenToUse: "Call after user provides feedback to update the learning model"
+    required: true
+    example: '{ "feedback": "positive", "response_length": 300 }'
+  reset_learning:
+    description: "Reset all adaptive learning data to default values"
+    parameters: "None"
+    whenToUse: "Call when you need to clear all learning data and start over"
+    required: false
+    example: "{}"
+  set_learning_intensity:
+    description: "Set the adaptive learning intensity"
+    parameters: "{ intensity: number (0 to 1) }"
+    whenToUse: "Call when you need to adjust learning speed - higher = faster learning but bigger fluctuations"
+    required: true
+    example: '{ "intensity": 0.5 }'
+  get_interaction_statistics:
+    description: "Get collected interaction statistics"
+    parameters: "None"
+    whenToUse: "Call when you need to view statistics about collected interaction data"
     required: false
     example: "{}"
 

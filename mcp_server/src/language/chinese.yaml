@@ -131,6 +131,21 @@ tool_descriptions:
     取消事件订阅，移除之前注册的 Webhook 推送。
   list_subscriptions: >
     列出所有当前活动的订阅，查看订阅 ID 和配置信息。
+  get_learning_preferences: >
+    获取当前学习到的用户偏好配置。
+    自适应学习系统会根据用户反馈自动学习用户喜好。
+  submit_feedback: >
+    提交用户反馈用于自适应学习。
+    根据用户反馈调整学习模型和 PAD 情感状态。
+  reset_learning: >
+    重置所有自适应学习数据到默认值。
+    清除所有收集的交互数据和学习到的偏好。
+  set_learning_intensity: >
+    设置自适应学习强度（0 到 1）。
+    强度越高，学习速度越快，但波动也越大。
+  get_interaction_statistics: >
+    获取收集的交互统计信息。
+    包括总交互次数和各种反馈类型的分布。
 
 # 工具索引的分类描述
 categories:
@@ -141,6 +156,7 @@ categories:
   kv_cache: "带艾宾浩斯遗忘曲线的 3 层 KV-Cache（会话快照）"
   soul_board: "项目状态管理和多智能体安全（Soul Board & Ledger）"
   subscription: "事件订阅推送（Webhook）"
+  adaptive: "自适应学习与用户偏好学习"
 
 # 完整工具索引条目（详细工具元数据）
 tool_index:
@@ -412,6 +428,36 @@ tool_index:
     description: "列出所有当前活动的订阅，查看订阅 ID 和配置信息"
     parameters: "{}"
     whenToUse: "需要查看当前有哪些订阅以及它们的 ID 时调用"
+    required: false
+    example: "{}"
+  get_learning_preferences:
+    description: "获取当前学习到的用户偏好配置"
+    parameters: "无"
+    whenToUse: "需要查看自适应学习系统学到了哪些用户偏好时调用"
+    required: false
+    example: "{}"
+  submit_feedback:
+    description: "提交用户反馈用于自适应学习"
+    parameters: "{ feedback: enum<positive|negative|neutral>, pad_before?: object, pad_after?: object, response_length?: number, topics?: string[], user_input?: string, agent_response?: string }"
+    whenToUse: "用户提供反馈后，需要更新学习模型时调用"
+    required: true
+    example: '{ "feedback": "positive", "response_length": 300 }'
+  reset_learning:
+    description: "重置所有自适应学习数据到默认值"
+    parameters: "无"
+    whenToUse: "需要清除所有学习数据重新开始学习时调用"
+    required: false
+    example: "{}"
+  set_learning_intensity:
+    description: "设置自适应学习强度"
+    parameters: "{ intensity: number (0 到 1) }"
+    whenToUse: "需要调整学习速度时调用 - 越高学习越快但波动越大"
+    required: true
+    example: '{ "intensity": 0.5 }'
+  get_interaction_statistics:
+    description: "获取收集的交互统计信息"
+    parameters: "无"
+    whenToUse: "需要查看已收集的交互数据统计时调用"
     required: false
     example: "{}"
 
