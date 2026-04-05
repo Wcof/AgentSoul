@@ -42,6 +42,9 @@ tool_descriptions:
     运行完整的 AgentSoul 安装健康检查。
     检查目录结构、配置文件、灵魂状态、记忆文件和权限。
     返回完整的健康报告，包含发现的问题和修复建议。
+  get_growth_curve: >
+    获取灵魂成长曲线历史数据。
+    返回完整的 PAD 情感状态变化历史记录，用于可视化和趋势分析。
   get_base_rules: >
     获取基础规则文档（SKILL、soul_base、memory_base、master_base 等）。
     需要重新阅读系统规则时调用。
@@ -178,6 +181,12 @@ tool_index:
     whenToUse: "对话后调用，更新你的情绪状态"
     required: false
     example: '{ "pleasure": 0.3, "arousal": 0.1, "dominance": 0.2, "trigger": "与用户愉快的对话" }'
+  get_growth_curve:
+    description: "获取灵魂成长曲线历史数据"
+    parameters: "无"
+    whenToUse: "需要查看 PAD 情感状态变化趋势生成可视化时调用"
+    required: false
+    example: "{}"
   get_base_rules:
     description: "获取基础规则文档（SKILL、soul_base、memory_base、master_base 等）"
     parameters: "{ name: enum<SKILL|soul_base|memory_base|master_base|secure_base|skills_base|tasks_base> }"

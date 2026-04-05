@@ -21,6 +21,7 @@ const TOOL_TO_CATEGORY: Record<string, string> = {
   get_soul_state: 'soul',
   update_soul_state: 'soul',
   health_check: 'soul',
+  get_growth_curve: 'soul',
   get_base_rules: 'soul',
   get_mcp_usage_guide: 'soul',
   mcp_tool_index: 'soul',
@@ -551,6 +552,9 @@ export async function handleWritePersonaConfig(
   };
 }
 
+/** 获取灵魂成长曲线数据的输入参数Schema */
+export const GetGrowthCurveSchema = z.object({});
+
 /** 健康检查的输入参数Schema */
 export const HealthCheckSchema = z.object({
   /** 是否包含记忆文件抽样检查 */
@@ -591,6 +595,39 @@ export async function handleHealthCheck(
     content: [{
       type: 'text',
       text: JSON.stringify(report, null, 2),
+    }],
+  };
+}
+
+/**
+ * 获取灵魂成长曲线历史数据
+ * @returns PAD 情感状态历史记录数组，用于生成趋势可视化
+ */
+export async function handleGetGrowthCurve(): Promise<ToolResponse> {
+  const state = storage.readSoulState();
+
+  // 计算统计数据
+  const history = state.history || [];
+
+  const stats = {
+    total_records: history.length,
+    earliest_timestamp: history.length > 0 ? history[0].timestamp : null,
+    latest_timestamp: history.length > 0 ? history[history.length - 1].timestamp : null,
+    current: {
+      pleasure: state.pleasure,
+      arousal: state.arousal,
+      dominance: state.dominance,
+    },
+    history: history,
+  };
+
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        success: true,
+        data: stats,
+      }, null, 2),
     }],
   };
 }

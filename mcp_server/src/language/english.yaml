@@ -42,6 +42,9 @@ tool_descriptions:
     Run a full health check on the AgentSoul installation.
     Checks directory structure, config files, soul state, memory files, and permissions.
     Returns a complete health report with any issues found and fix suggestions.
+  get_growth_curve: >
+    Get soul growth curve historical data.
+    Returns the full history of PAD affective state changes for visualization and trend analysis.
   get_base_rules: >
     Get the base rules documentation (SKILL, soul_base, memory_base, master_base, etc.).
     Call this when you need to re-read the system rules.
@@ -178,6 +181,12 @@ tool_index:
     whenToUse: "Call this after conversation to update your emotional state"
     required: false
     example: '{ "pleasure": 0.3, "arousal": 0.1, "dominance": 0.2, "trigger": "pleasant conversation with user" }'
+  get_growth_curve:
+    description: "Get soul growth curve historical data"
+    parameters: "None"
+    whenToUse: "Call when you need to view PAD emotional state trend history for visualization"
+    required: false
+    example: "{}"
   get_base_rules:
     description: "Get the base rules documentation (SKILL, soul_base, memory_base, master_base, etc.)"
     parameters: "{ name: enum<SKILL|soul_base|memory_base|master_base|secure_base|skills_base|tasks_base> }"

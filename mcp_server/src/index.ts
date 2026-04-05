@@ -68,6 +68,8 @@ import {
   handleUpdateSoulState,
   HealthCheckSchema,
   handleHealthCheck,
+  GetGrowthCurveSchema,
+  handleGetGrowthCurve,
   GetBaseRulesSchema,
   handleGetBaseRules,
   GetMcpUsageGuideSchema,
@@ -267,6 +269,7 @@ const ALL_TOOLS: ToolMetadata[] = [
   { name: 'write_persona_config', fallbackDescription: 'Write and update the persona configuration (agent identity and user profile). Call this after updating agent information. Triggers persona_updated event to all subscribers.', schema: WritePersonaConfigSchema },
   { name: 'get_soul_state', fallbackDescription: 'Read current PAD affective state vector (pleasure, arousal, dominance). Call this before responding to understand your current emotional state.', schema: GetSoulStateSchema },
   { name: 'health_check', fallbackDescription: 'Run a full health check on the AgentSoul installation. Checks directory structure, config files, soul state, memory files, and permissions. Returns a complete health report with any issues found and fix suggestions.', schema: HealthCheckSchema },
+  { name: 'get_growth_curve', fallbackDescription: 'Get soul growth curve historical data. Returns the full history of PAD affective state changes for visualization and trend analysis.', schema: GetGrowthCurveSchema },
   { name: 'update_soul_state', fallbackDescription: 'Update the PAD affective state vector after the conversation based on the interaction outcome.', schema: UpdateSoulStateSchema },
   { name: 'get_base_rules', fallbackDescription: 'Get the base rules documentation (SKILL, soul_base, memory_base, master_base, etc.). Call this when you need to re-read the system rules.', schema: GetBaseRulesSchema },
   { name: 'get_mcp_usage_guide', fallbackDescription: 'MANDATORY: Get the complete MCP usage guide. YOU MUST CALL THIS FIRST at conversation startup to understand when to call each tool, the AgentSoul workflow, and memory hierarchy rules. This guide tells you exactly how to use AgentSoul MCP correctly.', schema: GetMcpUsageGuideSchema },
@@ -386,6 +389,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUpdateSoulState(UpdateSoulStateSchema.parse(args));
     case 'health_check':
       return handleHealthCheck(HealthCheckSchema.parse(args));
+    case 'get_growth_curve':
+      return handleGetGrowthCurve();
     case 'get_base_rules':
       return handleGetBaseRules(GetBaseRulesSchema.parse(args));
     case 'get_mcp_usage_guide':
