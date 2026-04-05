@@ -70,6 +70,12 @@ import {
   handleGetMcpUsageGuide,
   McpToolIndexSchema,
   handleMcpToolIndex,
+  GetPersonaVersionSchema,
+  handleGetPersonaVersion,
+  ListSoulVersionsSchema,
+  handleListSoulVersions,
+  RollbackSoulSchema,
+  handleRollbackSoul,
 } from './tools/soul.js';
 
 import {
@@ -189,6 +195,15 @@ import {
   handleGetInteractionStatistics,
 } from './tools/adaptive.js';
 
+import {
+  SubscribeSchema,
+  handleSubscribe,
+  UnsubscribeSchema,
+  handleUnsubscribe,
+  ListSubscriptionsSchema,
+  handleListSubscriptions,
+} from './tools/subscription.js';
+
 // 创建 MCP 服务器实例
 const server = new Server(
   {
@@ -214,23 +229,31 @@ function defineTool(
   description: string,
   schema: any
 ): { name: string; description: string; inputSchema: { type: 'object'; properties: any } } {
+  // Extract the inner schema shape - handle both plain ZodObject and ZodEffects (refinements)
+  // For ZodEffects created by .refine(), the inner schema is at _schema
+  const shape = '_schema' in schema && schema._schema && 'shape' in schema._schema
+    ? schema._schema.shape
+    : 'shape' in schema
+    ? schema.shape
+    : {};
   return {
     name,
     description,
     inputSchema: {
       type: 'object',
-      properties: schema.shape,
+      properties: shape,
     },
   };
 }
 
 /**
  * Tool metadata for building the cached tools list
+ * schema can be ZodObject or ZodEffects (for refined schemas)
  */
 interface ToolMetadata {
   name: string;
   fallbackDescription: string;
-  schema: z.ZodObject<any>;
+  schema: any;
 }
 
 /** All tool metadata - used to build the cached list once after language init */
@@ -298,6 +321,14 @@ const ALL_TOOLS: ToolMetadata[] = [
   { name: 'reset_learning', fallbackDescription: 'Reset all adaptive learning data to default values (clears all learned preferences).', schema: ResetLearningSchema },
   { name: 'set_learning_intensity', fallbackDescription: 'Set the learning intensity (0 to 1) for adaptive adjustments. Higher intensity means faster learning.', schema: SetLearningIntensitySchema },
   { name: 'get_interaction_statistics', fallbackDescription: 'Get statistics about collected interaction data including feedback counts.', schema: GetInteractionStatisticsSchema },
+  // Subscription Push tools
+  { name: 'subscribe', fallbackDescription: 'Subscribe to soul events via webhook push. Get notified when memory is written, soul state changes, or topics are archived.', schema: SubscribeSchema },
+  { name: 'unsubscribe', fallbackDescription: 'Cancel an existing subscription by ID.', schema: UnsubscribeSchema },
+  { name: 'list_subscriptions', fallbackDescription: 'List all current subscriptions with their status.', schema: ListSubscriptionsSchema },
+  // Version management tools
+  { name: 'get_persona_version', fallbackDescription: 'Get current persona version information including version number, timestamp and checksum.', schema: GetPersonaVersionSchema },
+  { name: 'list_soul_versions', fallbackDescription: 'List all available soul state version snapshots for rollback.', schema: ListSoulVersionsSchema },
+  { name: 'rollback_soul', fallbackDescription: 'Rollback soul state (PAD emotion) to a specific previous version.', schema: RollbackSoulSchema },
 ];
 
 /**
@@ -463,6 +494,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleSetLearningIntensity(SetLearningIntensitySchema.parse(args));
     case 'get_interaction_statistics':
       return handleGetInteractionStatistics();
+
+    // Subscription Push tools
+    case 'subscribe':
+      return handleSubscribe(SubscribeSchema.parse(args));
+    case 'unsubscribe':
+      return handleUnsubscribe(UnsubscribeSchema.parse(args));
+    case 'list_subscriptions':
+      return handleListSubscriptions();
+
+    // Version management tools
+    case 'get_persona_version':
+      return handleGetPersonaVersion();
+    case 'list_soul_versions':
+      return handleListSoulVersions();
+    case 'rollback_soul':
+      return handleRollbackSoul(RollbackSoulSchema.parse(args));
 
     default:
       throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

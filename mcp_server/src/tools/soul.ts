@@ -4,9 +4,11 @@
  */
 
 import { z } from 'zod';
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { StorageManager } from '../storage.js';
 import { ToolResponse } from '../types.js';
 import { getLanguageResources, LanguageResources, CategoryIndex, ToolIndexEntry } from '../language/index.js';
+import { triggerEvent } from './subscription.js';
 
 const storage = new StorageManager();
 
@@ -56,6 +58,12 @@ const TOOL_TO_CATEGORY: Record<string, string> = {
   board_set_active_work: 'soul_board',
   ledger_list: 'soul_board',
   ledger_read: 'soul_board',
+  subscribe: 'subscription',
+  unsubscribe: 'subscription',
+  list_subscriptions: 'subscription',
+  get_persona_version: 'soul',
+  list_soul_versions: 'soul',
+  rollback_soul: 'soul',
 };
 
 /**
@@ -114,7 +122,18 @@ export const UpdateSoulStateSchema = z.object({
   dominance: z.number().min(-1).max(1).optional(),
   /** 触发原因 */
   trigger: z.string().optional(),
-});
+}).refine(
+  data => {
+    // At least one field must be provided for an update
+    return data.pleasure !== undefined ||
+           data.arousal !== undefined ||
+           data.dominance !== undefined ||
+           data.trigger !== undefined;
+  },
+  {
+    message: "At least one field (pleasure, arousal, dominance, or trigger) must be provided for update",
+  }
+);
 
 /**
  * 更新灵魂状态
@@ -155,31 +174,29 @@ export async function handleUpdateSoulState(
 
   const success = storage.writeSoulState(newState);
 
-  if (success) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            new_state: newState,
-          }),
-        },
-      ],
-    };
-  } else {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: 'Failed to write soul state to disk',
-          }),
-        },
-      ],
-    };
+  if (!success) {
+    throw new McpError(ErrorCode.InternalError, 'Failed to write soul state to disk');
   }
+
+  triggerEvent('soul_state_updated', {
+    pleasure: newState.pleasure,
+    arousal: newState.arousal,
+    dominance: newState.dominance,
+    trigger: params.trigger,
+    timestamp,
+  });
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          new_state: newState,
+        }),
+      },
+    ],
+  };
 }
 
 /** 获取基础规则文档的输入参数 Schema */
@@ -208,21 +225,7 @@ export async function handleGetBaseRules(
   const content = storage.readBaseRule(filename);
 
   if (content === null) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              success: false,
-              error: `Rule file ${filename} not found`,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
+    throw new McpError(ErrorCode.InvalidRequest, `Rule file ${filename} not found`);
   }
 
   // 安全检查：Level 3 (SEALED) 内容不能输出
@@ -411,5 +414,73 @@ ${messages.specific_tool_usage.replace('%s', foundTool.name)}
         text: JSON.stringify(output, null, 2),
       },
     ],
+  };
+}
+
+
+/** 获取灵魂状态版本列表的参数Schema */
+export const ListSoulVersionsSchema = z.object({});
+
+/**
+ * 获取灵魂状态版本历史列表
+ * @returns 可用版本列表
+ */
+export async function handleListSoulVersions(): Promise<ToolResponse> {
+  const versions = storage.listSoulStateVersions();
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        count: versions.length,
+        versions,
+      }, null, 2),
+    }],
+  };
+}
+
+/** 回滚灵魂状态到指定版本的参数Schema */
+export const RollbackSoulSchema = z.object({
+  /** 目标版本标识 */
+  version: z.string(),
+});
+
+/**
+ * 回滚灵魂状态到指定版本
+ * @param params 参数，包含目标版本
+ * @returns 回滚结果
+ */
+export async function handleRollbackSoul(
+  params: z.infer<typeof RollbackSoulSchema>
+): Promise<ToolResponse> {
+  const success = storage.rollbackSoulState(params.version);
+  if (!success) {
+    throw new McpError(ErrorCode.InvalidRequest, `Failed to rollback to version ${params.version}`);
+  }
+  const current = storage.readSoulState();
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        success: true,
+        current_state: current,
+      }, null, 2),
+    }],
+  };
+}
+
+/** 获取人格版本信息的参数Schema */
+export const GetPersonaVersionSchema = z.object({});
+
+/**
+ * 获取当前人格配置的版本信息
+ * @returns 版本信息，包含版本号、时间戳和校验和
+ */
+export async function handleGetPersonaVersion(): Promise<ToolResponse> {
+  const version = storage.getPersonaVersion();
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify(version, null, 2),
+    }],
   };
 }

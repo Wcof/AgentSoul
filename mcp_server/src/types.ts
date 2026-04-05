@@ -341,6 +341,8 @@ export interface PersonaConfig {
 
 /** 灵魂状态：PAD 情感模型 */
 export interface SoulState {
+  /** 灵魂版本标记 - for schema migration */
+  version?: string;
   /** 愉悦度 */
   pleasure: number;
   /** 唤醒度 */
@@ -365,6 +367,32 @@ export interface SoulStateHistory {
   timestamp: string;
   /** 触发事件 */
   trigger?: string;
+}
+
+/** 灵魂版本信息 - 用于版本追踪和回滚 */
+export interface SoulVersion {
+  /** 版本 */
+  version: string;
+  /** 时间戳 */
+  timestamp: string;
+  /** 校验和 */
+  checksum?: string;
+  /** 描述 */
+  description?: string;
+}
+
+/** 记忆冲突信息 - 用于冲突检测 */
+export interface MemoryConflict {
+  /** 冲突主题 */
+  topic: string;
+  /** 现有内容 */
+  existing_content: string;
+  /** 新内容 */
+  new_content: string;
+  /** 冲突类型: "timestamp", "content", "structure" */
+  conflict_type: string;
+  /** 解决方案 */
+  resolution?: string | null;
 }
 
 /** 记忆主题 */
@@ -406,6 +434,34 @@ export interface EntityMemoryConfig {
   max_entities: number;
 }
 
+/** 订阅事件类型 */
+export type SubscriptionEvent =
+  | 'memory_written'      // 记忆被写入
+  | 'memory_archived'     // 主题被归档
+  | 'soul_state_updated'  // 灵魂状态更新
+  | 'persona_updated'     // 人格配置更新
+  | 'all';                // 所有事件
+
+/** 订阅记录 */
+export interface Subscription {
+  /** 订阅 ID */
+  id: string;
+  /** Webhook URL 回调地址 */
+  url: string;
+  /** 订阅的事件类型 */
+  events: SubscriptionEvent[];
+  /** 创建时间 */
+  createdAt: string;
+  /** 最后调用时间 */
+  lastCalled: string | null;
+  /** 调用失败次数 */
+  failureCount: number;
+  /** 最大失败次数后自动取消 */
+  maxFailures: number;
+  /** 可选的密钥用于验证 */
+  secret: string | null;
+}
+
 /** AgentSoul 总配置 */
 export interface AgentSoulConfig {
   /** KV 缓存配置 */
@@ -414,4 +470,11 @@ export interface AgentSoulConfig {
   core_memory: CoreMemoryConfig;
   /** 实体记忆配置 */
   entity_memory: EntityMemoryConfig;
+  /** 订阅推送配置 */
+  subscription?: {
+    /** 启用推送 */
+    enabled: boolean;
+    /** 请求超时毫秒 */
+    timeoutMs: number;
+  };
 }

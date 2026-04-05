@@ -116,6 +116,13 @@ tool_descriptions:
     List ledger entries for a project.
   ledger_read: >
     Read a specific ledger entry by ID.
+  subscribe: >
+    Create an event subscription, register a Webhook URL to receive AgentSoul event pushes.
+    When specific events occur, AgentSoul will send an HTTP POST request to the registered URL.
+  unsubscribe: >
+    Cancel an event subscription, remove a previously registered Webhook push.
+  list_subscriptions: >
+    List all currently active subscriptions, view subscription IDs and configuration information.
 
 # Category descriptions for tool index
 categories:
@@ -125,6 +132,7 @@ categories:
   entity_memory: "Structured entity tracking (people, projects, hardware, concepts, places, services)"
   kv_cache: "3-tier KV-Cache with Ebbinghaus forgetting curve (session snapshots)"
   soul_board: "Project state management and multi-agent safety (Soul Board & Ledger)"
+  subscription: "Event subscription push (Webhook)"
 
 # Full tool index entries (detailed tool metadata)
 tool_index:
@@ -380,6 +388,24 @@ tool_index:
     whenToUse: "Call when you need details of a specific work session"
     required: false
     example: '{ "ledgerId": "abc123", "project": "AgentSoul" }'
+  subscribe:
+    description: "Create an event subscription, register a Webhook URL to receive AgentSoul event pushes"
+    parameters: "{ url: string (Webhook URL), events?: string[] (list of events to subscribe), secret?: string (verification secret), max_failures?: number (maximum failures before auto-unsubscribe) }"
+    whenToUse: "Call when an external system needs to receive notifications about AgentSoul events"
+    required: false
+    example: '{ "url": "https://example.com/webhook", "events": ["memory_written", "soul_state_updated"], "secret": "my-secret-key", "max_failures": 3 }'
+  unsubscribe:
+    description: "Cancel an event subscription, remove a previously registered Webhook push"
+    parameters: "{ subscription_id: string (subscription ID) }"
+    whenToUse: "Call when you no longer need to receive event pushes"
+    required: false
+    example: '{ "subscription_id": "abc123xyz" }'
+  list_subscriptions:
+    description: "List all currently active subscriptions, view subscription IDs and configuration"
+    parameters: "{}"
+    whenToUse: "Call when you need to see what subscriptions exist and get their IDs"
+    required: false
+    example: "{}"
 
 # Complete usage guide markdown content
 usage_guide: |

@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { StorageManager } from '../storage.js';
 import { ToolResponse } from '../types.js';
+import { triggerEvent } from './subscription.js';
 
 const storage = new StorageManager();
 
@@ -114,6 +115,9 @@ export async function handleWriteMemoryDay(
   const { date, content, append } = params;
   const fullContent = handleAppendRead(date, content, append, storage.readDailyMemory.bind(storage));
   const success = storage.writeDailyMemory(date, fullContent);
+  if (success) {
+    triggerEvent('memory_written', { type: 'day', identifier: date });
+  }
   return makeWriteResponse(success, 'date', date, append);
 }
 
@@ -152,6 +156,9 @@ export async function handleWriteMemoryWeek(
   const { year_week, content, append } = params;
   const fullContent = handleAppendRead(year_week, content, append, storage.readWeeklyMemory.bind(storage));
   const success = storage.writeWeeklyMemory(year_week, fullContent);
+  if (success) {
+    triggerEvent('memory_written', { type: 'week', identifier: year_week });
+  }
   return makeWriteResponse(success, 'year_week', year_week, append);
 }
 
@@ -190,6 +197,9 @@ export async function handleWriteMemoryMonth(
   const { year_month, content, append } = params;
   const fullContent = handleAppendRead(year_month, content, append, storage.readMonthlyMemory.bind(storage));
   const success = storage.writeMonthlyMemory(year_month, fullContent);
+  if (success) {
+    triggerEvent('memory_written', { type: 'month', identifier: year_month });
+  }
   return makeWriteResponse(success, 'year_month', year_month, append);
 }
 
@@ -228,6 +238,9 @@ export async function handleWriteMemoryYear(
   const { year, content, append } = params;
   const fullContent = handleAppendRead(year, content, append, storage.readYearlyMemory.bind(storage));
   const success = storage.writeYearlyMemory(year, fullContent);
+  if (success) {
+    triggerEvent('memory_written', { type: 'year', identifier: year });
+  }
   return makeWriteResponse(success, 'year', year, append);
 }
 
@@ -266,6 +279,9 @@ export async function handleWriteMemoryTopic(
   const { topic, content, append } = params;
   const fullContent = handleAppendRead(topic, content, append, storage.readTopicMemory.bind(storage));
   const success = storage.writeTopicMemory(topic, fullContent);
+  if (success) {
+    triggerEvent('memory_written', { type: 'topic', identifier: topic });
+  }
   return makeWriteResponse(success, 'topic', topic, append);
 }
 
@@ -319,6 +335,10 @@ export async function handleArchiveMemoryTopic(
   params: z.infer<typeof ArchiveMemoryTopicSchema>
 ): Promise<ToolResponse> {
   const success = storage.archiveTopic(params.topic);
+
+  if (success) {
+    triggerEvent('memory_archived', { topic: params.topic });
+  }
 
   return {
     content: [

@@ -6,9 +6,10 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
+import crypto from 'crypto';
 import { safePath, readFile, writeFile, sanitizeTopicName, safeGet, toList } from './lib/utils.js';
 import { PROJECT_ROOT } from './lib/paths.js';
-import { SoulState, PersonaConfig } from './types.js';
+import { SoulState, PersonaConfig, MemoryConflict } from './types.js';
 
 /** 原始人格配置接口，用于向后兼容不同版本的配置格式 */
 interface RawPersonaConfig {
@@ -21,8 +22,18 @@ interface RawPersonaConfig {
   master?: Record<string, unknown>;
 }
 
-/** 数据根目录路径 */
-const DATA_ROOT = path.join(PROJECT_ROOT, 'data');
+/** 数据根目录路径 - can be overridden by AGENTSOUL_DATA_ROOT environment variable */
+const DATA_ROOT = process.env.AGENTSOUL_DATA_ROOT
+  ? path.resolve(process.env.AGENTSOUL_DATA_ROOT)
+  : path.join(PROJECT_ROOT, 'data');
+
+/**
+ * Get the current data root directory path.
+ * @returns The resolved data root path
+ */
+export function getDataRoot(): string {
+  return DATA_ROOT;
+}
 
 /**
  * Detect if OpenClaw is installed globally
@@ -61,6 +72,7 @@ export function detectOpenClawGlobalInstall(): string | null {
  * If you change the baseline here, change it there too to keep consistency across codebases.
  */
 const DEFAULT_SOUL_STATE: SoulState = {
+  version: '1.0.0',
   pleasure: 0.3,
   arousal: 0.2,
   dominance: 0.3,
@@ -140,21 +152,75 @@ export class StorageManager {
   }
 
   /**
-   * Helper: Ensure parent directory exists and write file
+   * Helper: Ensure parent directory exists and write file atomically
+   * Uses write-then-rename for atomicity with automatic rollback on failure
+   * Retries up to 3 times for intermittent IO errors (file locking, etc)
    * @param fullPath - Full path to write
    * @param rootPath - Root path for safe path check
    * @param content - Content to write
+   * @param retries - Number of retries (default: 3)
+   * @param delayMs - Delay between retries in ms (default: 100)
    * @returns True if write was successful
    */
-  private ensureDirAndWrite(fullPath: string, rootPath: string, content: string): boolean {
+  private ensureDirAndWrite(
+    fullPath: string,
+    rootPath: string,
+    content: string,
+    retries: number = 3,
+    delayMs: number = 100
+  ): boolean {
     const checkedPath = safePath(fullPath, rootPath);
-    if (checkedPath) {
-      const parentDir = path.dirname(checkedPath);
-      // fs.mkdirSync with recursive: true is safe even if directory exists
-      // No need for prior exists check - avoids TOCTOU race
-      fs.mkdirSync(parentDir, { recursive: true });
-      return writeFile(checkedPath, content);
+    if (!checkedPath) {
+      return false;
     }
+
+    const parentDir = path.dirname(checkedPath);
+    // fs.mkdirSync with recursive: true is safe even if directory exists
+    // No need for prior exists check - avoids TOCTOU race
+    fs.mkdirSync(parentDir, { recursive: true });
+
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < retries; attempt++) {
+      // Atomic write: write to temp file first, then rename
+      // This prevents partial writes and enables rollback if something goes wrong
+      const tempPath = `${checkedPath}.tmp.${Date.now()}-${attempt}`;
+
+      try {
+        const tempSuccess = writeFile(tempPath, content);
+        if (!tempSuccess) {
+          // Clean up temp file if write failed
+          try {
+            fs.unlinkSync(tempPath);
+          } catch {
+            // Ignore cleanup errors
+          }
+          continue;
+        }
+
+        // Rename temp file to target (atomic on POSIX systems)
+        fs.renameSync(tempPath, checkedPath);
+        return true;
+      } catch (e) {
+        lastError = e;
+        // Clean up temp file on error
+        console.error(`[AgentSoul Storage] Atomic write failed (attempt ${attempt + 1}/${retries}) for ${fullPath}:`, e);
+        try {
+          fs.unlinkSync(tempPath);
+        } catch {
+          // Ignore cleanup errors
+        }
+        // Wait before retrying if not last attempt
+        if (attempt < retries - 1) {
+          const start = Date.now();
+          while (Date.now() - start < delayMs) {
+            // Busy wait for simplicity - short delay
+          }
+        }
+      }
+    }
+
+    // All attempts failed
+    console.error(`[AgentSoul Storage] All ${retries} write attempts failed for ${fullPath}:`, lastError);
     return false;
   }
 
@@ -285,14 +351,50 @@ export class StorageManager {
       return false;
     }
 
+    // 确保版本字段存在
+    if (!state.version) {
+      state.version = '1.0.0';
+    }
+
     const success = writeFile(checkedPath, JSON.stringify(state, null, 2));
 
-    // If OpenClaw is detected, sync write to it
+    // 保存版本快照用于回滚
     if (success) {
+      this._saveVersionSnapshot(state);
+      // If OpenClaw is detected, sync write to it
       this.syncWriteToOpenClaw('soul/soul_variable/state_vector.json', JSON.stringify(state, null, 2));
     }
 
     return success;
+  }
+
+  /**
+   * 保存版本快照用于回滚
+   * @param state - 灵魂状态对象
+   */
+  private _saveVersionSnapshot(state: SoulState): void {
+    try {
+      const historyDir = path.join(DATA_ROOT, 'soul', 'versions');
+      historyDir && fs.mkdirSync(historyDir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '');
+      const version = state.version || '1.0.0';
+      const snapshotPath = path.join(historyDir, `${timestamp}_v${version}.json`);
+      fs.writeFileSync(snapshotPath, JSON.stringify(state, null, 2), 'utf8');
+      // 只保留最近 50 个版本
+      const snapshots = fs.readdirSync(historyDir).filter(f => f.endsWith('.json'));
+      if (snapshots.length > 50) {
+        snapshots.sort();
+        for (const old of snapshots.slice(0, snapshots.length - 50)) {
+          try {
+            fs.unlinkSync(path.join(historyDir, old));
+          } catch {
+            // Ignore cleanup errors
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[AgentSoul Storage] Failed to save version snapshot:', e);
+    }
   }
 
   /**
@@ -592,6 +694,141 @@ export class StorageManager {
       return true;
     } catch (e) {
       console.error('Failed to archive topic:', e);
+      return false;
+    }
+  }
+
+  /**
+   * 检测主题记忆冲突
+   * @param topic - 主题名称
+   * @param newContent - 新内容
+   * @returns 冲突信息，如果没有冲突返回 null
+   */
+  detectConflict(topic: string, newContent: string): MemoryConflict | null {
+    const existing = this.readTopicMemory(topic);
+    if (existing === null || existing.length === 0) {
+      return null; // 不存在，不冲突
+    }
+
+    // 冲突检测策略：
+    // 1. 如果新内容长度是现有内容的 10x+，可能是误覆盖
+    if (newContent.length > existing.length * 10) {
+      return {
+        topic,
+        existing_content: existing.length > 200 ? existing.slice(0, 200) + '...' : existing,
+        new_content: newContent.length > 200 ? newContent.slice(0, 200) + '...' : newContent,
+        conflict_type: 'size_mismatch',
+        resolution: null,
+      };
+    }
+
+    // 2. 检查时间戳冲突 - 简单启发式检测
+    const datePattern = /\d{4}-\d{2}-\d{2}/g;
+    const existingDates = existing.match(datePattern);
+    const newDates = newContent.match(datePattern);
+    if (existingDates && newDates && existingDates[0] !== newDates[0]) {
+      return {
+        topic,
+        existing_content: existing,
+        new_content: newContent,
+        conflict_type: 'timestamp_mismatch',
+        resolution: null,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * 获取人格配置版本信息
+   * @returns 版本信息，包含版本号、时间戳和校验和
+   */
+  getPersonaVersion(): { version: string; timestamp: string; checksum: string } {
+    const configPath = path.join(PROJECT_ROOT, 'config', 'persona.yaml');
+    if (!fs.existsSync(configPath)) {
+      return {
+        version: '0.0.0',
+        timestamp: new Date().toISOString(),
+        checksum: '',
+      };
+    }
+
+    const content = fs.readFileSync(configPath);
+    const checksum = crypto.createHash('md5').update(content).digest('hex').slice(0, 8);
+    const mtime = fs.statSync(configPath).mtime;
+    const version = `1.0.${Math.floor(mtime.getTime() / 1000)}`;
+
+    return {
+      version,
+      timestamp: mtime.toISOString(),
+      checksum,
+    };
+  }
+
+  /**
+   * 列出灵魂状态的可用版本快照
+   * @returns 版本信息列表
+   */
+  listSoulStateVersions(): Array<{ version: string; timestamp: string }> {
+    const historyDir = path.join(DATA_ROOT, 'soul', 'versions');
+    const versions: Array<{ version: string; timestamp: string }> = [];
+
+    if (!fs.existsSync(historyDir)) {
+      return versions;
+    }
+
+    const files = fs.readdirSync(historyDir);
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const match = file.match(/^(\d{8}_\d{6})_v(.+)\.json$/);
+        if (match) {
+          const [, timestampStr, version] = match;
+          const year = timestampStr.slice(0, 4);
+          const month = timestampStr.slice(4, 6);
+          const day = timestampStr.slice(6, 8);
+          const hour = timestampStr.slice(9, 11);
+          const minute = timestampStr.slice(11, 13);
+          const timestamp = `${year}-${month}-${day}T${hour}:${minute}:00Z`;
+          versions.push({ version, timestamp });
+        }
+      }
+    }
+
+    return versions.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  }
+
+  /**
+   * 回滚灵魂状态到指定版本
+   * @param version - 目标版本标识
+   * @returns 是否回滚成功
+   */
+  rollbackSoulState(version: string): boolean {
+    const historyDir = path.join(DATA_ROOT, 'soul', 'versions');
+    if (!fs.existsSync(historyDir)) {
+      console.error('No version history found');
+      return false;
+    }
+
+    let foundPath: string | null = null;
+    const files = fs.readdirSync(historyDir);
+    for (const file of files) {
+      if (file.includes(`_v${version}.json`) || file.endsWith(`_v${version}.json`)) {
+        foundPath = path.join(historyDir, file);
+        break;
+      }
+    }
+
+    if (!foundPath || !fs.existsSync(foundPath)) {
+      console.error(`Version ${version} not found`);
+      return false;
+    }
+
+    try {
+      const content = fs.readFileSync(foundPath, 'utf8');
+      const state = JSON.parse(content) as SoulState;
+      return this.writeSoulState(state);
+    } catch (e) {
+      console.error('Failed to rollback:', e);
       return false;
     }
   }

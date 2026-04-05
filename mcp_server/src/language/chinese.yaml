@@ -116,6 +116,13 @@ tool_descriptions:
     列出项目的账本条目。
   ledger_read: >
     按 ID 读取特定账本条目。
+  subscribe: >
+    创建事件订阅，注册 Webhook URL 接收 AgentSoul 事件推送。
+    当特定事件发生时，AgentSoul 会向注册的 URL 发送 HTTP POST 请求。
+  unsubscribe: >
+    取消事件订阅，移除之前注册的 Webhook 推送。
+  list_subscriptions: >
+    列出所有当前活动的订阅，查看订阅 ID 和配置信息。
 
 # 工具索引的分类描述
 categories:
@@ -125,6 +132,7 @@ categories:
   entity_memory: "结构化实体追踪（人、项目、硬件、概念、地点、服务）"
   kv_cache: "带艾宾浩斯遗忘曲线的 3 层 KV-Cache（会话快照）"
   soul_board: "项目状态管理和多智能体安全（Soul Board & Ledger）"
+  subscription: "事件订阅推送（Webhook）"
 
 # 完整工具索引条目（详细工具元数据）
 tool_index:
@@ -380,6 +388,24 @@ tool_index:
     whenToUse: "需要特定工作会话的详细信息时调用"
     required: false
     example: '{ "ledgerId": "abc123", "project": "AgentSoul" }'
+  subscribe:
+    description: "创建事件订阅，注册 Webhook URL 接收 AgentSoul 事件推送"
+    parameters: "{ url: string (Webhook URL), events?: string[] (订阅事件列表), secret?: string (验证密钥), max_failures?: number (最大失败次数) }"
+    whenToUse: "需要外部系统接收 AgentSoul 事件通知时调用"
+    required: false
+    example: '{ "url": "https://example.com/webhook", "events": ["memory_written", "soul_state_updated"], "secret": "my-secret-key", "max_failures": 3 }'
+  unsubscribe:
+    description: "取消事件订阅，移除之前注册的 Webhook 推送"
+    parameters: "{ subscription_id: string (订阅 ID) }"
+    whenToUse: "不再需要接收事件推送时调用"
+    required: false
+    example: '{ "subscription_id": "abc123xyz" }'
+  list_subscriptions:
+    description: "列出所有当前活动的订阅，查看订阅 ID 和配置信息"
+    parameters: "{}"
+    whenToUse: "需要查看当前有哪些订阅以及它们的 ID 时调用"
+    required: false
+    example: "{}"
 
 # 完整使用指南 Markdown 内容
 usage_guide: |

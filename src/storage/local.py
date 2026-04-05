@@ -1,0 +1,459 @@
+"""
+AgentSoul · 本地文件系统存储实现
+=============================
+
+实现统一抽象接口的本地文件存储，用于：
+- OpenAI 链路直接存储
+- 独立运行模式存储
+- 向后兼容传统文件布局
+"""
+
+import os
+import json
+import yaml
+import hashlib
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from common import get_project_root, log
+from src.abstract import (
+    BasePersonaStorage,
+    BaseSoulStateStorage,
+    BaseMemoryStorage,
+    BaseSkillStorage,
+    SoulVersion,
+    MemoryConflict,
+)
+
+
+class LocalPersonaStorage(BasePersonaStorage):
+    """本地文件系统人格存储实现"""
+
+    def __init__(self, project_root: Optional[Path] = None):
+        self.project_root = project_root or get_project_root()
+        self.config_path = self.project_root / "config" / "persona.yaml"
+        self._version_cache: Optional[SoulVersion] = None
+
+    def read_persona_config(self) -> Dict[str, Any]:
+        """读取人格配置"""
+        if not self.config_path.exists():
+            log(f"Persona config not found at {self.config_path}, using defaults", level="WARNING")
+            return {
+                "ai": {
+                    "name": "Agent",
+                    "nickname": "",
+                    "naming_mode": "default",
+                    "role": "AI Assistant",
+                    "personality": [],
+                    "core_values": [],
+                    "interaction_style": {},
+                },
+                "master": {
+                    "name": "",
+                    "nickname": [],
+                    "timezone": "Asia/Shanghai",
+                    "labels": [],
+                },
+            }
+
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    def write_persona_config(self, config: Dict[str, Any]) -> bool:
+        """写入人格配置，带原子保证"""
+        try:
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            # 原子写入：先写临时文件再重命名
+            temp_path = f"{self.config_path}.tmp.{int(datetime.now().timestamp())}"
+            with open(temp_path, "w", encoding="utf-8") as f:
+                yaml.dump(config, f, allow_unicode=True, sort_keys=False)
+            os.replace(temp_path, self.config_path)
+            # 版本缓存失效
+            self._version_cache = None
+            return True
+        except Exception as e:
+            log(f"Failed to write persona config: {e}", level="ERROR")
+            return False
+
+    def get_version(self) -> SoulVersion:
+        """获取当前人格版本，基于文件内容哈希"""
+        if self._version_cache is not None:
+            return self._version_cache
+
+        if not self.config_path.exists():
+            self._version_cache = SoulVersion(
+                version="0.0.0",
+                timestamp=datetime.now().isoformat(),
+                checksum=None,
+                description="Empty/default configuration"
+            )
+            return self._version_cache
+
+        # 计算内容哈希作为版本标识
+        with open(self.config_path, "rb") as f:
+            content = f.read()
+        checksum = hashlib.md5(content).hexdigest()[:8]
+        mtime = datetime.fromtimestamp(self.config_path.stat().st_mtime)
+
+        self._version_cache = SoulVersion(
+            version=f"1.0.{int(mtime.timestamp())}",
+            timestamp=mtime.isoformat(),
+            checksum=checksum,
+            description=f"Persona config modified at {mtime}"
+        )
+        return self._version_cache
+
+
+class LocalSoulStateStorage(BaseSoulStateStorage):
+    """本地文件系统灵魂状态存储实现"""
+
+    def __init__(self, project_root: Optional[Path] = None):
+        self.project_root = project_root or get_project_root()
+        self.state_path = self.project_root / "data" / "soul" / "soul_variable" / "state_vector.json"
+        # 版本历史存储在同目录
+        self.history_dir = self.project_root / "data" / "soul" / "versions"
+
+    def read_soul_state(self) -> Dict[str, Any]:
+        """读取灵魂状态"""
+        if not self.state_path.exists():
+            # 返回默认状态
+            return {
+                "version": "1.0.0",
+                "pleasure": 0.3,
+                "arousal": 0.2,
+                "dominance": 0.3,
+                "last_updated": None,
+                "history": [],
+            }
+
+        try:
+            with open(self.state_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            log(f"Failed to read soul state: {e}, using defaults", level="ERROR")
+            return {
+                "version": "1.0.0",
+                "pleasure": 0.3,
+                "arousal": 0.2,
+                "dominance": 0.3,
+                "last_updated": None,
+                "history": [],
+            }
+
+    def write_soul_state(self, state: Dict[str, Any]) -> bool:
+        """写入灵魂状态，带原子保证和版本快照"""
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # 确保版本字段存在
+            if "version" not in state:
+                state["version"] = "1.0.0"
+
+            # 原子写入
+            temp_path = f"{self.state_path}.tmp.{int(datetime.now().timestamp())}"
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2, ensure_ascii=False)
+            os.replace(temp_path, self.state_path)
+
+            # 可选：保存版本快照用于回滚
+            self._save_version_snapshot(state)
+
+            return True
+        except Exception as e:
+            log(f"Failed to write soul state: {e}", level="ERROR")
+            return False
+
+    def _save_version_snapshot(self, state: Dict[str, Any]) -> None:
+        """保存版本快照用于回滚"""
+        try:
+            self.history_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            version = state.get("version", "1.0.0")
+            snapshot_path = self.history_dir / f"{timestamp}_v{version}.json"
+            with open(snapshot_path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2, ensure_ascii=False)
+            # 只保留最近 50 个版本
+            snapshots = sorted(self.history_dir.glob("*.json"))
+            if len(snapshots) > 50:
+                for old in snapshots[:-50]:
+                    old.unlink()
+        except Exception as e:
+            log(f"Failed to save version snapshot: {e}", level="DEBUG")
+
+    def list_versions(self) -> List[SoulVersion]:
+        """列出所有可用版本"""
+        versions: List[SoulVersion] = []
+        if not self.history_dir.exists():
+            return versions
+
+        for snap in self.history_dir.glob("*.json"):
+            try:
+                mtime = datetime.fromtimestamp(snap.stat().st_mtime)
+                name_parts = snap.stem.split("_v")
+                version = name_parts[-1] if len(name_parts) > 1 else "unknown"
+                versions.append(SoulVersion(
+                    version=version,
+                    timestamp=mtime.isoformat(),
+                    checksum=None,
+                    description=f"Snapshot from {mtime}"
+                ))
+            except Exception:
+                continue
+
+        return sorted(versions, key=lambda v: v.timestamp, reverse=True)
+
+    def rollback(self, to_version: str) -> bool:
+        """回滚到指定版本"""
+        if not self.history_dir.exists():
+            log("No version history found", level="ERROR")
+            return False
+
+        # 查找匹配的版本快照
+        found: Optional[Path] = None
+        for snap in self.history_dir.glob("*.json"):
+            if to_version in snap.name:
+                found = snap
+                break
+
+        if found is None:
+            log(f"Version {to_version} not found", level="ERROR")
+            return False
+
+        try:
+            with open(found, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            return self.write_soul_state(state)
+        except Exception as e:
+            log(f"Failed to rollback: {e}", level="ERROR")
+            return False
+
+
+class LocalMemoryStorage(BaseMemoryStorage):
+    """本地文件系统分层记忆存储实现"""
+
+    def __init__(self, project_root: Optional[Path] = None):
+        self.project_root = project_root or get_project_root()
+        self.base_dir = self.project_root / "data" / "memory"
+
+    def _get_path(self, period: str, identifier: str) -> Path:
+        """获取记忆文件路径"""
+        return self.base_dir / period / f"{identifier}.md"
+
+    def _ensure_parent(self, path: Path) -> None:
+        """确保父目录存在"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _sanitize_topic(topic: str) -> str:
+        """净化主题名称，移除危险字符"""
+        return "".join(c for c in topic if c.isalnum() or c in "-_")
+
+    def read_daily_memory(self, date: str) -> Optional[str]:
+        path = self._get_path("day", date)
+        if not path.exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def write_daily_memory(self, date: str, content: str, append: bool = False) -> bool:
+        path = self._get_path("day", date)
+        return self._atomic_write(path, content, append)
+
+    def read_weekly_memory(self, year_week: str) -> Optional[str]:
+        path = self._get_path("week", year_week)
+        if not path.exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def write_weekly_memory(self, year_week: str, content: str, append: bool = False) -> bool:
+        path = self._get_path("week", year_week)
+        return self._atomic_write(path, content, append)
+
+    def read_monthly_memory(self, year_month: str) -> Optional[str]:
+        path = self._get_path("month", year_month)
+        if not path.exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def write_monthly_memory(self, year_month: str, content: str, append: bool = False) -> bool:
+        path = self._get_path("month", year_month)
+        return self._atomic_write(path, content, append)
+
+    def read_yearly_memory(self, year: str) -> Optional[str]:
+        path = self._get_path("year", year)
+        if not path.exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def write_yearly_memory(self, year: str, content: str, append: bool = False) -> bool:
+        path = self._get_path("year", year)
+        return self._atomic_write(path, content, append)
+
+    def read_topic_memory(self, topic: str) -> Optional[str]:
+        # 先试活跃目录，再试归档
+        sanitized = self._sanitize_topic(topic)
+        path = self.base_dir / "topic" / f"{sanitized}.md"
+        if path.exists():
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        # 试归档
+        archive_path = self.base_dir / "topic" / "archive" / f"{sanitized}.md"
+        if archive_path.exists():
+            with open(archive_path, "r", encoding="utf-8") as f:
+                return f.read()
+        return None
+
+    def write_topic_memory(self, topic: str, content: str, append: bool = False) -> bool:
+        sanitized = self._sanitize_topic(topic)
+        path = self.base_dir / "topic" / f"{sanitized}.md"
+        return self._atomic_write(path, content, append)
+
+    def _atomic_write(self, path: Path, content: str, append: bool) -> bool:
+        """原子写入，支持追加模式"""
+        try:
+            self._ensure_parent(path)
+            temp_path = f"{path}.tmp.{int(datetime.now().timestamp())}"
+
+            if append and path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    existing = f.read()
+                content = existing + "\n\n" + content
+
+            with open(temp_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(temp_path, path)
+            return True
+        except Exception as e:
+            log(f"Failed to write {path}: {e}", level="ERROR")
+            return False
+
+    def list_topics(self, status: str = "active") -> List[Dict[str, str]]:
+        results: List[Dict[str, str]] = []
+
+        if status in ["active", "all"]:
+            active_dir = self.base_dir / "topic"
+            if active_dir.exists():
+                for file in active_dir.glob("*.md"):
+                    if file.name != "archive":
+                        results.append({
+                            "name": file.stem,
+                            "status": "active",
+                            "path": str(file)
+                        })
+
+        if status in ["archived", "all"]:
+            archive_dir = self.base_dir / "topic" / "archive"
+            if archive_dir.exists():
+                for file in archive_dir.glob("*.md"):
+                    results.append({
+                        "name": file.stem,
+                        "status": "archived",
+                        "path": str(file)
+                    })
+
+        return sorted(results, key=lambda x: x["name"])
+
+    def archive_topic(self, topic: str) -> bool:
+        sanitized = self._sanitize_topic(topic)
+        active_path = self.base_dir / "topic" / f"{sanitized}.md"
+        archive_path = self.base_dir / "topic" / "archive" / f"{sanitized}.md"
+
+        if not active_path.exists():
+            log(f"Topic {topic} not found", level="ERROR")
+            return False
+
+        try:
+            archive_path.parent.mkdir(parents=True, exist_ok=True)
+            if archive_path.exists():
+                archive_path.unlink()
+            os.rename(active_path, archive_path)
+            return True
+        except Exception as e:
+            log(f"Failed to archive topic: {e}", level="ERROR")
+            return False
+
+    def detect_conflict(self, topic: str, new_content: str) -> Optional[MemoryConflict]:
+        """检测记忆冲突"""
+        existing = self.read_topic_memory(topic)
+        if existing is None or len(existing.strip()) == 0:
+            return None  # 不存在，不冲突
+
+        # 简单冲突检测策略：
+        # 1. 如果新内容长度是现有内容的 10x+，可能是误覆盖
+        if len(new_content) > len(existing) * 10:
+            return MemoryConflict(
+                topic=topic,
+                existing_content=existing[:200] + ("..." if len(existing) > 200 else ""),
+                new_content=new_content[:200] + ("..." if len(new_content) > 200 else ""),
+                conflict_type="size_mismatch",
+                resolution=None
+            )
+
+        # 2. 检查时间戳冲突（如果内容中包含 ISO 日期）
+        # 简单检测：如果现有有日期，新内容也有，但不同
+        # 这个检测比较启发式，主要防止手滑覆盖不同日期的对话
+        import re
+        date_pattern = r'\d{4}-\d{2}-\d{2}'
+        existing_dates = re.findall(date_pattern, existing)
+        new_dates = re.findall(date_pattern, new_content)
+        if existing_dates and new_dates and existing_dates[0] != new_dates[0]:
+            return MemoryConflict(
+                topic=topic,
+                existing_content=existing,
+                new_content=new_content,
+                conflict_type="timestamp_mismatch",
+                resolution=None
+            )
+
+        return None
+
+    def resolve_conflict(self, conflict: MemoryConflict, resolution: str) -> bool:
+        """解决记忆冲突
+        resolution: "keep_existing", "overwrite", "merge_append"
+        """
+        if resolution == "keep_existing":
+            # 什么都不做，保留原有
+            return True
+        elif resolution == "overwrite":
+            # 直接覆盖
+            return self.write_topic_memory(conflict.topic, conflict.new_content, append=False)
+        elif resolution == "merge_append":
+            # 追加合并
+            existing = self.read_topic_memory(conflict.topic) or ""
+            merged = existing + "\n\n---\n" + conflict.new_content
+            return self.write_topic_memory(conflict.topic, merged, append=False)
+        else:
+            log(f"Unknown resolution strategy: {resolution}", level="ERROR")
+            return False
+
+
+class LocalSkillStorage(BaseSkillStorage):
+    """本地文件系统技能规则存储实现"""
+
+    def __init__(self, project_root: Optional[Path] = None):
+        self.project_root = project_root or get_project_root()
+        self.rules_dir = self.project_root / "src"
+
+    def read_base_rule(self, name: str) -> Optional[str]:
+        """读取基础规则，name 是文件名（不带 .md）"""
+        path = self.rules_dir / f"{name}.md"
+        if not path.exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def list_available_rules(self) -> List[str]:
+        """列出所有可用基础规则"""
+        rules: List[str] = []
+        for file in self.rules_dir.glob("*.md"):
+            if file.stem in ["SKILL", "soul_base", "memory_base", "master_base", "secure_base", "skills_base", "tasks_base"]:
+                rules.append(file.stem)
+        return sorted(rules)
