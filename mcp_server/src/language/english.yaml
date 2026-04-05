@@ -29,6 +29,10 @@ tool_descriptions:
     Get the current persona configuration (agent identity and user profile).
     Call this at conversation startup to know who you are and who the user is.
     After calling this, you MUST also call get_mcp_usage_guide to get the workflow instructions.
+  write_persona_config: >
+    Write and update the persona configuration (agent identity and user profile).
+    Call this after updating agent name, role, personality or user information.
+    After writing, triggers the persona_updated event to all subscribers.
   get_soul_state: >
     Read current PAD affective state vector (pleasure, arousal, dominance).
     Call this before responding to understand your current emotional state.

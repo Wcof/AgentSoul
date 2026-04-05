@@ -17,6 +17,7 @@ const storage = new StorageManager();
  */
 const TOOL_TO_CATEGORY: Record<string, string> = {
   get_persona_config: 'soul',
+  write_persona_config: 'soul',
   get_soul_state: 'soul',
   update_soul_state: 'soul',
   get_base_rules: 'soul',
@@ -481,6 +482,70 @@ export async function handleGetPersonaVersion(): Promise<ToolResponse> {
     content: [{
       type: 'text',
       text: JSON.stringify(version, null, 2),
+    }],
+  };
+}
+
+/** 写入人格配置的输入参数Schema */
+export const WritePersonaConfigSchema = z.object({
+  /** AI 代理配置 */
+  ai: z.object({
+    /** Agent 名称 */
+    name: z.string(),
+    /** Agent 昵称 */
+    nickname: z.string(),
+    /** 命名模式 */
+    naming_mode: z.string(),
+    /** 角色描述 */
+    role: z.string(),
+    /** 个性特征列表 */
+    personality: z.array(z.string()),
+    /** 核心价值观列表 */
+    core_values: z.array(z.string()),
+    /** 交互风格 */
+    interaction_style: z.record(z.string(), z.any()),
+  }),
+  /** 主人（用户）配置 */
+  master: z.object({
+    /** 用户名称 */
+    name: z.string(),
+    /** 用户昵称列表 */
+    nickname: z.array(z.string()),
+    /** 用户时区 */
+    timezone: z.string(),
+    /** 用户标签/兴趣列表 */
+    labels: z.array(z.string()),
+  }),
+});
+
+/**
+ * 写入人格配置
+ * @param params - 完整的人格配置
+ * @returns 写入结果
+ */
+export async function handleWritePersonaConfig(
+  params: z.infer<typeof WritePersonaConfigSchema>
+): Promise<ToolResponse> {
+  const success = storage.writePersonaConfig(params);
+
+  if (!success) {
+    throw new McpError(ErrorCode.InternalError, 'Failed to write persona config to disk');
+  }
+
+  const timestamp = new Date().toISOString();
+  triggerEvent('persona_updated', {
+    config: params,
+    timestamp,
+  });
+
+  const version = storage.getPersonaVersion();
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        success: true,
+        version,
+      }, null, 2),
     }],
   };
 }

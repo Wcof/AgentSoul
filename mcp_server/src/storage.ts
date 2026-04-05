@@ -293,6 +293,35 @@ export class StorageManager {
   }
 
   /**
+   * 写入人格配置
+   * @param config - 人格配置对象
+   * @returns 是否写入成功
+   */
+  writePersonaConfig(config: PersonaConfig): boolean {
+    const configPath = path.join(PROJECT_ROOT, 'config', 'persona.yaml');
+
+    // Convert back to YAML format expected by the project
+    const yamlContent = yaml.dump({
+      agent: {
+        name: config.ai.name,
+        nickname: config.ai.nickname,
+        role: config.ai.role,
+        personality: config.ai.personality,
+        core_values: config.ai.core_values,
+        interaction_style: config.ai.interaction_style,
+      },
+      master: {
+        name: config.master.name,
+        nickname: config.master.nickname,
+        timezone: config.master.timezone,
+        labels: config.master.labels,
+      },
+    });
+
+    return writeFile(configPath, yamlContent);
+  }
+
+  /**
    * 读取基础规则文件
    * @param filename - 规则文件名
    * @returns 文件内容或 null

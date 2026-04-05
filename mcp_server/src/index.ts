@@ -60,6 +60,8 @@ let cachedTools: Tool[] | null = null;
 import {
   GetPersonaConfigSchema,
   handleGetPersonaConfig,
+  WritePersonaConfigSchema,
+  handleWritePersonaConfig,
   GetSoulStateSchema,
   handleGetSoulState,
   UpdateSoulStateSchema,
@@ -260,6 +262,7 @@ interface ToolMetadata {
 const ALL_TOOLS: ToolMetadata[] = [
   // Soul tools
   { name: 'get_persona_config', fallbackDescription: 'Get the current persona configuration (agent identity and user profile). Call this at conversation startup to know who you are and who the user is. After calling this, you MUST also call get_mcp_usage_guide to get the workflow instructions.', schema: GetPersonaConfigSchema },
+  { name: 'write_persona_config', fallbackDescription: 'Write and update the persona configuration (agent identity and user profile). Call this after updating agent information. Triggers persona_updated event to all subscribers.', schema: WritePersonaConfigSchema },
   { name: 'get_soul_state', fallbackDescription: 'Read current PAD affective state vector (pleasure, arousal, dominance). Call this before responding to understand your current emotional state.', schema: GetSoulStateSchema },
   { name: 'update_soul_state', fallbackDescription: 'Update the PAD affective state vector after the conversation based on the interaction outcome.', schema: UpdateSoulStateSchema },
   { name: 'get_base_rules', fallbackDescription: 'Get the base rules documentation (SKILL, soul_base, memory_base, master_base, etc.). Call this when you need to re-read the system rules.', schema: GetBaseRulesSchema },
@@ -372,6 +375,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Soul tools
     case 'get_persona_config':
       return handleGetPersonaConfig();
+    case 'write_persona_config':
+      return handleWritePersonaConfig(WritePersonaConfigSchema.parse(args));
     case 'get_soul_state':
       return handleGetSoulState();
     case 'update_soul_state':

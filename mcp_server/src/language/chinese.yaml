@@ -29,6 +29,10 @@ tool_descriptions:
     获取当前人格配置（AI 身份和用户档案）。
     在对话启动时调用此工具，了解你是谁以及用户是谁。
     调用此工具后，必须再调用 get_mcp_usage_guide 获取工作流程说明。
+  write_persona_config: >
+    写入更新人格配置（AI 身份和用户档案）。
+    更新 AI 名称、角色、性格或用户信息后调用。
+    写入后会触发 persona_updated 事件推送给所有订阅者。
   get_soul_state: >
     读取当前 PAD 情感状态向量（愉悦度、唤醒度、支配度）。
     响应前调用此工具，了解你当前的情绪状态。
