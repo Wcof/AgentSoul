@@ -9,7 +9,7 @@ import argparse
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import yaml
 
@@ -30,7 +30,7 @@ def _check_file_exists(file_path: Path, error_msg: str) -> None:
         sys.exit(1)
 
 
-def _load_config(config_path: Path) -> Dict[str, Any]:
+def _load_config(config_path: Path) -> dict[str, Any]:
     try:
         with open(config_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}

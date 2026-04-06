@@ -190,7 +190,7 @@ class TestPathCompat(unittest.TestCase):
         self.assertFalse(results["/agent/memory_bank/test2.md"].is_legacy)
 
     def test_cache_cleared(self):
-        result1 = self.resolver.resolve("/xiaonuan/test.md", check_existence=False)
+        self.resolver.resolve("/xiaonuan/test.md", check_existence=False)
         self.assertIn("/xiaonuan/test.md", self.resolver._cache)
 
         self.resolver.clear_cache()
@@ -318,7 +318,6 @@ class TestInstallScript(unittest.TestCase):
             config_dir = Path(test_dir) / "config"
             config_dir.mkdir(parents=True, exist_ok=True)
             persona_path = config_dir / "persona.yaml"
-            project_root = Path(__file__).parent.parent
 
             create_default_persona(persona_path)
             with open(persona_path, encoding="utf-8") as f:
