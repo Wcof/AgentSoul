@@ -710,10 +710,23 @@ def confirm_install(scope: str) -> bool:
 
 
 def get_openclaw_workspace() -> Optional[Path]:
+    """Find OpenClaw workspace location.
+
+    Checks standard install locations and prompts user for custom path if not found.
+    Returns None if OpenClaw is not detected.
+    """
     default_paths = [
         Path.home() / ".openclaw" / "workspace",
         Path.home() / "openclaw" / "workspace",
     ]
+
+    # First check if any of the default paths exist
+    openclaw_path_exists = any(path.exists() for path in default_paths)
+    if not openclaw_path_exists:
+        log("❌ 未检测到 OpenClaw 安装", "ERROR")
+        log("   AgentSoul 需要在已安装 OpenClaw 的环境下才能安装", "ERROR")
+        log("   请先安装 OpenClaw 后再运行此命令", "ERROR")
+        return None
 
     for path in default_paths:
         marker = path / "_agentsoul_installed"
@@ -724,7 +737,7 @@ def get_openclaw_workspace() -> Optional[Path]:
         return default_paths[0]
 
     while True:
-        custom_path = input("\n请输入 OpenClaw workspace 路径（直接回车使用默认路径）: ").strip()
+        custom_path = input("\n请输入 OpenClaw workspace 路径（直接回车使用默认路径): ").strip()
         if not custom_path:
             path = default_paths[0]
         else:
@@ -747,6 +760,7 @@ def install_openclaw(scope: str) -> None:
 
     workspace = get_openclaw_workspace()
     if not workspace:
+        # get_openclaw_workspace already prints error message if OpenClaw not installed
         return
 
     installer = OpenClawInstaller(PROJECT_ROOT, workspace)

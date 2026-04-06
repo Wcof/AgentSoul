@@ -9,6 +9,7 @@ AgentSoul · 本地文件系统存储实现
 """
 
 import os
+import re
 import json
 import yaml
 import hashlib
@@ -261,9 +262,249 @@ class LocalMemoryStorage(BaseMemoryStorage):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
 
+    @staticmethod
+    def _parse_date(date: str) -> Optional[tuple[int, int, int]]:
+        """Parse date string to year, month, day components."""
+        match = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', date)
+        if not match:
+            return None
+        try:
+            year = int(match.group(1))
+            month = int(match.group(2))
+            day = int(match.group(3))
+            if 1 <= month <= 12 and 1 <= day <= 31:
+                # Verify the date actually exists (e.g., not February 30)
+                date_obj = datetime(year, month, day)
+                if date_obj.year == year and date_obj.month == month and date_obj.day == day:
+                    return (year, month, day)
+            return None
+        except ValueError:
+            return None
+
+    def _date_to_year_week(self, date: str) -> Optional[str]:
+        """Convert YYYY-MM-DD date to YYYY-WW format."""
+        parsed = self._parse_date(date)
+        if not parsed:
+            return None
+        year, month, day = parsed
+        date_obj = datetime(year, month, day)
+        start_of_year = datetime(year, 1, 1)
+        day_of_year = (date_obj - start_of_year).days + 1
+        week = (day_of_year - 1) // 7 + 1
+        return f"{year}-{week:02d}"
+
+    def _date_to_year_month(self, date: str) -> Optional[str]:
+        """Convert YYYY-MM-DD date to YYYY-MM format."""
+        parsed = self._parse_date(date)
+        if not parsed:
+            return None
+        year, month, _ = parsed
+        return f"{year}-{month:02d}"
+
+    def _date_to_year(self, date: str) -> Optional[str]:
+        """Convert YYYY-MM-DD date to YYYY format."""
+        parsed = self._parse_date(date)
+        if not parsed:
+            return None
+        return f"{parsed[0]}"
+
+    def _should_archive_day_to_week(self, current_date: str, archived_date: str) -> bool:
+        """Check if archived_date is old enough to be archived to week."""
+        current_parsed = self._parse_date(current_date)
+        archived_parsed = self._parse_date(archived_date)
+        if not current_parsed or not archived_parsed:
+            return False
+
+        # If different week, should archive
+        current_week = self._date_to_year_week(current_date)
+        archived_week = self._date_to_year_week(archived_date)
+        if current_week != archived_week:
+            return True
+
+        # Same week but more than 7 days ago
+        current_dt = datetime(*current_parsed)
+        archived_dt = datetime(*archived_parsed)
+        days_diff = (current_dt - archived_dt).days
+        return days_diff >= 7
+
+    def _should_archive_week_to_month(self, year_week: str) -> bool:
+        """Check if week should be archived to month."""
+        today = datetime.now()
+        current_year = today.year
+        current_week = (today.timetuple().tm_yday - 1) // 7 + 1
+        try:
+            year, week = map(int, year_week.split('-'))
+            if year < current_year:
+                return True
+            if year > current_year:
+                return False
+            return week < current_week - 1
+        except ValueError:
+            return False
+
+    def _should_archive_month_to_year(self, year_month: str) -> bool:
+        """Check if month should be archived to year."""
+        today = datetime.now()
+        current_year = today.year
+        current_month = today.month
+        try:
+            year, month = map(int, year_month.split('-'))
+            if year < current_year:
+                return True
+            if year > current_year:
+                return False
+            return month < current_month
+        except ValueError:
+            return False
+
+    def _aggregate_daily_to_weekly(self, year_week: str) -> Optional[str]:
+        """Aggregate all daily memories for a week into weekly content."""
+        day_dir = self.base_dir / "day"
+        if not day_dir.exists():
+            return None
+
+        aggregated = f"# Weekly Aggregation: {year_week}\n\n"
+        has_content = False
+
+        for file in day_dir.glob("*.md"):
+            date = file.stem
+            file_week = self._date_to_year_week(date)
+            if file_week == year_week:
+                content = self.read_daily_memory(date)
+                if content and content.strip():
+                    aggregated += f"## {date}\n\n{content.strip()}\n\n---\n\n"
+                    has_content = True
+
+        return aggregated if has_content else None
+
+    def _aggregate_weekly_to_monthly(self, year_month: str) -> Optional[str]:
+        """Aggregate all weekly memories for a month into monthly content."""
+        week_dir = self.base_dir / "week"
+        if not week_dir.exists():
+            return None
+
+        aggregated = f"# Monthly Aggregation: {year_month}\n\n"
+        has_content = False
+
+        for file in week_dir.glob("*.md"):
+            year_week = file.stem
+            if year_week.startswith(year_month[:7]):
+                content = self.read_weekly_memory(year_week)
+                if content and content.strip():
+                    aggregated += f"## {year_week}\n\n{content.strip()}\n\n---\n\n"
+                    has_content = True
+
+        return aggregated if has_content else None
+
+    def _aggregate_monthly_to_yearly(self, year: str) -> Optional[str]:
+        """Aggregate all monthly memories for a year into yearly content."""
+        month_dir = self.base_dir / "month"
+        if not month_dir.exists():
+            return None
+
+        aggregated = f"# Yearly Aggregation: {year}\n\n"
+        has_content = False
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+
+        for file in month_dir.glob("*.md"):
+            year_month = file.stem
+            if year_month.startswith(year):
+                content = self.read_monthly_memory(year_month)
+                if content and content.strip():
+                    month_num = int(year_month.split('-')[1])
+                    month_name = month_names[month_num - 1] if 1 <= month_num <= 12 else str(month_num)
+                    aggregated += f"## {month_name} {year}\n\n{content.strip()}\n\n---\n\n"
+                    has_content = True
+
+        return aggregated if has_content else None
+
+    def _trigger_automatic_archiving(self, current_date: str) -> None:
+        """Trigger automatic hierarchical archiving after writing a new daily memory."""
+        try:
+            import logging
+            day_dir = self.base_dir / "day"
+            if not day_dir.exists():
+                return
+
+            # Step 1: Archive past days to weeks
+            archived_weeks = set()
+            for file in day_dir.glob("*.md"):
+                day_date = file.stem
+                if self._should_archive_day_to_week(current_date, day_date):
+                    year_week = self._date_to_year_week(day_date)
+                    if year_week:
+                        archived_weeks.add(year_week)
+
+            # Aggregate each completed week
+            for year_week in archived_weeks:
+                aggregated = self._aggregate_daily_to_weekly(year_week)
+                if aggregated:
+                    self.write_weekly_memory(year_week, aggregated)
+                    log(f"[AutoArchive] Aggregated daily memories to week {year_week}", "DEBUG")
+
+            # Step 2: Archive past weeks to months
+            week_dir = self.base_dir / "week"
+            if not week_dir.exists():
+                return
+
+            archived_months = set()
+            for file in week_dir.glob("*.md"):
+                year_week = file.stem
+                if self._should_archive_week_to_month(year_week):
+                    try:
+                        # Extract year and get month by calculating the date of the first day of this week
+                        # This gives a more accurate month mapping than week_num // 4
+                        year_str, week_str = year_week.split('-')
+                        year = int(year_str)
+                        week = int(week_str)
+                        # Calculate approximate date of the first day of this week
+                        # January 1 is day 1 of week 1
+                        first_day = datetime(year, 1, 1 + (week - 1) * 7)
+                        month = first_day.month
+                        year_month = f"{year}-{month:02d}"
+                        archived_months.add(year_month)
+                    except ValueError:
+                        continue
+
+            for year_month in archived_months:
+                if self._should_archive_week_to_month(year_month):
+                    aggregated = self._aggregate_weekly_to_monthly(year_month)
+                    if aggregated:
+                        self.write_monthly_memory(year_month, aggregated)
+                        log(f"[AutoArchive] Aggregated weekly memories to month {year_month}", "DEBUG")
+
+            # Step 3: Archive past months to year
+            month_dir = self.base_dir / "month"
+            if not month_dir.exists():
+                return
+
+            archived_years = set()
+            for file in month_dir.glob("*.md"):
+                year_month = file.stem
+                if self._should_archive_month_to_year(year_month):
+                    year = year_month.split('-')[0]
+                    archived_years.add(year)
+
+            for year in archived_years:
+                aggregated = self._aggregate_monthly_to_yearly(year)
+                if aggregated:
+                    self.write_yearly_memory(year, aggregated)
+                    log(f"[AutoArchive] Aggregated monthly memories to year {year}", "DEBUG")
+
+        except Exception as e:
+            # Don't fail the write if auto-archiving fails
+            log(f"Error during automatic archiving: {e}", "WARNING")
+
     def write_daily_memory(self, date: str, content: str, append: bool = False) -> bool:
         path = self._get_path("day", date)
-        return self._atomic_write(path, content, append)
+        success = self._atomic_write(path, content, append)
+        if success:
+            # Trigger automatic hierarchical archiving
+            self._trigger_automatic_archiving(date)
+        return success
 
     def read_weekly_memory(self, year_week: str) -> Optional[str]:
         path = self._get_path("week", year_week)

@@ -259,6 +259,122 @@ class HealthChecker:
 
         return issues
 
+    def _parse_date_from_filename(self, filename: str) -> Optional[datetime]:
+        """从文件名解析日期"""
+        stem = filename.stem
+        try:
+            if len(stem) == 10 and "-" in stem:  # YYYY-MM-DD
+                return datetime.strptime(stem, "%Y-%m-%d")
+            elif len(stem) == 7 and "-" in stem:  # YYYY-MM
+                return datetime.strptime(stem, "%Y-%m")
+            elif len(stem) == 4:  # YYYY
+                return datetime.strptime(stem, "%Y")
+            elif len(stem) == 6 and "-W" in stem:  # YYYY-WW
+                return datetime.strptime(stem + "-1", "%Y-W%w-%w")
+        except ValueError:
+            pass
+        return None
+
+    def _date_to_year_week(self, date: datetime) -> str:
+        """将日期转换为YYYY-WW格式"""
+        week = date.isocalendar()[1]
+        return f"{date.year}-{week:02d}"
+
+    def _date_to_year_month(self, date: datetime) -> str:
+        """将日期转换为YYYY-MM格式"""
+        return f"{date.year}-{date.month:02d}"
+
+    def _date_to_year(self, date: datetime) -> str:
+        """将日期转换为YYYY格式"""
+        return f"{date.year}"
+
+    def check_archival_consistency(self) -> List[HealthIssue]:
+        """检查分层归档一致性 - 自动归档是否正确完成"""
+        issues = []
+        day_dir = self.data_root / "memory" / "day"
+        if not day_dir.exists():
+            return issues
+
+        # 检查所有日记忆，判断是否应该已经被归档但未归档
+        today = datetime.now()
+        day_files = list(day_dir.glob("*.md"))
+
+        for file in day_files:
+            if file.name == ".gitkeep":
+                continue
+
+            date = self._parse_date_from_filename(file)
+            if date is None:
+                continue
+
+            # 判断是否应该归档：
+            # - 超过7天的日记忆应该归档到周
+            days_old = (today - date).days
+            if days_old >= 7:
+                # 应该已经归档到周，检查对应周文件是否存在
+                year_week = self._date_to_year_week(date)
+                week_path = self.data_root / "memory" / "week" / f"{year_week}.md"
+                if not week_path.exists():
+                    issues.append(HealthIssue(
+                        level="warning",
+                        category="memory",
+                        message=f"Daily memory {days_old} days old should be archived to weekly, but weekly file not found",
+                        location=str(file),
+                        fix_suggestion=f"Trigger automatic archiving by writing a new daily memory or manually create {week_path}"
+                    ))
+
+        # 检查周记忆：超过30天的应该归档到月
+        week_dir = self.data_root / "memory" / "week"
+        if week_dir.exists():
+            week_files = list(week_dir.glob("*.md"))
+            for file in week_files:
+                if file.name == ".gitkeep":
+                    continue
+
+                date = self._parse_date_from_filename(file)
+                if date is None:
+                    continue
+
+                days_old = (today - date).days
+                if days_old >= 30:
+                    year_month = self._date_to_year_month(date)
+                    month_path = self.data_root / "memory" / "month" / f"{year_month}.md"
+                    if not month_path.exists():
+                        issues.append(HealthIssue(
+                            level="warning",
+                            category="memory",
+                            message=f"Weekly memory {days_old} days old should be archived to monthly, but monthly file not found",
+                            location=str(file),
+                            fix_suggestion=f"Trigger automatic archiving by writing a new daily memory or manually create {month_path}"
+                        ))
+
+        # 检查月记忆：超过365天的应该归档到年
+        month_dir = self.data_root / "memory" / "month"
+        if month_dir.exists():
+            month_files = list(month_dir.glob("*.md"))
+            for file in month_files:
+                if file.name == ".gitkeep":
+                    continue
+
+                date = self._parse_date_from_filename(file)
+                if date is None:
+                    continue
+
+                days_old = (today - date).days
+                if days_old >= 365:
+                    year = self._date_to_year(date)
+                    year_path = self.data_root / "memory" / "year" / f"{year}.md"
+                    if not year_path.exists():
+                        issues.append(HealthIssue(
+                            level="warning",
+                            category="memory",
+                            message=f"Monthly memory {days_old} days old should be archived to yearly, but yearly file not found",
+                            location=str(file),
+                            fix_suggestion=f"Trigger automatic archiving by writing a new daily memory or manually create {year_path}"
+                        ))
+
+        return issues
+
     def check_memory_files(self, sample_limit: int = 10) -> List[HealthIssue]:
         """检查记忆文件（抽样检查）"""
         issues = []
@@ -319,6 +435,9 @@ class HealthChecker:
                     message=f"Failed to scan directory: {str(e)}",
                     location=str(dir_path)
                 ))
+
+        # Add archival consistency check
+        issues.extend(self.check_archival_consistency())
 
         return issues
 

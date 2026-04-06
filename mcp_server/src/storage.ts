@@ -733,6 +733,346 @@ export class StorageManager {
   }
 
   /**
+   * Parse date identifier to year, month, day components
+   * @param date - Date string in YYYY-MM-DD format
+   * @returns Object with year, month, day numbers or null if invalid
+   */
+  private parseDate(date: string): { year: number; month: number; day: number } | null {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    // Verify the date actually exists (e.g., not February 30)
+    const dateObj = new Date(year, month - 1, day);
+    if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
+      return null;
+    }
+    return { year, month, day };
+  }
+
+  /**
+   * Get year-week identifier for a given date
+   * @param date - Date in YYYY-MM-DD format
+   * @returns Year-week string in YYYY-WW format or null if invalid
+   *
+   * Uses (dayOfYear - 1) // 7 + 1 calculation - simple but good enough for aggregation
+   */
+  private dateToYearWeek(date: string): string | null {
+    const parsed = this.parseDate(date);
+    if (!parsed) return null;
+
+    const dateObj = new Date(parsed.year, parsed.month - 1, parsed.day);
+    const startOfYear = new Date(parsed.year, 0, 1);
+    const dayOfYear = Math.floor((dateObj.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const week = Math.floor((dayOfYear - 1) / 7) + 1;
+    return `${parsed.year}-${week.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Get year-month identifier for a given date
+   * @param date - Date in YYYY-MM-DD format
+   * @returns Year-month string in YYYY-MM format or null if invalid
+   */
+  private dateToYearMonth(date: string): string | null {
+    const parsed = this.parseDate(date);
+    if (!parsed) return null;
+    return `${parsed.year}-${parsed.month.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Get year identifier for a given date
+   * @param date - Date in YYYY-MM-DD format
+   * @returns Year string in YYYY format or null if invalid
+   */
+  private dateToYear(date: string): string | null {
+    const parsed = this.parseDate(date);
+    if (!parsed) return null;
+    return `${parsed.year}`;
+  }
+
+  /**
+   * Check if a date belongs to a past period that should be archived
+   * @param currentDate - The date that was just written (current date)
+   * @param archivedDate - The date to check if it should be archived
+   * @returns True if archivedDate is old enough to be archived
+   */
+  private shouldArchiveDayToWeek(currentDate: string, archivedDate: string): boolean {
+    const parsedCurrent = this.parseDate(currentDate);
+    const parsedArchived = this.parseDate(archivedDate);
+    if (!parsedCurrent || !parsedArchived) return false;
+
+    // If the archived date is from a different week than current date, it should be archived
+    const currentWeek = this.dateToYearWeek(currentDate);
+    const archivedWeek = this.dateToYearWeek(archivedDate);
+    if (currentWeek !== archivedWeek) return true;
+
+    // Same week but more than 7 days ago - should be archived
+    const currentDateObj = new Date(parsedCurrent.year, parsedCurrent.month - 1, parsedCurrent.day);
+    const archivedDateObj = new Date(parsedArchived.year, parsedArchived.month - 1, parsedArchived.day);
+    const daysDiff = Math.floor((currentDateObj.getTime() - archivedDateObj.getTime()) / (1000 * 60 * 60 * 24));
+
+    return daysDiff >= 7;
+  }
+
+  /**
+   * Check if a week should be archived to month
+   * @param yearWeek - Week identifier in YYYY-WW format
+   * @returns True if week belongs to a completed month that should be archived
+   */
+  private shouldArchiveWeekToMonth(yearWeek: string): boolean {
+    // For any week that's not the current week of the current month, it should be archived
+    // We can just always aggregate - the write will happen regardless, but if the month is complete
+    // it gets aggregated to monthly. For our automatic triggering, we just check if this is not the current week
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentWeek = Math.floor((today.getDate() - 1 + this.getDayOfYear(today)) / 7) + 1;
+    const [year, weekStr] = yearWeek.split('-');
+    const week = parseInt(weekStr, 10);
+
+    if (parseInt(year, 10) < currentYear) {
+      return true; // Previous year, definitely should be archived
+    }
+    if (parseInt(year, 10) > currentYear) {
+      return false; // Future, don't archive yet
+    }
+    // Same year - if week is more than 2 weeks behind current, archive
+    return week < currentWeek - 1;
+  }
+
+  /**
+   * Check if a month should be archived to year
+   * @param yearMonth - Month identifier in YYYY-MM format
+   * @returns True if month is completed and should be archived
+   */
+  private shouldArchiveMonthToYear(yearMonth: string): boolean {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    const [year, monthStr] = yearMonth.split('-');
+    const month = parseInt(monthStr, 10);
+
+    if (parseInt(year, 10) < currentYear) {
+      return true; // Previous year, definitely should be archived
+    }
+    if (parseInt(year, 10) > currentYear) {
+      return false; // Future, don't archive yet
+    }
+    // Same year - if month is before current month, it's completed - should archive
+    return month < currentMonth;
+  }
+
+  /**
+   * Get day of year for a date
+   */
+  private getDayOfYear(date: Date): number {
+    const startOfYear = new Date(date.getFullYear(), 0, 1);
+    const diff = date.getTime() - startOfYear.getTime();
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  }
+
+  /**
+   * Aggregate all daily memories for a week into weekly memory content
+   * @param yearWeek - Week identifier
+   * @returns Aggregated content or null if no daily files found
+   */
+  private aggregateDailyToWeekly(yearWeek: string): string | null {
+    const dayDir = path.join(DATA_ROOT, 'memory', 'day');
+    if (!fs.existsSync(dayDir)) return null;
+
+    let aggregated = `# Weekly Aggregation: ${yearWeek}\n\n`;
+    let hasContent = false;
+
+    const files = fs.readdirSync(dayDir);
+    for (const file of files) {
+      if (!file.endsWith('.md')) continue;
+      const date = file.replace('.md', '');
+      const fileWeek = this.dateToYearWeek(date);
+      if (fileWeek === yearWeek) {
+        const content = this.readDailyMemory(date);
+        if (content && content.trim()) {
+          aggregated += `## ${date}\n\n${content.trim()}\n\n---\n\n`;
+          hasContent = true;
+        }
+      }
+    }
+
+    return hasContent ? aggregated : null;
+  }
+
+  /**
+   * Aggregate all weekly memories for a month into monthly memory content
+   * @param yearMonth - Month identifier
+   * @returns Aggregated content or null if no weekly files found
+   */
+  private aggregateWeeklyToMonthly(yearMonth: string): string | null {
+    const weekDir = path.join(DATA_ROOT, 'memory', 'week');
+    if (!fs.existsSync(weekDir)) return null;
+
+    let aggregated = `# Monthly Aggregation: ${yearMonth}\n\n`;
+    let hasContent = false;
+
+    const files = fs.readdirSync(weekDir);
+    for (const file of files) {
+      if (!file.endsWith('.md')) continue;
+      const yearWeek = file.replace('.md', '');
+      // Check if this week belongs to the month
+      // Simple check: starts with YYYY-MM
+      if (yearWeek.startsWith(yearMonth)) {
+        const content = this.readWeeklyMemory(yearWeek);
+        if (content && content.trim()) {
+          aggregated += `## ${yearWeek}\n\n${content.trim()}\n\n---\n\n`;
+          hasContent = true;
+        }
+      }
+    }
+
+    return hasContent ? aggregated : null;
+  }
+
+  /**
+   * Aggregate all monthly memories for a year into yearly memory content
+   * @param year - Year identifier
+   * @returns Aggregated content or null if no monthly files found
+   */
+  private aggregateMonthlyToYearly(year: string): string | null {
+    const monthDir = path.join(DATA_ROOT, 'memory', 'month');
+    if (!fs.existsSync(monthDir)) return null;
+
+    let aggregated = `# Yearly Aggregation: ${year}\n\n`;
+    let hasContent = false;
+
+    const files = fs.readdirSync(monthDir);
+    for (const file of files) {
+      if (!file.endsWith('.md')) continue;
+      const yearMonth = file.replace('.md', '');
+      // Check if this month belongs to the year
+      if (yearMonth.startsWith(year)) {
+        const content = this.readMonthlyMemory(yearMonth);
+        if (content && content.trim()) {
+          const monthName = this.getMonthName(parseInt(yearMonth.split('-')[1], 10));
+          aggregated += `## ${monthName} ${year}\n\n${content.trim()}\n\n---\n\n`;
+          hasContent = true;
+        }
+      }
+    }
+
+    return hasContent ? aggregated : null;
+  }
+
+  /**
+   * Get Chinese month name
+   */
+  private getMonthName(month: number): string {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month - 1] || `${month}`;
+  }
+
+  /**
+   * Trigger automatic hierarchical archiving after writing a new daily memory
+   * @param currentDate - The date that was just written
+   */
+  private triggerAutomaticArchiving(currentDate: string): void {
+    try {
+      const dayDir = path.join(DATA_ROOT, 'memory', 'day');
+      if (!fs.existsSync(dayDir)) return;
+
+      // Step 1: Archive past days to weeks
+      const dayFiles = fs.readdirSync(dayDir);
+      const archivedWeeks = new Set<string>();
+
+      for (const file of dayFiles) {
+        if (!file.endsWith('.md')) continue;
+        const dayDate = file.replace('.md', '');
+        if (this.shouldArchiveDayToWeek(currentDate, dayDate)) {
+          const yearWeek = this.dateToYearWeek(dayDate);
+          if (yearWeek) {
+            archivedWeeks.add(yearWeek);
+          }
+        }
+      }
+
+      // Aggregate each completed week and write to weekly memory
+      for (const yearWeek of archivedWeeks) {
+        const aggregated = this.aggregateDailyToWeekly(yearWeek);
+        if (aggregated) {
+          this.writeWeeklyMemory(yearWeek, aggregated);
+          console.log(`[AgentSoul AutoArchive] Aggregated daily memories to week ${yearWeek}`);
+        }
+      }
+
+      // Step 2: Archive past weeks to months (after day→week is done)
+      const weekDir = path.join(DATA_ROOT, 'memory', 'week');
+      if (!fs.existsSync(weekDir)) return;
+
+      const weekFiles = fs.readdirSync(weekDir);
+      const archivedMonths = new Set<string>();
+
+      for (const file of weekFiles) {
+        if (!file.endsWith('.md')) continue;
+        const yearWeek = file.replace('.md', '');
+        if (this.shouldArchiveWeekToMonth(yearWeek)) {
+          // Extract year and get month by calculating the date of the first day of this week
+          // This gives a more accurate month mapping than weekNum // 4
+          const [yearStr, weekStr] = yearWeek.split('-');
+          const year = parseInt(yearStr, 10);
+          const week = parseInt(weekStr, 10);
+          // Calculate approximate date of the first day of this week
+          // January 1 is day 1 of week 1
+          const firstDay = new Date(year, 0, 1 + (week - 1) * 7);
+          const month = firstDay.getMonth() + 1;
+          const yearMonth = `${year}-${month.toString().padStart(2, '0')}`;
+          archivedMonths.add(yearMonth);
+        }
+      }
+
+      // Aggregate each completed month and write to monthly memory
+      for (const yearMonth of archivedMonths) {
+        if (this.shouldArchiveWeekToMonth(yearMonth)) {
+          const aggregated = this.aggregateWeeklyToMonthly(yearMonth);
+          if (aggregated) {
+            this.writeMonthlyMemory(yearMonth, aggregated);
+            console.log(`[AgentSoul AutoArchive] Aggregated weekly memories to month ${yearMonth}`);
+          }
+        }
+      }
+
+      // Step 3: Archive past months to year (after week→month is done)
+      const monthDir = path.join(DATA_ROOT, 'memory', 'month');
+      if (!fs.existsSync(monthDir)) return;
+
+      const monthFiles = fs.readdirSync(monthDir);
+      const archivedYears = new Set<string>();
+
+      for (const file of monthFiles) {
+        if (!file.endsWith('.md')) continue;
+        const yearMonth = file.replace('.md', '');
+        if (this.shouldArchiveMonthToYear(yearMonth)) {
+          const year = yearMonth.split('-')[0];
+          archivedYears.add(year);
+        }
+      }
+
+      // Aggregate each completed year and write to yearly memory
+      for (const year of archivedYears) {
+        const aggregated = this.aggregateMonthlyToYearly(year);
+        if (aggregated) {
+          this.writeYearlyMemory(year, aggregated);
+          console.log(`[AgentSoul AutoArchive] Aggregated monthly memories to year ${year}`);
+        }
+      }
+    } catch (e) {
+      // Don't fail the write if auto-archiving fails - just log and continue
+      console.error('[AgentSoul AutoArchive] Error during automatic archiving:', e);
+    }
+  }
+
+  /**
    * 写入基于时间的记忆（通用方法）
    * @param period - 时间周期类型
    * @param identifier - 标识符
@@ -753,6 +1093,11 @@ export class StorageManager {
     // If OpenClaw is detected, sync write to it
     if (success) {
       this.syncWriteToOpenClaw(`memory/${period}/${identifier}.md`, content);
+
+      // Trigger automatic hierarchical archiving after writing a new daily memory
+      if (period === 'day') {
+        this.triggerAutomaticArchiving(identifier);
+      }
     }
 
     return success;
