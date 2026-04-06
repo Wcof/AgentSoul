@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict
 
 import yaml
 
@@ -32,17 +32,17 @@ class AgentConfig:
     nickname: str = ""
     naming_mode: str = "default"
     role: str = "AI Assistant"
-    personality: list = field(default_factory=list)
-    core_values: list = field(default_factory=list)
-    interaction_style: dict = field(default_factory=dict)
+    personality: list[str] = field(default_factory=list)
+    core_values: list[str] = field(default_factory=list)
+    interaction_style: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class MasterConfig:
     name: str = ""
-    nickname: list = field(default_factory=list)
+    nickname: list[str] = field(default_factory=list)
     timezone: str = "Asia/Shanghai"
-    labels: list = field(default_factory=list)
+    labels: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -56,7 +56,7 @@ class BehaviorConfig:
     response_length_limit: int = 0
     forbidden_topics: list[str] = field(default_factory=list)
     allowed_topics: list[str] = field(default_factory=list)
-    custom_settings: dict = field(default_factory=dict)
+    custom_settings: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -73,7 +73,7 @@ class ConfigLoader(TTLCacheBase):
     def __init__(self, project_root: Path | None = None, default_ttl: int = 300):
         super().__init__(default_ttl)
         self.project_root = project_root or get_project_root()
-        self._config_cache: dict | None = None
+        self._config_cache: dict[str, Any] | None = None
         self._persona_cache: PersonaConfig | None = None
         self._behavior_cache: BehaviorConfig | None = None
 
@@ -90,7 +90,7 @@ class ConfigLoader(TTLCacheBase):
             return False
         return super()._cache_is_valid()
 
-    def load_yaml(self, file_path: Path) -> dict:
+    def load_yaml(self, file_path: Path) -> dict[str, Any]:
         if not file_path.exists():
             return {}
         with open(file_path, encoding="utf-8") as f:
@@ -150,7 +150,7 @@ class ConfigLoader(TTLCacheBase):
         return value
 
     @staticmethod
-    def _to_list(value: Any) -> list:
+    def _to_list(value: Any) -> list[Any]:
         if isinstance(value, (list, tuple)):
             return list(value)
         if isinstance(value, str):
@@ -175,7 +175,7 @@ class ConfigLoader(TTLCacheBase):
             return "主人"
         return master_name.strip()
 
-    def get_master_nicknames(self, persona_path: Path | None = None) -> list:
+    def get_master_nicknames(self, persona_path: Path | None = None) -> list[str]:
         config = self.load_persona_config(persona_path)
         nicknames = config.master.nickname
         if not nicknames:
@@ -224,7 +224,7 @@ class ConfigLoader(TTLCacheBase):
 
         return errors
 
-    def to_legacy_format(self, persona_path: Path | None = None) -> dict:
+    def to_legacy_format(self, persona_path: Path | None = None) -> dict[str, Any]:
         config = self.load_persona_config(persona_path)
         return {
             "ai": {

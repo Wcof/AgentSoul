@@ -4,21 +4,24 @@ AgentSoul · 健康检测模块测试
 
 测试 HealthChecker 功能
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import unittest
-import tempfile
-from pathlib import Path
 import json
+import tempfile
+import unittest
+from pathlib import Path
+
 import yaml
 
 from src import (
     HealthChecker,
-    HealthReport,
     HealthIssue,
+    HealthReport,
 )
 
 

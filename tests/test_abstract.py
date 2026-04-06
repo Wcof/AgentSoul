@@ -4,28 +4,27 @@ AgentSoul · 核心抽象接口测试
 
 测试统一抽象接口和基础功能
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
 from datetime import datetime
+
 from src.abstract import (
-    BasePersonaStorage,
-    BaseSoulStateStorage,
-    BaseMemoryStorage,
-    BaseSkillStorage,
-    UnifiedSoulStorage,
     InjectionRollback,
     MemoryConflict,
     SoulVersion,
+    UnifiedSoulStorage,
 )
 from src.storage.local import (
-    LocalPersonaStorage,
-    LocalSoulStateStorage,
     LocalMemoryStorage,
+    LocalPersonaStorage,
     LocalSkillStorage,
+    LocalSoulStateStorage,
 )
 
 

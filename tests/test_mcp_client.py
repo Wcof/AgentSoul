@@ -4,13 +4,16 @@ AgentSoul · MCP 客户端测试
 
 测试 MCP 客户端配置和重试机制
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
-from src import McpRetryConfig, McpClientError, McpConnectionError, McpRequestError
+
+from src import McpClientError, McpConnectionError, McpRequestError, McpRetryConfig
 
 
 class TestMcpRetryConfig(unittest.TestCase):

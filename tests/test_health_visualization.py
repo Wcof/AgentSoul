@@ -1,10 +1,12 @@
 """
 Unit tests for health visualization module
 """
+from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from src.health_visualization import HealthChartExporter, HealthRecord
+
+from src.health_visualization import HealthChartExporter
 
 
 class TestHealthVisualization:
@@ -68,7 +70,7 @@ class TestHealthVisualization:
         assert result.exists()
         assert result.stat().st_size > 0
         # Check it contains SVG opening tag
-        with open(result, 'r') as f:
+        with open(result) as f:
             svg_content = f.read()
             assert '<svg' in svg_content
             assert '</svg>' in svg_content

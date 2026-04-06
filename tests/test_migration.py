@@ -82,20 +82,47 @@ class TestMigration(BaseTest):
         with open(self.project_root / "data" / "memory" / "topic" / "test-topic.md", "w", encoding="utf-8") as f:
             f.write("# Test Topic\n\nThis is a test topic for migration testing.")
 
+        # 创建源存储（可被所有测试复用）
+        self.source_p = LocalPersonaStorage(self.project_root)
+        self.source_s = LocalSoulStateStorage(self.project_root)
+        self.source_m = LocalMemoryStorage(self.project_root)
+
     def tearDown(self):
         """清理临时目录"""
         self.temp_dir.cleanup()
 
+    def _create_migrator(self, target_subdir: str, memory_subdir: str | None = None) -> CrossPlatformMigrator:
+        """Helper: 创建迁移器并初始化目标目录
+
+        Args:
+            target_subdir: 目标子目录名称
+            memory_subdir: 如果提供，创建 memory/<memory_subdir> 目录
+
+        Returns:
+            配置好的 CrossPlatformMigrator 实例
+        """
+        target_root = self.project_root / target_subdir
+        target_root.mkdir()
+        (target_root / "config").mkdir()
+        (target_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+
+        if memory_subdir is not None:
+            (target_root / "data" / "memory" / memory_subdir).mkdir(parents=True)
+
+        target_p = LocalPersonaStorage(target_root)
+        target_s = LocalSoulStateStorage(target_root)
+        target_m = LocalMemoryStorage(target_root)
+
+        return CrossPlatformMigrator(
+            (self.source_p, self.source_s, self.source_m),
+            (target_p, target_s, target_m)
+        )
+
     def test_export_archive(self):
         """测试导出归档"""
-        # 创建源存储
-        source_p = LocalPersonaStorage(self.project_root)
-        source_s = LocalSoulStateStorage(self.project_root)
-        source_m = LocalMemoryStorage(self.project_root)
-
         # 导出到 zip
         output_zip = self.project_root / "export_test.zip"
-        result = export_archive((source_p, source_s, source_m), output_zip)
+        result = export_archive((self.source_p, self.source_s, self.source_m), output_zip)
 
         self.assertTrue(result.exists())
         self.assertTrue(result.stat().st_size > 0)
@@ -111,11 +138,8 @@ class TestMigration(BaseTest):
     def test_import_archive(self):
         """测试导入归档"""
         # 先导出
-        source_p = LocalPersonaStorage(self.project_root)
-        source_s = LocalSoulStateStorage(self.project_root)
-        source_m = LocalMemoryStorage(self.project_root)
         export_zip = self.project_root / "export_test.zip"
-        export_archive((source_p, source_s, source_m), export_zip)
+        export_archive((self.source_p, self.source_s, self.source_m), export_zip)
 
         # 创建目标目录
         target_root = self.project_root / "target"
@@ -163,28 +187,13 @@ class TestMigration(BaseTest):
     def test_skip_existing(self):
         """测试跳过已存在文件"""
         # 创建源和目标
-        source_root = self.project_root
-        target_root = self.project_root / "target_skip"
-        target_root.mkdir()
-        (target_root / "config").mkdir()
-        (target_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
-        (target_root / "data" / "memory" / "day").mkdir(parents=True)
+        migrator = self._create_migrator("target_skip", "day")
 
         # 在目标已存在相同内容
+        target_root = self.project_root / "target_skip"
         with open(target_root / "data" / "memory" / "day" / "2026-04-05.md", "w", encoding="utf-8") as f:
             f.write("# 2026-04-05\n\nToday we tested migration.")
 
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
         result = migrator.migrate_all(skip_existing=True)
 
         # 人格应该迁移，但日记忆应该跳过（内容相同）
@@ -193,158 +202,36 @@ class TestMigration(BaseTest):
 
     def test_cross_platform_migrator_initialization(self):
         """测试迁移器初始化"""
-        source_p = LocalPersonaStorage(self.project_root)
-        source_s = LocalSoulStateStorage(self.project_root)
-        source_m = LocalMemoryStorage(self.project_root)
-        target_p = LocalPersonaStorage(self.project_root / "target")
-        target_s = LocalSoulStateStorage(self.project_root / "target")
-        target_m = LocalMemoryStorage(self.project_root / "target")
+        migrator = self._create_migrator("target", None)
 
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
         self.assertIsNotNone(migrator)
-        self.assertEqual(migrator.source_persona, source_p)
-        self.assertEqual(migrator.source_soul, source_s)
-        self.assertEqual(migrator.source_memory, source_m)
+        self.assertEqual(migrator.source_persona, self.source_p)
+        self.assertEqual(migrator.source_soul, self.source_s)
+        self.assertEqual(migrator.source_memory, self.source_m)
 
-    def test_migrate_daily_memory(self):
-        """测试迁移日记忆"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_daily"
-        target_root.mkdir()
-        (target_root / "data" / "memory" / "day").mkdir(parents=True)
+    def test_migrate_all_memory_types(self):
+        """测试各类型记忆迁移（日/周/月/年/主题）"""
+        # 参数化测试所有记忆类型
+        memory_tests = [
+            ("target_daily", "day", "_migrate_daily_memory"),
+            ("target_weekly", "week", "_migrate_weekly_memory"),
+            ("target_monthly", "month", "_migrate_monthly_memory"),
+            ("target_yearly", "year", "_migrate_yearly_memory"),
+            ("target_topic", "topic", "_migrate_topic_memory"),
+        ]
 
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        # 内部方法测试 - 迁移已存在的测试数据
-        errors: list[str] = []
-        result = migrator._migrate_daily_memory(skip_existing=True, errors=errors)
-        # 至少应该完成而不崩溃
-        self.assertGreaterEqual(result, 0)
-
-    def test_migrate_weekly_memory(self):
-        """测试迁移周记忆"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_weekly"
-        target_root.mkdir()
-        (target_root / "data" / "memory" / "week").mkdir(parents=True)
-
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        errors: list[str] = []
-        result = migrator._migrate_weekly_memory(skip_existing=True, errors=errors)
-        self.assertGreaterEqual(result, 0)
-
-    def test_migrate_monthly_memory(self):
-        """测试迁移月记忆"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_monthly"
-        target_root.mkdir()
-        (target_root / "data" / "memory" / "month").mkdir(parents=True)
-
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        errors: list[str] = []
-        result = migrator._migrate_monthly_memory(skip_existing=True, errors=errors)
-        self.assertGreaterEqual(result, 0)
-
-    def test_migrate_yearly_memory(self):
-        """测试迁移年记忆"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_yearly"
-        target_root.mkdir()
-        (target_root / "data" / "memory" / "year").mkdir(parents=True)
-
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        errors: list[str] = []
-        result = migrator._migrate_yearly_memory(skip_existing=True, errors=errors)
-        self.assertGreaterEqual(result, 0)
-
-    def test_migrate_topic_memory(self):
-        """测试迁移主题记忆（包括可能已归档的）"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_topic"
-        target_root.mkdir()
-        (target_root / "data" / "memory" / "topic").mkdir(parents=True)
-
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        errors: list[str] = []
-        result = migrator._migrate_topic_memory(skip_existing=True, errors=errors)
-        self.assertGreaterEqual(result, 0)
+        for target_name, mem_subdir, method_name in memory_tests:
+            with self.subTest(memory_type=mem_subdir):
+                migrator = self._create_migrator(target_name, mem_subdir)
+                errors: list[str] = []
+                method = getattr(migrator, method_name)
+                result = method(skip_existing=True, errors=errors)
+                self.assertGreaterEqual(result, 0)
 
     def test_check_exists_and_skip_same_content(self):
         """测试_check_exists_and_skip 当内容相同时跳过"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_check"
-        target_root.mkdir()
+        migrator = self._create_migrator("target_check", None)
 
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        # 创建一个模拟读取函数返回相同内容
         def mock_read(identifier: str) -> str | None:
             return "test content\nsame for both\n"
 
@@ -354,28 +241,12 @@ class TestMigration(BaseTest):
             skip_existing=True,
             read_func=mock_read
         )
-        # 内容相同应该跳过
         self.assertTrue(should_skip)
 
     def test_check_exists_and_skip_different_content(self):
         """测试_check_exists_and_skip 当内容不同时不跳过"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_check2"
-        target_root.mkdir()
+        migrator = self._create_migrator("target_check2", None)
 
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        # 模拟读取函数返回不同内容
         def mock_read(identifier: str) -> str | None:
             return "different content\n"
 
@@ -385,28 +256,12 @@ class TestMigration(BaseTest):
             skip_existing=True,
             read_func=mock_read
         )
-        # 内容不同不应该跳过
         self.assertFalse(should_skip)
 
     def test_check_exists_and_skip_no_existing(self):
         """测试_check_exists_and_skip 当目标不存在时不跳过"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_check3"
-        target_root.mkdir()
+        migrator = self._create_migrator("target_check3", None)
 
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
-
-        # 模拟读取函数返回 None（不存在）
         def mock_read(identifier: str) -> str | None:
             return None
 
@@ -416,26 +271,11 @@ class TestMigration(BaseTest):
             skip_existing=True,
             read_func=mock_read
         )
-        # 目标不存在不应该跳过
         self.assertFalse(should_skip)
 
     def test_check_exists_and_skip_skip_existing_false(self):
         """测试_check_exists_and_skip 当 skip_existing=False 时不跳过"""
-        source_root = self.project_root
-        target_root = self.project_root / "target_check4"
-        target_root.mkdir()
-
-        source_p = LocalPersonaStorage(source_root)
-        source_s = LocalSoulStateStorage(source_root)
-        source_m = LocalMemoryStorage(source_root)
-        target_p = LocalPersonaStorage(target_root)
-        target_s = LocalSoulStateStorage(target_root)
-        target_m = LocalMemoryStorage(target_root)
-
-        migrator = CrossPlatformMigrator(
-            (source_p, source_s, source_m),
-            (target_p, target_s, target_m)
-        )
+        migrator = self._create_migrator("target_check4", None)
 
         def mock_read(identifier: str) -> str | None:
             return "same content\n"
@@ -446,7 +286,6 @@ class TestMigration(BaseTest):
             skip_existing=False,
             read_func=mock_read
         )
-        # skip_existing=False 不跳过
         self.assertFalse(should_skip)
 
     def test_local_to_mcp_migrator_creation(self):

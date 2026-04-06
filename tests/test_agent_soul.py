@@ -3,19 +3,18 @@
 AgentSoul · 单元测试
 测试配置加载、隐私扫描、迁移脚本、路径兼容性等核心功能
 """
+from __future__ import annotations
 
-import unittest
-import tempfile
 import shutil
-from pathlib import Path
-from typing import List
 import sys
-import os
+import tempfile
+import unittest
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.config_loader import ConfigLoader, create_default_persona
-from src.path_compat import PathResolver, resolve_path, convert_legacy_path
+from src.path_compat import PathResolver, convert_legacy_path
 
 
 class TestConfigLoader(unittest.TestCase):
@@ -322,7 +321,7 @@ class TestInstallScript(unittest.TestCase):
             project_root = Path(__file__).parent.parent
 
             create_default_persona(persona_path)
-            with open(persona_path, "r", encoding="utf-8") as f:
+            with open(persona_path, encoding="utf-8") as f:
                 import yaml
                 data = yaml.safe_load(f)
             data["agent"]["name"] = "TestAgent"
@@ -425,9 +424,10 @@ class TestAdaptiveLearning(unittest.TestCase):
 
     def test_emoji_counting_various_emojis(self):
         """Test that various emoji types are correctly counted."""
-        from src.adaptive_learning.preference_learner import PreferenceLearner
-        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
         from datetime import datetime
+
+        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from src.adaptive_learning.preference_learner import PreferenceLearner
 
         learner = PreferenceLearner(data_path=Path(self.test_dir))
 
@@ -459,8 +459,9 @@ class TestAdaptiveLearning(unittest.TestCase):
 
     def test_data_collector_append_record(self):
         """Test that data collector correctly appends interaction records."""
-        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
         from datetime import datetime
+
+        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
 
         collector = DataCollector(data_path=Path(self.test_dir))
         session_id = collector.create_session()
@@ -544,9 +545,10 @@ class TestAdaptiveLearning(unittest.TestCase):
 
     def test_preference_learning_basic(self):
         """Test basic preference learning functionality."""
-        from src.adaptive_learning.preference_learner import PreferenceLearner
-        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
         from datetime import datetime
+
+        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from src.adaptive_learning.preference_learner import PreferenceLearner
 
         learner = PreferenceLearner(data_path=Path(self.test_dir))
         collector = DataCollector(data_path=Path(self.test_dir))
@@ -586,10 +588,11 @@ class TestAdaptiveLearning(unittest.TestCase):
 
     def test_preference_topic_feedback(self):
         """Test that positive feedback adds topics, negative feedback removes topics."""
-        from src.adaptive_learning.preference_learner import PreferenceLearner
-        from src.adaptive_learning.data_collector import InteractionRecord
         from datetime import datetime
         from pathlib import Path
+
+        from src.adaptive_learning.data_collector import InteractionRecord
+        from src.adaptive_learning.preference_learner import PreferenceLearner
 
         learner = PreferenceLearner(data_path=Path(self.test_dir))
 
@@ -633,10 +636,10 @@ class TestEnhancedMemory(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
-    def create_test_memory(self, memory_id: str, content: str, tags: List[str]):
+    def create_test_memory(self, memory_id: str, content: str, tags: list[str]):
         """Helper to create a test memory file."""
-        from datetime import datetime
         import json
+        from datetime import datetime
         memory_file = Path(self.test_dir) / f"{memory_id}.json"
         data = {
             "content": content,
@@ -725,6 +728,7 @@ class TestEnhancedMemory(unittest.TestCase):
     def test_priority_weighting_applied(self):
         """Test that search results are sorted by priority * relevance."""
         import json
+
         from src.memory_enhanced.retrieval import MemoryRetriever
 
         # Create two memories with same relevance but different priorities
@@ -797,7 +801,7 @@ class TestConfigManager(unittest.TestCase):
 
     def test_list_templates_loads_all(self):
         """Test that all templates are loaded and sorted by name."""
-        from src.config_manager.templates import TemplateManager, ConfigTemplate
+        from src.config_manager.templates import TemplateManager
         self.create_test_template("b", """agent:
   name: B
   role: Role B

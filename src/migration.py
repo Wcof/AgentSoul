@@ -37,6 +37,14 @@ from src.storage.mcp_client import (
     McpSoulStateStorage,
 )
 
+# Standard memory type mapping for time-slice memory: (subdirectory name, method name prefix)
+TIME_SLICE_MEMORY_TYPES = [
+    ("day", "daily"),
+    ("week", "weekly"),
+    ("month", "monthly"),
+    ("year", "yearly"),
+]
+
 
 @dataclass
 class MigrationResult:
@@ -102,25 +110,12 @@ class CrossPlatformMigrator:
                 errors.append("Failed to migrate soul state")
 
             # 3. 迁移分层记忆
-            # 日记忆
-            daily_migrated = self._migrate_daily_memory(skip_existing, errors)
-            total_migrated += daily_migrated
-            log(f"Migrated {daily_migrated} daily memory files", level="INFO")
-
-            # 周记忆
-            weekly_migrated = self._migrate_weekly_memory(skip_existing, errors)
-            total_migrated += weekly_migrated
-            log(f"Migrated {weekly_migrated} weekly memory files", level="INFO")
-
-            # 月记忆
-            monthly_migrated = self._migrate_monthly_memory(skip_existing, errors)
-            total_migrated += monthly_migrated
-            log(f"Migrated {monthly_migrated} monthly memory files", level="INFO")
-
-            # 年记忆
-            yearly_migrated = self._migrate_yearly_memory(skip_existing, errors)
-            total_migrated += yearly_migrated
-            log(f"Migrated {yearly_migrated} yearly memory files", level="INFO")
+            # 时间切片记忆（日/周/月/年）
+            for _, type_name in TIME_SLICE_MEMORY_TYPES:
+                method = getattr(self, f'_migrate_{type_name}_memory')
+                migrated = method(skip_existing, errors)
+                total_migrated += migrated
+                log(f"Migrated {migrated} {type_name} memory files", level="INFO")
 
             # 主题记忆
             topic_migrated = self._migrate_topic_memory(skip_existing, errors)
@@ -178,80 +173,58 @@ class CrossPlatformMigrator:
 
     def _migrate_daily_memory(self, skip_existing: bool, errors: list[str]) -> int:
         """迁移所有日记忆"""
+        return self._migrate_memory_by_type('day', 'daily', skip_existing, errors)
+
+    def _migrate_weekly_memory(self, skip_existing: bool, errors: list[str]) -> int:
+        """迁移所有周记忆"""
+        return self._migrate_memory_by_type('week', 'weekly', skip_existing, errors)
+
+    def _migrate_monthly_memory(self, skip_existing: bool, errors: list[str]) -> int:
+        """迁移所有月记忆"""
+        return self._migrate_memory_by_type('month', 'monthly', skip_existing, errors)
+
+    def _migrate_yearly_memory(self, skip_existing: bool, errors: list[str]) -> int:
+        """迁移所有年记忆"""
+        return self._migrate_memory_by_type('year', 'yearly', skip_existing, errors)
+
+    def _migrate_memory_by_type(
+        self,
+        subdir: str,
+        type_name: str,
+        skip_existing: bool,
+        errors: list[str],
+    ) -> int:
+        """通用迁移方法 - 按类型迁移时间切片记忆
+
+        Args:
+            subdir: 子目录名称 (day/week/month/year)
+            type_name: 类型名称 (daily/weekly/monthly/yearly) - 用于方法名
+            skip_existing: 是否跳过已存在
+            errors: 错误列表收集器
+
+        Returns:
+            迁移的项目数量
+        """
         migrated = 0
         # 如果源是本地，我们可以直接枚举文件
         if hasattr(self.source_memory, 'base_dir'):
             # 本地存储
-            daily_dir = self.source_memory.base_dir / "day"
-            if daily_dir.exists():
-                for file in daily_dir.glob("*.md"):
-                    date = file.stem
-                    content = self.source_memory.read_daily_memory(date)
+            memory_dir = self.source_memory.base_dir / subdir
+            if memory_dir.exists():
+                read_method = getattr(self.source_memory, f'read_{type_name}_memory')
+                read_target_method = getattr(self.target_memory, f'read_{type_name}_memory')
+                write_target_method = getattr(self.target_memory, f'write_{type_name}_memory')
+                for file in memory_dir.glob("*.md"):
+                    identifier = file.stem
+                    content = read_method(identifier)
                     if content is None:
                         continue
-                    if self._check_exists_and_skip(date, content, skip_existing, self.target_memory.read_daily_memory):
+                    if self._check_exists_and_skip(identifier, content, skip_existing, read_target_method):
                         continue
-                    if self.target_memory.write_daily_memory(date, content):
+                    if write_target_method(identifier, content):
                         migrated += 1
                     else:
-                        errors.append(f"Failed to write daily memory for {date}")
-        return migrated
-
-    def _migrate_weekly_memory(self, skip_existing: bool, errors: list[str]) -> int:
-        """迁移所有周记忆"""
-        migrated = 0
-        if hasattr(self.source_memory, 'base_dir'):
-            weekly_dir = self.source_memory.base_dir / "week"
-            if weekly_dir.exists():
-                for file in weekly_dir.glob("*.md"):
-                    year_week = file.stem
-                    content = self.source_memory.read_weekly_memory(year_week)
-                    if content is None:
-                        continue
-                    if self._check_exists_and_skip(year_week, content, skip_existing, self.target_memory.read_weekly_memory):
-                        continue
-                    if self.target_memory.write_weekly_memory(year_week, content):
-                        migrated += 1
-                    else:
-                        errors.append(f"Failed to write weekly memory for {year_week}")
-        return migrated
-
-    def _migrate_monthly_memory(self, skip_existing: bool, errors: list[str]) -> int:
-        """迁移所有月记忆"""
-        migrated = 0
-        if hasattr(self.source_memory, 'base_dir'):
-            monthly_dir = self.source_memory.base_dir / "month"
-            if monthly_dir.exists():
-                for file in monthly_dir.glob("*.md"):
-                    year_month = file.stem
-                    content = self.source_memory.read_monthly_memory(year_month)
-                    if content is None:
-                        continue
-                    if self._check_exists_and_skip(year_month, content, skip_existing, self.target_memory.read_monthly_memory):
-                        continue
-                    if self.target_memory.write_monthly_memory(year_month, content):
-                        migrated += 1
-                    else:
-                        errors.append(f"Failed to write monthly memory for {year_month}")
-        return migrated
-
-    def _migrate_yearly_memory(self, skip_existing: bool, errors: list[str]) -> int:
-        """迁移所有年记忆"""
-        migrated = 0
-        if hasattr(self.source_memory, 'base_dir'):
-            yearly_dir = self.source_memory.base_dir / "year"
-            if yearly_dir.exists():
-                for file in yearly_dir.glob("*.md"):
-                    year = file.stem
-                    content = self.source_memory.read_yearly_memory(year)
-                    if content is None:
-                        continue
-                    if self._check_exists_and_skip(year, content, skip_existing, self.target_memory.read_yearly_memory):
-                        continue
-                    if self.target_memory.write_yearly_memory(year, content):
-                        migrated += 1
-                    else:
-                        errors.append(f"Failed to write yearly memory for {year}")
+                        errors.append(f"Failed to write {type_name} memory for {identifier}")
         return migrated
 
     def _migrate_topic_memory(self, skip_existing: bool, errors: list[str]) -> int:
@@ -469,69 +442,24 @@ def import_archive(
         # 导入记忆
         memory_dir = tmp_path / "memory"
 
-        # 日记忆
-        daily_dir = memory_dir / "day"
-        if daily_dir.exists():
-            for file in daily_dir.glob("*.md"):
-                date = file.stem
-                with open(file, encoding="utf-8") as f:
-                    content = f.read()
-                if len(content.strip()) == 0:
-                    continue
-                if skip_existing and target_m.read_daily_memory(date) is not None:
-                    continue
-                if target_m.write_daily_memory(date, content):
-                    total_migrated += 1
-                else:
-                    errors.append(f"Failed to write daily {date}")
-
-        # 周记忆
-        weekly_dir = memory_dir / "week"
-        if weekly_dir.exists():
-            for file in weekly_dir.glob("*.md"):
-                year_week = file.stem
-                with open(file, encoding="utf-8") as f:
-                    content = f.read()
-                if len(content.strip()) == 0:
-                    continue
-                if skip_existing and target_m.read_weekly_memory(year_week) is not None:
-                    continue
-                if target_m.write_weekly_memory(year_week, content):
-                    total_migrated += 1
-                else:
-                    errors.append(f"Failed to write weekly {year_week}")
-
-        # 月记忆
-        monthly_dir = memory_dir / "month"
-        if monthly_dir.exists():
-            for file in monthly_dir.glob("*.md"):
-                year_month = file.stem
-                with open(file, encoding="utf-8") as f:
-                    content = f.read()
-                if len(content.strip()) == 0:
-                    continue
-                if skip_existing and target_m.read_monthly_memory(year_month) is not None:
-                    continue
-                if target_m.write_monthly_memory(year_month, content):
-                    total_migrated += 1
-                else:
-                    errors.append(f"Failed to write monthly {year_month}")
-
-        # 年记忆
-        yearly_dir = memory_dir / "year"
-        if yearly_dir.exists():
-            for file in yearly_dir.glob("*.md"):
-                year = file.stem
-                with open(file, encoding="utf-8") as f:
-                    content = f.read()
-                if len(content.strip()) == 0:
-                    continue
-                if skip_existing and target_m.read_yearly_memory(year) is not None:
-                    continue
-                if target_m.write_yearly_memory(year, content):
-                    total_migrated += 1
-                else:
-                    errors.append(f"Failed to write yearly {year}")
+        # 批量导入各类型时间切片记忆
+        for subdir, type_name in TIME_SLICE_MEMORY_TYPES:
+            dir_path = memory_dir / subdir
+            if dir_path.exists():
+                read_method = getattr(target_m, f'read_{type_name}_memory')
+                write_method = getattr(target_m, f'write_{type_name}_memory')
+                for file in dir_path.glob("*.md"):
+                    identifier = file.stem
+                    with open(file, encoding="utf-8") as f:
+                        content = f.read()
+                    if len(content.strip()) == 0:
+                        continue
+                    if skip_existing and read_method(identifier) is not None:
+                        continue
+                    if write_method(identifier, content):
+                        total_migrated += 1
+                    else:
+                        errors.append(f"Failed to write {type_name} {identifier}")
 
         # 主题记忆
         topic_dir = memory_dir / "topic"

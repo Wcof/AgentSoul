@@ -65,7 +65,7 @@ def log(message: str, level: str = "INFO") -> None:
     print(f"{symbol} {message}")
 
 
-def icons() -> dict:
+def icons() -> Dict[str, str]:
     """Get icon mapping.
 
     Deprecated: Use ICONS constant directly instead.
@@ -74,7 +74,7 @@ def icons() -> dict:
     return ICONS
 
 
-def load_config(project_root: Optional[Path] = None) -> dict:
+def load_config(project_root: Optional[Path] = None) -> Dict[str, Any]:
     if project_root is None:
         project_root = PROJECT_ROOT
 

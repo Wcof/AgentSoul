@@ -63,7 +63,7 @@ class McpPersonaStorage(BasePersonaStorage):
     ):
         self.server_command = server_command or self._default_server_command()
         self.retry_config = retry_config or McpRetryConfig()
-        self._process: subprocess.Popen | None = None
+        self._process: subprocess.Popen[str] | None = None
         self._connected = False
 
     def _default_server_command(self) -> str:

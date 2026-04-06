@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, Any
 
 from common import get_project_root, log
 
@@ -185,7 +186,7 @@ class HealthChartExporter:
         log(f"健康度图表已导出 SVG: {output_path}", "OK")
         return output_path
 
-    def get_summary(self) -> dict:
+    def get_summary(self) -> Dict[str, int | float]:
         """获取健康度统计摘要"""
         records = self.parse_history()
         if not records:

@@ -4,20 +4,23 @@ AgentSoul · OpenAI 适配器测试
 
 测试 OpenAI 注入适配器功能
 """
+from __future__ import annotations
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
-from src import OpenAIInjectionAdapter, InjectionConfig
-from src.storage.local import (
-    LocalPersonaStorage,
-    LocalSoulStateStorage,
-    LocalMemoryStorage,
-    LocalSkillStorage,
-)
+
+from src import InjectionConfig, OpenAIInjectionAdapter
 from src.abstract import UnifiedSoulStorage
+from src.storage.local import (
+    LocalMemoryStorage,
+    LocalPersonaStorage,
+    LocalSkillStorage,
+    LocalSoulStateStorage,
+)
 
 
 class TestOpenAIAdapter(unittest.TestCase):

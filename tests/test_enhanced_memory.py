@@ -1,11 +1,12 @@
 """
 Unit tests for enhanced memory module - tags
 """
+from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from datetime import datetime
-from src.memory_enhanced.tags import TagManager, TagInfo
+
+from src.memory_enhanced.tags import TagManager
 
 
 class TestEnhancedMemoryTags:
