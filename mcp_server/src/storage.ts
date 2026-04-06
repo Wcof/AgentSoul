@@ -120,8 +120,6 @@ function getDefaultPersonaConfig(): PersonaConfig {
   };
 }
 
-// Import shared utilities from utils - already imported at top, duplicate import removed
-
 /**
  * 存储管理器类
  * 负责 AgentSoul 所有数据的持久化操作，包括人格配置、灵魂状态和各种记忆

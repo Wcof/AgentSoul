@@ -96,18 +96,28 @@ class LocalPersonaStorage(BasePersonaStorage):
             return self._version_cache
 
         # 计算内容哈希作为版本标识
-        with open(self.config_path, "rb") as f:
-            content = f.read()
-        checksum = hashlib.md5(content).hexdigest()[:8]
-        mtime = datetime.fromtimestamp(self.config_path.stat().st_mtime)
+        try:
+            with open(self.config_path, "rb") as f:
+                content = f.read()
+            checksum = hashlib.md5(content).hexdigest()[:8]
+            mtime = datetime.fromtimestamp(self.config_path.stat().st_mtime)
 
-        self._version_cache = SoulVersion(
-            version=f"1.0.{int(mtime.timestamp())}",
-            timestamp=mtime.isoformat(),
-            checksum=checksum,
-            description=f"Persona config modified at {mtime}"
-        )
-        return self._version_cache
+            self._version_cache = SoulVersion(
+                version=f"1.0.{int(mtime.timestamp())}",
+                timestamp=mtime.isoformat(),
+                checksum=checksum,
+                description=f"Persona config modified at {mtime}"
+            )
+            return self._version_cache
+        except Exception as e:
+            log(f"Failed to read persona config for version checking: {e}, using default version", level="WARNING")
+            self._version_cache = SoulVersion(
+                version="0.0.0",
+                timestamp=datetime.now().isoformat(),
+                checksum=None,
+                description=f"Failed to read config: {e}"
+            )
+            return self._version_cache
 
 
 class LocalSoulStateStorage(BaseSoulStateStorage):
@@ -259,8 +269,12 @@ class LocalMemoryStorage(BaseMemoryStorage):
         path = self._get_path("day", date)
         if not path.exists():
             return None
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            log(f"Failed to read daily memory for {date}: {e}", level="ERROR")
+            return None
 
     @staticmethod
     def _parse_date(date: str) -> Optional[tuple[int, int, int]]:
@@ -510,8 +524,12 @@ class LocalMemoryStorage(BaseMemoryStorage):
         path = self._get_path("week", year_week)
         if not path.exists():
             return None
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            log(f"Failed to read weekly memory for {year_week}: {e}", level="ERROR")
+            return None
 
     def write_weekly_memory(self, year_week: str, content: str, append: bool = False) -> bool:
         path = self._get_path("week", year_week)
@@ -521,8 +539,12 @@ class LocalMemoryStorage(BaseMemoryStorage):
         path = self._get_path("month", year_month)
         if not path.exists():
             return None
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            log(f"Failed to read monthly memory for {year_month}: {e}", level="ERROR")
+            return None
 
     def write_monthly_memory(self, year_month: str, content: str, append: bool = False) -> bool:
         path = self._get_path("month", year_month)
@@ -532,8 +554,12 @@ class LocalMemoryStorage(BaseMemoryStorage):
         path = self._get_path("year", year)
         if not path.exists():
             return None
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            log(f"Failed to read yearly memory for {year}: {e}", level="ERROR")
+            return None
 
     def write_yearly_memory(self, year: str, content: str, append: bool = False) -> bool:
         path = self._get_path("year", year)
@@ -544,13 +570,19 @@ class LocalMemoryStorage(BaseMemoryStorage):
         sanitized = self._sanitize_topic(topic)
         path = self.base_dir / "topic" / f"{sanitized}.md"
         if path.exists():
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                log(f"Failed to read topic memory for {topic}: {e}", level="ERROR")
         # 试归档
         archive_path = self.base_dir / "topic" / "archive" / f"{sanitized}.md"
         if archive_path.exists():
-            with open(archive_path, "r", encoding="utf-8") as f:
-                return f.read()
+            try:
+                with open(archive_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                log(f"Failed to read archived topic memory for {topic}: {e}", level="ERROR")
         return None
 
     def write_topic_memory(self, topic: str, content: str, append: bool = False) -> bool:
@@ -583,23 +615,37 @@ class LocalMemoryStorage(BaseMemoryStorage):
         if status in ["active", "all"]:
             active_dir = self.base_dir / "topic"
             if active_dir.exists():
-                for file in active_dir.glob("*.md"):
-                    if file.name != "archive":
-                        results.append({
-                            "name": file.stem,
-                            "status": "active",
-                            "path": str(file)
-                        })
+                try:
+                    for file in active_dir.glob("*.md"):
+                        try:
+                            if file.name != "archive":
+                                results.append({
+                                    "name": file.stem,
+                                    "status": "active",
+                                    "path": str(file)
+                                })
+                        except Exception:
+                            # Skip unreadable files
+                            continue
+                except Exception as e:
+                    log(f"Failed to list active topics: {e}", level="ERROR")
 
         if status in ["archived", "all"]:
             archive_dir = self.base_dir / "topic" / "archive"
             if archive_dir.exists():
-                for file in archive_dir.glob("*.md"):
-                    results.append({
-                        "name": file.stem,
-                        "status": "archived",
-                        "path": str(file)
-                    })
+                try:
+                    for file in archive_dir.glob("*.md"):
+                        try:
+                            results.append({
+                                "name": file.stem,
+                                "status": "archived",
+                                "path": str(file)
+                            })
+                        except Exception:
+                            # Skip unreadable files
+                            continue
+                except Exception as e:
+                    log(f"Failed to list archived topics: {e}", level="ERROR")
 
         return sorted(results, key=lambda x: x["name"])
 
