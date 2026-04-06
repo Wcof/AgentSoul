@@ -13,16 +13,15 @@ AgentSoul · 配置加载器
 # AgentSoul · 配置加载器 v1.0
 # 支持通用Agent配置模型，含空值fallback逻辑
 
-import os
-import copy
-import time
-from pathlib import Path
-from typing import Any, Dict, Optional, Union, List
-from dataclasses import dataclass, field
-import yaml
-import json
+from __future__ import annotations
 
-from common import get_project_root, log
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from common import get_project_root
 from src.common.cache import TTLCacheBase
 from src.config_manager.validator import ConfigValidator, ValidationError
 
@@ -55,8 +54,8 @@ class BehaviorConfig:
     task_scheduling: bool = True
     memory_daily_summary: bool = True
     response_length_limit: int = 0
-    forbidden_topics: List[str] = field(default_factory=list)
-    allowed_topics: List[str] = field(default_factory=list)
+    forbidden_topics: list[str] = field(default_factory=list)
+    allowed_topics: list[str] = field(default_factory=list)
     custom_settings: dict = field(default_factory=dict)
 
 
@@ -71,12 +70,12 @@ class ConfigLoader(TTLCacheBase):
     DEFAULT_MASTER_NAME = ""
     DEFAULT_ROLE = "AI Assistant"
 
-    def __init__(self, project_root: Optional[Path] = None, default_ttl: int = 300):
+    def __init__(self, project_root: Path | None = None, default_ttl: int = 300):
         super().__init__(default_ttl)
         self.project_root = project_root or get_project_root()
-        self._config_cache: Optional[Dict] = None
-        self._persona_cache: Optional[PersonaConfig] = None
-        self._behavior_cache: Optional[BehaviorConfig] = None
+        self._config_cache: dict | None = None
+        self._persona_cache: PersonaConfig | None = None
+        self._behavior_cache: BehaviorConfig | None = None
 
     def invalidate_cache(self) -> None:
         """Invalidate all cached configuration - force reload on next load."""
@@ -91,13 +90,13 @@ class ConfigLoader(TTLCacheBase):
             return False
         return super()._cache_is_valid()
 
-    def load_yaml(self, file_path: Path) -> Dict:
+    def load_yaml(self, file_path: Path) -> dict:
         if not file_path.exists():
             return {}
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
-    def load_persona_config(self, persona_path: Optional[Path] = None) -> PersonaConfig:
+    def load_persona_config(self, persona_path: Path | None = None) -> PersonaConfig:
         if self._cache_is_valid():
             assert self._persona_cache is not None
             return self._persona_cache
@@ -160,23 +159,23 @@ class ConfigLoader(TTLCacheBase):
             return [value.strip()] if value.strip() else []
         return []
 
-    def get_agent_name(self, persona_path: Optional[Path] = None) -> str:
+    def get_agent_name(self, persona_path: Path | None = None) -> str:
         config = self.load_persona_config(persona_path)
         name = config.ai.name or self.DEFAULT_AGENT_NAME
         return name.strip() or self.DEFAULT_AGENT_NAME
 
-    def get_agent_nickname(self, persona_path: Optional[Path] = None) -> str:
+    def get_agent_nickname(self, persona_path: Path | None = None) -> str:
         config = self.load_persona_config(persona_path)
         return config.ai.nickname or ""
 
-    def get_master_name(self, persona_path: Optional[Path] = None) -> str:
+    def get_master_name(self, persona_path: Path | None = None) -> str:
         config = self.load_persona_config(persona_path)
         master_name = config.master.name
         if not master_name or not master_name.strip():
             return "主人"
         return master_name.strip()
 
-    def get_master_nicknames(self, persona_path: Optional[Path] = None) -> list:
+    def get_master_nicknames(self, persona_path: Path | None = None) -> list:
         config = self.load_persona_config(persona_path)
         nicknames = config.master.nickname
         if not nicknames:
@@ -184,7 +183,7 @@ class ConfigLoader(TTLCacheBase):
         return [n for n in nicknames if n]
 
     def get_effective_master_name(
-        self, persona_path: Optional[Path] = None
+        self, persona_path: Path | None = None
     ) -> str:
         nicknames = self.get_master_nicknames(persona_path)
         if nicknames and nicknames[0] != "主人":
@@ -192,7 +191,7 @@ class ConfigLoader(TTLCacheBase):
             return nicknames[0]
         return self.get_master_name(persona_path)
 
-    def is_config_valid(self, persona_path: Optional[Path] = None) -> bool:
+    def is_config_valid(self, persona_path: Path | None = None) -> bool:
         try:
             check_path = persona_path or (self.project_root / "config" / "persona.yaml")
             if not check_path.exists():
@@ -202,7 +201,7 @@ class ConfigLoader(TTLCacheBase):
         except Exception:
             return False
 
-    def validate_current_config(self, persona_path: Optional[Path] = None, log_errors: bool = True) -> List[ValidationError]:
+    def validate_current_config(self, persona_path: Path | None = None, log_errors: bool = True) -> list[ValidationError]:
         """Validate current configuration and return list of validation errors.
 
         Args:
@@ -225,7 +224,7 @@ class ConfigLoader(TTLCacheBase):
 
         return errors
 
-    def to_legacy_format(self, persona_path: Optional[Path] = None) -> Dict:
+    def to_legacy_format(self, persona_path: Path | None = None) -> dict:
         config = self.load_persona_config(persona_path)
         return {
             "ai": {
@@ -245,7 +244,7 @@ class ConfigLoader(TTLCacheBase):
             },
         }
 
-    def load_behavior_config(self, behavior_path: Optional[Path] = None) -> BehaviorConfig:
+    def load_behavior_config(self, behavior_path: Path | None = None) -> BehaviorConfig:
         """加载行为配置
         Args:
             behavior_path: 可选的自定义 behavior.yaml 路径
@@ -278,7 +277,7 @@ class ConfigLoader(TTLCacheBase):
         self._update_cache_timestamp()
         return behavior
 # Default persona configuration data - created once at module load
-DEFAULT_PERSONA_DATA: Dict[str, Any] = {
+DEFAULT_PERSONA_DATA: dict[str, Any] = {
     "agent": {
         "name": "Agent",
         "nickname": "",

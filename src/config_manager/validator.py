@@ -2,9 +2,10 @@
 AgentSoul · 配置验证器
 提供配置文件格式验证、字段检查和数值范围验证
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 from common import log
 
@@ -22,19 +23,19 @@ class ConfigValidator:
     ALLOWED_EMOJI_FREQS = ["minimal", "moderate", "frequent"]
     ALLOWED_BOOLEAN_FIELDS = ["enabled", "auto_memory", "emotional_response", "task_scheduling", "memory_daily_summary"]
 
-    def validate(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors: List[ValidationError] = []
+    def validate(self, config: dict[str, Any]) -> list[ValidationError]:
+        errors: list[ValidationError] = []
         errors.extend(self._validate_agent_config(config))
         errors.extend(self._validate_master_config(config))
         errors.extend(self._validate_interaction_style(config))
         errors.extend(self._validate_behavior_config(config))
         return errors
 
-    def is_valid(self, config: Dict[str, Any]) -> bool:
+    def is_valid(self, config: dict[str, Any]) -> bool:
         errors = self.validate(config)
         return not any(e.severity == "error" for e in errors)
 
-    def print_errors(self, errors: List[ValidationError]) -> None:
+    def print_errors(self, errors: list[ValidationError]) -> None:
         if not errors:
             log("配置验证通过！", "OK")
             return
@@ -51,8 +52,8 @@ class ConfigValidator:
             prefix = "❌" if error.severity == "error" else "⚠️"
             log(f"{prefix} [{error.field}] {error.message}", error.severity.upper())
 
-    def _validate_agent_config(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors: List[ValidationError] = []
+    def _validate_agent_config(self, config: dict[str, Any]) -> list[ValidationError]:
+        errors: list[ValidationError] = []
         agent = config.get("agent", config.get("ai", {}))
 
         if not agent:
@@ -104,8 +105,8 @@ class ConfigValidator:
 
         return errors
 
-    def _validate_master_config(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors: List[ValidationError] = []
+    def _validate_master_config(self, config: dict[str, Any]) -> list[ValidationError]:
+        errors: list[ValidationError] = []
         master = config.get("master", {})
 
         if not master:
@@ -123,8 +124,8 @@ class ConfigValidator:
 
         return errors
 
-    def _validate_interaction_style(self, config: Dict[str, Any]) -> List[ValidationError]:
-        errors: List[ValidationError] = []
+    def _validate_interaction_style(self, config: dict[str, Any]) -> list[ValidationError]:
+        errors: list[ValidationError] = []
         agent = config.get("agent", config.get("ai", {}))
         style = agent.get("interaction_style", {})
 
@@ -157,7 +158,7 @@ class ConfigValidator:
 
         return errors
 
-    def validate_pad_value(self, value: Any, field_name: str) -> Optional[ValidationError]:
+    def validate_pad_value(self, value: Any, field_name: str) -> ValidationError | None:
         if not isinstance(value, (int, float)):
             return ValidationError(
                 field=field_name,
@@ -175,15 +176,15 @@ class ConfigValidator:
 
         return None
 
-    def _add_error(self, errors: List[ValidationError], field: str, message: str, severity: str) -> None:
+    def _add_error(self, errors: list[ValidationError], field: str, message: str, severity: str) -> None:
         errors.append(ValidationError(field=field, message=message, severity=severity))
 
     def _validate_choice(
         self,
-        errors: List[ValidationError],
-        value: Optional[str],
+        errors: list[ValidationError],
+        value: str | None,
         field: str,
-        allowed_values: List[str],
+        allowed_values: list[str],
         label: str
     ) -> None:
         if value and value not in allowed_values:
@@ -194,14 +195,14 @@ class ConfigValidator:
                 "error"
             )
 
-    def _validate_behavior_config(self, config: Dict[str, Any]) -> List[ValidationError]:
+    def _validate_behavior_config(self, config: dict[str, Any]) -> list[ValidationError]:
         """Validate behavior configuration structure.
 
         Handles both cases:
         - Behavior config embedded inside a full persona config (under 'behavior' key)
         - Standalone behavior config (root is the behavior dict)
         """
-        errors: List[ValidationError] = []
+        errors: list[ValidationError] = []
 
         # Check if behavior config exists
         if "behavior" in config:

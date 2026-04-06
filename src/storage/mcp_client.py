@@ -8,21 +8,22 @@ AgentSoul · MCP 客户端存储实现
 - 请求重试机制
 - 超时处理
 """
+from __future__ import annotations
 
 import json
-import time
 import subprocess
-from typing import Any, Dict, List, Optional, Tuple, Union
+import time
 from dataclasses import dataclass
+from typing import Any
 
 from common import get_project_root, log
 from src.abstract import (
-    BasePersonaStorage,
-    BaseSoulStateStorage,
     BaseMemoryStorage,
+    BasePersonaStorage,
     BaseSkillStorage,
-    SoulVersion,
+    BaseSoulStateStorage,
     MemoryConflict,
+    SoulVersion,
 )
 
 
@@ -57,12 +58,12 @@ class McpPersonaStorage(BasePersonaStorage):
 
     def __init__(
         self,
-        server_command: Optional[str] = None,
-        retry_config: Optional[McpRetryConfig] = None
+        server_command: str | None = None,
+        retry_config: McpRetryConfig | None = None
     ):
         self.server_command = server_command or self._default_server_command()
         self.retry_config = retry_config or McpRetryConfig()
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
         self._connected = False
 
     def _default_server_command(self) -> str:
@@ -77,7 +78,7 @@ class McpPersonaStorage(BasePersonaStorage):
             return
 
         retry_config = self.retry_config
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(retry_config.max_retries):
             try:
@@ -103,10 +104,10 @@ class McpPersonaStorage(BasePersonaStorage):
 
         raise McpConnectionError(f"Failed to connect after {retry_config.max_retries} attempts: {last_error}")
 
-    def _send_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
+    def _send_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """发送请求到 MCP 服务器，带重试和断连自动重连"""
         retry_config = self.retry_config
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(retry_config.max_retries):
             try:
@@ -133,7 +134,7 @@ class McpPersonaStorage(BasePersonaStorage):
                 if not response_line:
                     raise McpRequestError("Empty response from MCP server")
 
-                response: Dict[str, Any] = json.loads(response_line)
+                response: dict[str, Any] = json.loads(response_line)
                 return response
 
             except Exception as e:
@@ -147,7 +148,7 @@ class McpPersonaStorage(BasePersonaStorage):
 
         raise McpRequestError(f"Request failed after {retry_config.max_retries} attempts: {last_error}")
 
-    def _call_tool(self, name: str, params: Dict[str, Any]) -> Any:
+    def _call_tool(self, name: str, params: dict[str, Any]) -> Any:
         """调用 MCP 工具"""
         request = {
             "jsonrpc": "2.0",
@@ -173,14 +174,14 @@ class McpPersonaStorage(BasePersonaStorage):
         except json.JSONDecodeError:
             return text
 
-    def read_persona_config(self) -> Dict[str, Any]:
+    def read_persona_config(self) -> dict[str, Any]:
         result = self._call_tool("get_persona_config", {})
         if isinstance(result, str):
-            config: Dict[str, Any] = json.loads(result)
+            config: dict[str, Any] = json.loads(result)
             return config
         return result if isinstance(result, dict) else {}
 
-    def write_persona_config(self, config: Dict[str, Any]) -> bool:
+    def write_persona_config(self, config: dict[str, Any]) -> bool:
         # MCP 服务器端不支持直接写入，需要通过文件系统
         log("write_persona_config not supported via MCP client, use local storage", level="WARNING")
         return False
@@ -221,12 +222,12 @@ class McpSoulStateStorage(BaseSoulStateStorage):
     def __init__(self, client: McpPersonaStorage):
         self.client = client
 
-    def read_soul_state(self) -> Dict[str, Any]:
+    def read_soul_state(self) -> dict[str, Any]:
         result = self.client._call_tool("get_soul_state", {})
         assert isinstance(result, dict)
         return result
 
-    def write_soul_state(self, state: Dict[str, Any]) -> bool:
+    def write_soul_state(self, state: dict[str, Any]) -> bool:
         # 需要使用 update_soul_state，但参数是增量更新
         # 这里为了兼容接口，转换为增量更新
         result = self.client._call_tool("update_soul_state", {
@@ -252,7 +253,7 @@ class McpMemoryStorage(BaseMemoryStorage):
     def __init__(self, client: McpPersonaStorage):
         self.client = client
 
-    def read_daily_memory(self, date: str) -> Optional[str]:
+    def read_daily_memory(self, date: str) -> str | None:
         result = self.client._call_tool("read_memory_day", {"date": date})
         return result if isinstance(result, str) else None
 
@@ -260,7 +261,7 @@ class McpMemoryStorage(BaseMemoryStorage):
         result = self.client._call_tool("write_memory_day", {"date": date, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
-    def read_weekly_memory(self, year_week: str) -> Optional[str]:
+    def read_weekly_memory(self, year_week: str) -> str | None:
         result = self.client._call_tool("read_memory_week", {"year_week": year_week})
         return result if isinstance(result, str) else None
 
@@ -268,7 +269,7 @@ class McpMemoryStorage(BaseMemoryStorage):
         result = self.client._call_tool("write_memory_week", {"year_week": year_week, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
-    def read_monthly_memory(self, year_month: str) -> Optional[str]:
+    def read_monthly_memory(self, year_month: str) -> str | None:
         result = self.client._call_tool("read_memory_month", {"year_month": year_month})
         return result if isinstance(result, str) else None
 
@@ -276,7 +277,7 @@ class McpMemoryStorage(BaseMemoryStorage):
         result = self.client._call_tool("write_memory_month", {"year_month": year_month, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
-    def read_yearly_memory(self, year: str) -> Optional[str]:
+    def read_yearly_memory(self, year: str) -> str | None:
         result = self.client._call_tool("read_memory_year", {"year": year})
         return result if isinstance(result, str) else None
 
@@ -284,7 +285,7 @@ class McpMemoryStorage(BaseMemoryStorage):
         result = self.client._call_tool("write_memory_year", {"year": year, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
-    def read_topic_memory(self, topic: str) -> Optional[str]:
+    def read_topic_memory(self, topic: str) -> str | None:
         result = self.client._call_tool("read_memory_topic", {"topic": topic})
         return result if isinstance(result, str) else None
 
@@ -292,7 +293,7 @@ class McpMemoryStorage(BaseMemoryStorage):
         result = self.client._call_tool("write_memory_topic", {"topic": topic, "content": content})
         return "success" in result if isinstance(result, dict) else False
 
-    def list_topics(self, status: str = "active") -> List[Dict[str, str]]:
+    def list_topics(self, status: str = "active") -> list[dict[str, str]]:
         result = self.client._call_tool("list_memory_topics", {"status": status})
         return result if isinstance(result, list) else []
 
@@ -300,7 +301,7 @@ class McpMemoryStorage(BaseMemoryStorage):
         result = self.client._call_tool("archive_memory_topic", {"topic": topic})
         return result.get("success", False) if isinstance(result, dict) else False
 
-    def detect_conflict(self, topic: str, new_content: str) -> Optional[MemoryConflict]:
+    def detect_conflict(self, topic: str, new_content: str) -> MemoryConflict | None:
         # 冲突检测在客户端进行
         existing = self.read_topic_memory(topic)
         if existing is None or len(existing.strip()) == 0:
@@ -334,10 +335,10 @@ class McpSkillStorage(BaseSkillStorage):
     def __init__(self, client: McpPersonaStorage):
         self.client = client
 
-    def read_base_rule(self, name: str) -> Optional[str]:
+    def read_base_rule(self, name: str) -> str | None:
         result = self.client._call_tool("get_base_rules", {"name": name})
         return result if isinstance(result, str) else None
 
-    def list_available_rules(self) -> List[str]:
+    def list_available_rules(self) -> list[str]:
         # MCP doesn't provide this via API, return empty
         return []

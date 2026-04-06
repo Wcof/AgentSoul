@@ -3,22 +3,23 @@
 AgentSoul · 配置管理命令行工具
 提供模板列表、预览、应用和配置验证功能
 """
+from __future__ import annotations
 
-import sys
 import argparse
 import shutil
-import yaml
+import sys
 from pathlib import Path
-from typing import Optional
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from common import log, get_project_root
+from common import get_project_root, log
 from src.config_manager.templates import TemplateManager
 from src.config_manager.validator import ConfigValidator
 
 
-def _resolve_path(path_str: Optional[str], default: Path) -> Path:
+def _resolve_path(path_str: str | None, default: Path) -> Path:
     return Path(path_str) if path_str else default
 
 
@@ -30,7 +31,7 @@ def _check_file_exists(file_path: Path, error_msg: str) -> None:
 
 def _load_config(config_path: Path) -> dict:
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
         log(f"读取配置文件失败: {e}", "ERROR")
@@ -63,7 +64,7 @@ def preview_template(name: str) -> None:
     print()
 
 
-def apply_template(name: str, target_path: Optional[str] = None, no_backup: bool = False) -> None:
+def apply_template(name: str, target_path: str | None = None, no_backup: bool = False) -> None:
     """应用配置模板"""
     manager = TemplateManager()
     target = _resolve_path(target_path, get_project_root() / "config" / "persona.yaml")
@@ -79,7 +80,7 @@ def apply_template(name: str, target_path: Optional[str] = None, no_backup: bool
     sys.exit(0 if success else 1)
 
 
-def validate_config(config_path: Optional[str] = None) -> None:
+def validate_config(config_path: str | None = None) -> None:
     """验证配置文件"""
     resolved_config_path = _resolve_path(config_path, get_project_root() / "config" / "persona.yaml")
     _check_file_exists(resolved_config_path, f"配置文件不存在: {resolved_config_path}")
@@ -96,7 +97,7 @@ def validate_config(config_path: Optional[str] = None) -> None:
         sys.exit(1)
 
 
-def export_config(output_path: Optional[str] = None) -> None:
+def export_config(output_path: str | None = None) -> None:
     """导出当前配置"""
     source_path = get_project_root() / "config" / "persona.yaml"
     resolved_output_path = _resolve_path(output_path, get_project_root() / "exported_config.yaml")
@@ -126,7 +127,7 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(title="命令", dest="command", required=True)
 
-    list_parser = subparsers.add_parser("list-templates", help="列出所有可用的配置模板")
+    subparsers.add_parser("list-templates", help="列出所有可用的配置模板")
 
     preview_parser = subparsers.add_parser("preview-template", help="预览指定的配置模板")
     preview_parser.add_argument("name", help="模板名称")

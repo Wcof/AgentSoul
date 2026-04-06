@@ -6,9 +6,10 @@ AgentSoul · 平台适配器
 - openai: OpenAI SDK 兼容适配器
 - gemini: Google Gemini 兼容适配器
 """
+from __future__ import annotations
 
-from .openai import OpenAIInjectionAdapter, InjectionConfig, OpenAIMessage
 from .gemini import GeminiInjectionAdapter, GeminiInjectionConfig, GeminiMessage
+from .openai import InjectionConfig, OpenAIInjectionAdapter, OpenAIMessage
 
 __all__ = [
     "OpenAIInjectionAdapter",

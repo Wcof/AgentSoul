@@ -10,22 +10,21 @@ AgentSoul · 灵魂一致性健康检测
 5. 权限检查
 6. 输出健康报告和修复建议
 """
+from __future__ import annotations
 
-import sys
-import os
 import json
-import yaml
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 # Add project root to path for proper imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from common import get_project_root, log
-from src.config_loader import ConfigLoader, ValidationError
+from common import get_project_root  # noqa: E402
+from src.config_loader import ConfigLoader  # noqa: E402
 
 
 @dataclass
@@ -34,8 +33,8 @@ class HealthIssue:
     level: str  # "error", "warning", "info"
     category: str  # "directory", "config", "memory", "soul_state", "permission"
     message: str
-    location: Optional[str] = None
-    fix_suggestion: Optional[str] = None
+    location: str | None = None
+    fix_suggestion: str | None = None
 
 
 @dataclass
@@ -45,20 +44,20 @@ class HealthReport:
     total_checks: int
     errors: int
     warnings: int
-    issues: List[HealthIssue]
+    issues: list[HealthIssue]
     is_healthy: bool
-    soul_version: Optional[str] = None
+    soul_version: str | None = None
 
 
 class HealthChecker:
     """灵魂一致性健康检测器"""
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.data_root = self.project_root / "data"
         self.config_root = self.project_root / "config"
 
-    def check_directory_structure(self) -> List[HealthIssue]:
+    def check_directory_structure(self) -> list[HealthIssue]:
         """检查目录结构是否完整"""
         issues = []
         required_dirs = [
@@ -95,7 +94,7 @@ class HealthChecker:
                         category="directory",
                         message=f"Optional directory doesn't exist: {dir_path}",
                         location=str(full_path),
-                        fix_suggestion=f"Will be created automatically on first write"
+                        fix_suggestion="Will be created automatically on first write"
                     ))
             else:
                 # Check directory permissions
@@ -110,7 +109,7 @@ class HealthChecker:
 
         return issues
 
-    def check_config_files(self) -> List[HealthIssue]:
+    def check_config_files(self) -> list[HealthIssue]:
         """检查配置文件"""
         issues = []
         loader = ConfigLoader(self.project_root)
@@ -179,7 +178,7 @@ class HealthChecker:
 
         return issues
 
-    def check_soul_state(self) -> List[HealthIssue]:
+    def check_soul_state(self) -> list[HealthIssue]:
         """检查灵魂状态文件"""
         issues = []
         state_path = self.data_root / "soul" / "soul_variable" / "state_vector.json"
@@ -195,7 +194,7 @@ class HealthChecker:
             return issues
 
         try:
-            with open(state_path, "r", encoding="utf-8") as f:
+            with open(state_path, encoding="utf-8") as f:
                 state = json.load(f)
 
             # Check required fields
@@ -259,9 +258,9 @@ class HealthChecker:
 
         return issues
 
-    def _parse_date_from_filename(self, filename: str) -> Optional[datetime]:
+    def _parse_date_from_filename(self, file: Path) -> datetime | None:
         """从文件名解析日期"""
-        stem = filename.stem
+        stem = file.stem
         try:
             if len(stem) == 10 and "-" in stem:  # YYYY-MM-DD
                 return datetime.strptime(stem, "%Y-%m-%d")
@@ -288,9 +287,9 @@ class HealthChecker:
         """将日期转换为YYYY格式"""
         return f"{date.year}"
 
-    def check_archival_consistency(self) -> List[HealthIssue]:
+    def check_archival_consistency(self) -> list[HealthIssue]:
         """检查分层归档一致性 - 自动归档是否正确完成"""
-        issues = []
+        issues: list[HealthIssue] = []
         day_dir = self.data_root / "memory" / "day"
         if not day_dir.exists():
             return issues
@@ -375,7 +374,7 @@ class HealthChecker:
 
         return issues
 
-    def check_memory_files(self, sample_limit: int = 10) -> List[HealthIssue]:
+    def check_memory_files(self, sample_limit: int = 10) -> list[HealthIssue]:
         """检查记忆文件（抽样检查）"""
         issues = []
         memory_dirs = [
@@ -399,7 +398,7 @@ class HealthChecker:
                 for file in sampled:
                     try:
                         # Just check if it's readable
-                        with open(file, "r", encoding="utf-8") as f:
+                        with open(file, encoding="utf-8") as f:
                             content = f.read()
                         if len(content.strip()) == 0 and file.name != ".gitkeep":
                             issues.append(HealthIssue(
@@ -441,7 +440,7 @@ class HealthChecker:
 
         return issues
 
-    def check_permissions(self) -> List[HealthIssue]:
+    def check_permissions(self) -> list[HealthIssue]:
         """检查关键文件权限"""
         issues = []
 
@@ -471,7 +470,7 @@ class HealthChecker:
 
     def run_check(self, include_memory_samples: bool = True) -> HealthReport:
         """运行完整健康检查"""
-        all_issues: List[HealthIssue] = []
+        all_issues: list[HealthIssue] = []
 
         all_issues.extend(self.check_directory_structure())
         all_issues.extend(self.check_config_files())
@@ -488,7 +487,7 @@ class HealthChecker:
         state_path = self.data_root / "soul" / "soul_variable" / "state_vector.json"
         if state_path.exists():
             try:
-                with open(state_path, "r", encoding="utf-8") as f:
+                with open(state_path, encoding="utf-8") as f:
                     state = json.load(f)
                     soul_version = state.get("version")
             except Exception:

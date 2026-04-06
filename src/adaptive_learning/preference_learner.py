@@ -2,13 +2,14 @@
 AgentSoul · 用户偏好学习模块
 学习用户偏好的响应长度、语气、emoji使用等
 """
+from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-import json
 
-from common import log, get_project_root
+from common import get_project_root, log
+
 from .data_collector import InteractionRecord
 
 # Unicode emoji ranges (covers most common emoji) - constant defined once at module level
@@ -28,12 +29,12 @@ class UserPreferences:
     preferred_tone: str = "neutral"
     preferred_response_length: int = 0
     preferred_emoji_freq: str = "minimal"
-    preferred_topics: List[str] = field(default_factory=list)
-    learning_confidence: Dict[str, float] = field(default_factory=dict)
+    preferred_topics: list[str] = field(default_factory=list)
+    learning_confidence: dict[str, float] = field(default_factory=dict)
 
 
 class PreferenceLearner:
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Path | None = None):
         if data_path is None:
             data_path = get_project_root() / "data" / "learning"
         self.data_path = data_path
@@ -45,7 +46,7 @@ class PreferenceLearner:
     def _load_preferences(self) -> None:
         if self.preferences_file.exists():
             try:
-                with open(self.preferences_file, "r", encoding="utf-8") as f:
+                with open(self.preferences_file, encoding="utf-8") as f:
                     data = json.load(f)
                     self._preferences = UserPreferences(
                         preferred_tone=data.get("preferred_tone", "neutral"),
@@ -147,5 +148,5 @@ class PreferenceLearner:
         self._save_preferences()
         log("Preferences reset to defaults", "OK")
 
-    def get_confidence_summary(self) -> Dict[str, float]:
+    def get_confidence_summary(self) -> dict[str, float]:
         return self._preferences.learning_confidence.copy()

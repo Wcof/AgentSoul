@@ -2,16 +2,15 @@
 AgentSoul · 记忆优先级管理
 提供三级优先级管理、自动调整和高优先级记忆检索功能
 """
+from __future__ import annotations
 
-import time
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Dict
-import json
 
-from common import log, get_project_root
+from common import get_project_root, log
 from src.common.cache import TTLCacheBase
 
 
@@ -31,14 +30,14 @@ class MemoryPriority:
 
 
 class PriorityManager(TTLCacheBase):
-    def __init__(self, storage_path: Optional[Path] = None, default_ttl: int = 300):
+    def __init__(self, storage_path: Path | None = None, default_ttl: int = 300):
         super().__init__(default_ttl)
         if storage_path is None:
             storage_path = get_project_root() / "data" / "memories"
         self.storage_path = storage_path
         self.priority_index_file = storage_path / "priority_index.json"
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        self._priorities: Dict[str, MemoryPriority] = {}
+        self._priorities: dict[str, MemoryPriority] = {}
         self._load_index()
 
     def invalidate_cache(self) -> None:
@@ -55,7 +54,7 @@ class PriorityManager(TTLCacheBase):
 
         if self.priority_index_file.exists():
             try:
-                with open(self.priority_index_file, "r", encoding="utf-8") as f:
+                with open(self.priority_index_file, encoding="utf-8") as f:
                     data = json.load(f)
                     for mem_id, info in data.get("priorities", {}).items():
                         self._priorities[mem_id] = MemoryPriority(
@@ -152,7 +151,7 @@ class PriorityManager(TTLCacheBase):
             elif priority.level == PriorityLevel.MEDIUM:
                 priority.level = PriorityLevel.LOW
 
-    def get_high_priority_memories(self, limit: int = 20) -> List[str]:
+    def get_high_priority_memories(self, limit: int = 20) -> list[str]:
         self._load_index()
         high_priority = [
             (mem_id, info.last_accessed)
@@ -162,7 +161,7 @@ class PriorityManager(TTLCacheBase):
         high_priority.sort(key=lambda x: x[1], reverse=True)
         return [mem_id for mem_id, _ in high_priority[:limit]]
 
-    def get_all_priorities(self) -> List[MemoryPriority]:
+    def get_all_priorities(self) -> list[MemoryPriority]:
         self._load_index()
         return sorted(
             self._priorities.values(),
@@ -187,7 +186,7 @@ class PriorityManager(TTLCacheBase):
             return
 
         try:
-            with open(memory_file, "r", encoding="utf-8") as f:
+            with open(memory_file, encoding="utf-8") as f:
                 memory = json.load(f)
 
             priority_info = self._priorities.get(memory_id)

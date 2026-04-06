@@ -2,17 +2,18 @@
 AgentSoul · 智能检索模块
 提供模糊匹配、时间过滤、相关度排序等高级搜索功能
 """
+from __future__ import annotations
 
-import time
+import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-import json
-import re
+from typing import Any
 
-from common import log, get_project_root
+from common import get_project_root, log
 from src.common.cache import TTLCacheBase
+
 from .priority import PriorityLevel
 
 
@@ -21,19 +22,19 @@ class SearchResult:
     memory_id: str
     content: str
     relevance: float
-    tags: List[str]
+    tags: list[str]
     last_accessed: datetime
     priority: str = "medium"
 
 
 class MemoryRetriever(TTLCacheBase):
-    def __init__(self, storage_path: Optional[Path] = None, default_ttl: int = 300):
+    def __init__(self, storage_path: Path | None = None, default_ttl: int = 300):
         super().__init__(default_ttl)
         if storage_path is None:
             storage_path = get_project_root() / "data" / "memories"
         self.storage_path = storage_path
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        self._cache: Optional[List[Dict[str, Any]]] = None
+        self._cache: list[dict[str, Any]] | None = None
 
     @staticmethod
     def levenshtein_distance(s1: str, s2: str) -> int:
@@ -43,7 +44,7 @@ class MemoryRetriever(TTLCacheBase):
         if len(s2) == 0:
             return len(s1)
 
-        previous_row: List[int] = list(range(len(s2) + 1))
+        previous_row: list[int] = list(range(len(s2) + 1))
         for i, c1 in enumerate(s1):
             current_row = [i + 1]
             for j, c2 in enumerate(s2):
@@ -90,19 +91,19 @@ class MemoryRetriever(TTLCacheBase):
             return False
         return super()._cache_is_valid()
 
-    def _load_all_memories(self) -> List[Dict[str, Any]]:
+    def _load_all_memories(self) -> list[dict[str, Any]]:
         # Return cached copy if still valid
         if self._cache_is_valid():
             return self._cache if self._cache is not None else []
 
-        memories: List[Dict[str, Any]] = []
+        memories: list[dict[str, Any]] = []
         if not self.storage_path.exists():
             self._cache = memories
             return memories
 
         for json_file in self.storage_path.glob("*.json"):
             try:
-                with open(json_file, "r", encoding="utf-8") as f:
+                with open(json_file, encoding="utf-8") as f:
                     memory = json.load(f)
                     memory["memory_id"] = json_file.stem
                     memories.append(memory)
@@ -118,12 +119,12 @@ class MemoryRetriever(TTLCacheBase):
     def search(
         self,
         query: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        tags: Optional[List[str]] = None,
-        priority: Optional[str] = None,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        tags: list[str] | None = None,
+        priority: str | None = None,
         limit: int = 10
-    ) -> List[SearchResult]:
+    ) -> list[SearchResult]:
         memories = self._load_all_memories()
         results = []
 

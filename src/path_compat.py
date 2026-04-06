@@ -17,10 +17,10 @@ AgentSoul · 路径兼容性模块 v1.0
     resolver = PathResolver(project_root)
     result = resolver.resolve("memory_bank/memory_day/2024-01-01.md")
 """
+from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
+from pathlib import Path
 
 from common import get_project_root
 
@@ -54,8 +54,8 @@ class PathResolver:
 
     def __init__(
         self,
-        project_root: Optional[Path] = None,
-        mappings: Optional[list[PathMapping]] = None,
+        project_root: Path | None = None,
+        mappings: list[PathMapping] | None = None,
     ):
         self.project_root = project_root or get_project_root()
         self.mappings = mappings if mappings is not None else self.DEFAULT_MAPPINGS
@@ -64,7 +64,7 @@ class PathResolver:
             self.mappings.sort(key=lambda m: m.priority, reverse=True)
         self._cache: dict[str, ResolveResult] = {}
 
-    def _apply_mapping(self, path: str) -> Tuple[str, PathMapping]:
+    def _apply_mapping(self, path: str) -> tuple[str, PathMapping]:
         normalized = path.replace("\\", "/")
 
         for mapping in self.mappings:
@@ -150,7 +150,7 @@ class PathResolver:
 
         return result
 
-    def resolve_many(self, paths: List[str]) -> Dict[str, ResolveResult]:
+    def resolve_many(self, paths: list[str]) -> dict[str, ResolveResult]:
         return {p: self.resolve(p) for p in paths}
 
     def clear_cache(self) -> None:
@@ -159,7 +159,7 @@ class PathResolver:
 
 def resolve_path(
     path: str,
-    project_root: Optional[Path] = None,
+    project_root: Path | None = None,
     check_existence: bool = True
 ) -> ResolveResult:
     resolver = PathResolver(project_root)

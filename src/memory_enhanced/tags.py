@@ -2,16 +2,15 @@
 AgentSoul · 记忆标签系统
 提供标签管理、标签统计和自动标签建议功能
 """
+from __future__ import annotations
 
-import time
+import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Set
-import json
-import re
 
-from common import log, get_project_root
+from common import get_project_root, log
 from src.common.cache import TTLCacheBase
 
 
@@ -23,15 +22,15 @@ class TagInfo:
 
 
 class TagManager(TTLCacheBase):
-    def __init__(self, storage_path: Optional[Path] = None, default_ttl: int = 300):
+    def __init__(self, storage_path: Path | None = None, default_ttl: int = 300):
         super().__init__(default_ttl)
         if storage_path is None:
             storage_path = get_project_root() / "data" / "memories"
         self.storage_path = storage_path
         self.tags_index_file = storage_path / "tags_index.json"
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        self._tags_cache: Dict[str, TagInfo] = {}
-        self._memory_tags: Dict[str, Set[str]] = {}
+        self._tags_cache: dict[str, TagInfo] = {}
+        self._memory_tags: dict[str, set[str]] = {}
         self._load_index()
 
     def invalidate_cache(self) -> None:
@@ -50,7 +49,7 @@ class TagManager(TTLCacheBase):
 
         if self.tags_index_file.exists():
             try:
-                with open(self.tags_index_file, "r", encoding="utf-8") as f:
+                with open(self.tags_index_file, encoding="utf-8") as f:
                     data = json.load(f)
                     self._tags_cache = {
                         name: TagInfo(
@@ -92,7 +91,7 @@ class TagManager(TTLCacheBase):
         except Exception as e:
             log(f"Failed to save tags index: {e}", "ERROR")
 
-    def add_tags(self, memory_id: str, tags: List[str]) -> None:
+    def add_tags(self, memory_id: str, tags: list[str]) -> None:
         self._load_index()
         if memory_id not in self._memory_tags:
             self._memory_tags[memory_id] = set()
@@ -118,7 +117,7 @@ class TagManager(TTLCacheBase):
         self._save_index()
         self._update_memory_file_tags(memory_id)
 
-    def remove_tags(self, memory_id: str, tags: List[str]) -> None:
+    def remove_tags(self, memory_id: str, tags: list[str]) -> None:
         self._load_index()
         if memory_id not in self._memory_tags:
             return
@@ -141,11 +140,11 @@ class TagManager(TTLCacheBase):
         self._save_index()
         self._update_memory_file_tags(memory_id)
 
-    def get_tags(self, memory_id: str) -> List[str]:
+    def get_tags(self, memory_id: str) -> list[str]:
         self._load_index()
         return list(self._memory_tags.get(memory_id, set()))
 
-    def list_all_tags(self, min_count: int = 1) -> List[TagInfo]:
+    def list_all_tags(self, min_count: int = 1) -> list[TagInfo]:
         self._load_index()
         tags = [
             info for info in self._tags_cache.values()
@@ -153,10 +152,10 @@ class TagManager(TTLCacheBase):
         ]
         return sorted(tags, key=lambda t: (-t.count, -t.last_used.timestamp()))
 
-    def suggest_tags(self, content: str, limit: int = 5) -> List[str]:
+    def suggest_tags(self, content: str, limit: int = 5) -> list[str]:
         self._load_index()
         words = re.findall(r"[\w\u4e00-\u9fff]+", content.lower())
-        suggestions: Dict[str, int] = {}
+        suggestions: dict[str, int] = {}
 
         for tag in self._tags_cache:
             tag_parts = re.findall(r"[\w\u4e00-\u9fff]+", tag)
@@ -177,7 +176,7 @@ class TagManager(TTLCacheBase):
             return
 
         try:
-            with open(memory_file, "r", encoding="utf-8") as f:
+            with open(memory_file, encoding="utf-8") as f:
                 memory = json.load(f)
 
             memory["tags"] = list(self._memory_tags.get(memory_id, set()))

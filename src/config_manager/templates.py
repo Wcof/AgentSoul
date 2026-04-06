@@ -2,16 +2,17 @@
 AgentSoul · 配置模板管理
 提供配置模板的加载、预览和应用功能
 """
+from __future__ import annotations
 
-import time
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Optional, Any
-import yaml
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
-from common import log, get_project_root
+import yaml
+
+from common import get_project_root, log
 from src.common.cache import TTLCacheBase
 
 
@@ -19,24 +20,24 @@ from src.common.cache import TTLCacheBase
 class ConfigTemplate:
     name: str
     description: str
-    config: Dict[str, Any]
+    config: dict[str, Any]
     file_path: Path
 
 
 class TemplateManager(TTLCacheBase):
-    def __init__(self, templates_dir: Optional[Path] = None, default_ttl: int = 300):
+    def __init__(self, templates_dir: Path | None = None, default_ttl: int = 300):
         super().__init__(default_ttl)
         if templates_dir is None:
             templates_dir = get_project_root() / "config" / "templates"
         self.templates_dir = templates_dir
-        self._templates_cache: Optional[List[ConfigTemplate]] = None
+        self._templates_cache: list[ConfigTemplate] | None = None
 
-    def list_templates(self, use_cache: bool = True) -> List[ConfigTemplate]:
+    def list_templates(self, use_cache: bool = True) -> list[ConfigTemplate]:
         # Return cached copy if still valid
         if use_cache and self._cache_is_valid():
             return self._templates_cache if self._templates_cache is not None else []
 
-        templates: List[ConfigTemplate] = []
+        templates: list[ConfigTemplate] = []
         if not self.templates_dir.exists():
             self._templates_cache = templates
             self._update_cache_timestamp()
@@ -54,7 +55,7 @@ class TemplateManager(TTLCacheBase):
         self._update_cache_timestamp()
         return self._templates_cache
 
-    def get_template(self, name: str) -> Optional[ConfigTemplate]:
+    def get_template(self, name: str) -> ConfigTemplate | None:
         templates = self.list_templates()
         for template in templates:
             if template.name.lower() == name.lower():
@@ -91,7 +92,7 @@ class TemplateManager(TTLCacheBase):
     def apply_template(
         self,
         name: str,
-        target_path: Optional[Path] = None,
+        target_path: Path | None = None,
         backup: bool = True
     ) -> bool:
         template = self.get_template(name)
@@ -114,7 +115,7 @@ class TemplateManager(TTLCacheBase):
         log(f"Template '{name}' applied to {target_path}", "OK")
         return True
 
-    def _load_template(self, file_path: Path) -> Optional[ConfigTemplate]:
+    def _load_template(self, file_path: Path) -> ConfigTemplate | None:
         if not file_path.exists():
             return None
 
@@ -136,7 +137,7 @@ class TemplateManager(TTLCacheBase):
             log(f"Error loading template {file_path}: {e}", "ERROR")
             return None
 
-    def _extract_description(self, config: Dict[str, Any]) -> str:
+    def _extract_description(self, config: dict[str, Any]) -> str:
         agent = config.get("agent", {})
         role = agent.get("role", "AI Assistant")
         personality = agent.get("personality", [])
@@ -151,16 +152,16 @@ class TemplateManager(TTLCacheBase):
 # === Convenience module-level functions for backward compatibility and easy access ===
 
 # Pre-defined persona templates (will be populated from disk on access)
-PERSONA_TEMPLATES: List[str] = []
+PERSONA_TEMPLATES: list[str] = []
 
 
-def get_template(name: str) -> Optional[ConfigTemplate]:
+def get_template(name: str) -> ConfigTemplate | None:
     """Get a template by name (convenience function)."""
     manager = TemplateManager()
     return manager.get_template(name)
 
 
-def list_templates() -> List[ConfigTemplate]:
+def list_templates() -> list[ConfigTemplate]:
     """List all available templates (convenience function)."""
     global PERSONA_TEMPLATES
     manager = TemplateManager()

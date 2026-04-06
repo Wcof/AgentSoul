@@ -2,32 +2,33 @@
 AgentSoul · 交互数据收集模块
 记录对话元数据、用户反馈和PAD状态变化
 """
+from __future__ import annotations
 
+import json
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-import json
-import uuid
+from typing import Any
 
-from common import log, get_project_root, read_last_n_lines
+from common import get_project_root, log, read_last_n_lines
 
 
 @dataclass
 class InteractionRecord:
     session_id: str
     timestamp: datetime
-    pad_before: Dict[str, float]
-    pad_after: Dict[str, float]
-    feedback: Optional[str] = None
-    response_length: Optional[int] = None
-    topics: Optional[List[str]] = None
-    user_input: Optional[str] = None
-    agent_response: Optional[str] = None
+    pad_before: dict[str, float]
+    pad_after: dict[str, float]
+    feedback: str | None = None
+    response_length: int | None = None
+    topics: list[str] | None = None
+    user_input: str | None = None
+    agent_response: str | None = None
 
 
 class DataCollector:
-    def __init__(self, data_path: Optional[Path] = None):
+    def __init__(self, data_path: Path | None = None):
         if data_path is None:
             data_path = get_project_root() / "data" / "learning"
         self.data_path = data_path
@@ -54,8 +55,8 @@ class DataCollector:
         except Exception as e:
             log(f"Failed to record interaction: {e}", "ERROR")
 
-    def get_recent(self, limit: int = 100) -> List[InteractionRecord]:
-        records: List[InteractionRecord] = []
+    def get_recent(self, limit: int = 100) -> list[InteractionRecord]:
+        records: list[InteractionRecord] = []
 
         if not self.interactions_file.exists():
             return records
@@ -67,7 +68,7 @@ class DataCollector:
 
             # For small files, read all at once
             if file_size < 100 * 1024:  # Less than 100KB
-                with open(self.interactions_file, "r", encoding="utf-8") as f:
+                with open(self.interactions_file, encoding="utf-8") as f:
                     lines = f.readlines()
                 lines_to_process = lines[-limit:]
             else:
@@ -101,7 +102,7 @@ class DataCollector:
 
         return records
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         records = self.get_recent(limit=1000)
 
         if not records:

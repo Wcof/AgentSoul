@@ -7,40 +7,41 @@ AgentSoul · 本地文件系统存储实现
 - 独立运行模式存储
 - 向后兼容传统文件布局
 """
+from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
-import json
-import yaml
-import hashlib
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime
-
 import sys
-import os
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import yaml
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from common import get_project_root, log
 from src.abstract import (
-    BasePersonaStorage,
-    BaseSoulStateStorage,
     BaseMemoryStorage,
+    BasePersonaStorage,
     BaseSkillStorage,
-    SoulVersion,
+    BaseSoulStateStorage,
     MemoryConflict,
+    SoulVersion,
 )
 
 
 class LocalPersonaStorage(BasePersonaStorage):
     """本地文件系统人格存储实现"""
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.config_path = self.project_root / "config" / "persona.yaml"
-        self._version_cache: Optional[SoulVersion] = None
+        self._version_cache: SoulVersion | None = None
 
-    def read_persona_config(self) -> Dict[str, Any]:
+    def read_persona_config(self) -> dict[str, Any]:
         """读取人格配置"""
         if not self.config_path.exists():
             log(f"Persona config not found at {self.config_path}, using defaults", level="WARNING")
@@ -62,10 +63,10 @@ class LocalPersonaStorage(BasePersonaStorage):
                 },
             }
 
-        with open(self.config_path, "r", encoding="utf-8") as f:
+        with open(self.config_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
-    def write_persona_config(self, config: Dict[str, Any]) -> bool:
+    def write_persona_config(self, config: dict[str, Any]) -> bool:
         """写入人格配置，带原子保证"""
         try:
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -123,13 +124,13 @@ class LocalPersonaStorage(BasePersonaStorage):
 class LocalSoulStateStorage(BaseSoulStateStorage):
     """本地文件系统灵魂状态存储实现"""
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.state_path = self.project_root / "data" / "soul" / "soul_variable" / "state_vector.json"
         # 版本历史存储在同目录
         self.history_dir = self.project_root / "data" / "soul" / "versions"
 
-    def read_soul_state(self) -> Dict[str, Any]:
+    def read_soul_state(self) -> dict[str, Any]:
         """读取灵魂状态"""
         if not self.state_path.exists():
             # 返回默认状态
@@ -143,8 +144,8 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
             }
 
         try:
-            with open(self.state_path, "r", encoding="utf-8") as f:
-                result: Dict[str, Any] = json.load(f)
+            with open(self.state_path, encoding="utf-8") as f:
+                result: dict[str, Any] = json.load(f)
                 return result
         except Exception as e:
             log(f"Failed to read soul state: {e}, using defaults", level="ERROR")
@@ -157,7 +158,7 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
                 "history": [],
             }
 
-    def write_soul_state(self, state: Dict[str, Any]) -> bool:
+    def write_soul_state(self, state: dict[str, Any]) -> bool:
         """写入灵魂状态，带原子保证和版本快照"""
         try:
             self.state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -180,7 +181,7 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
             log(f"Failed to write soul state: {e}", level="ERROR")
             return False
 
-    def _save_version_snapshot(self, state: Dict[str, Any]) -> None:
+    def _save_version_snapshot(self, state: dict[str, Any]) -> None:
         """保存版本快照用于回滚"""
         try:
             self.history_dir.mkdir(parents=True, exist_ok=True)
@@ -197,9 +198,9 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
         except Exception as e:
             log(f"Failed to save version snapshot: {e}", level="DEBUG")
 
-    def list_versions(self) -> List[SoulVersion]:
+    def list_versions(self) -> list[SoulVersion]:
         """列出所有可用版本"""
-        versions: List[SoulVersion] = []
+        versions: list[SoulVersion] = []
         if not self.history_dir.exists():
             return versions
 
@@ -226,7 +227,7 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
             return False
 
         # 查找匹配的版本快照
-        found: Optional[Path] = None
+        found: Path | None = None
         for snap in self.history_dir.glob("*.json"):
             if to_version in snap.name:
                 found = snap
@@ -237,7 +238,7 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
             return False
 
         try:
-            with open(found, "r", encoding="utf-8") as f:
+            with open(found, encoding="utf-8") as f:
                 state = json.load(f)
             return self.write_soul_state(state)
         except Exception as e:
@@ -248,7 +249,7 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
 class LocalMemoryStorage(BaseMemoryStorage):
     """本地文件系统分层记忆存储实现"""
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.base_dir = self.project_root / "data" / "memory"
 
@@ -265,19 +266,19 @@ class LocalMemoryStorage(BaseMemoryStorage):
         """净化主题名称，移除危险字符"""
         return "".join(c for c in topic if c.isalnum() or c in "-_")
 
-    def read_daily_memory(self, date: str) -> Optional[str]:
+    def read_daily_memory(self, date: str) -> str | None:
         path = self._get_path("day", date)
         if not path.exists():
             return None
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
             log(f"Failed to read daily memory for {date}: {e}", level="ERROR")
             return None
 
     @staticmethod
-    def _parse_date(date: str) -> Optional[tuple[int, int, int]]:
+    def _parse_date(date: str) -> tuple[int, int, int] | None:
         """Parse date string to year, month, day components."""
         match = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', date)
         if not match:
@@ -295,7 +296,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
         except ValueError:
             return None
 
-    def _date_to_year_week(self, date: str) -> Optional[str]:
+    def _date_to_year_week(self, date: str) -> str | None:
         """Convert YYYY-MM-DD date to YYYY-WW format."""
         parsed = self._parse_date(date)
         if not parsed:
@@ -307,7 +308,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
         week = (day_of_year - 1) // 7 + 1
         return f"{year}-{week:02d}"
 
-    def _date_to_year_month(self, date: str) -> Optional[str]:
+    def _date_to_year_month(self, date: str) -> str | None:
         """Convert YYYY-MM-DD date to YYYY-MM format."""
         parsed = self._parse_date(date)
         if not parsed:
@@ -315,7 +316,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
         year, month, _ = parsed
         return f"{year}-{month:02d}"
 
-    def _date_to_year(self, date: str) -> Optional[str]:
+    def _date_to_year(self, date: str) -> str | None:
         """Convert YYYY-MM-DD date to YYYY format."""
         parsed = self._parse_date(date)
         if not parsed:
@@ -371,7 +372,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
         except ValueError:
             return False
 
-    def _aggregate_daily_to_weekly(self, year_week: str) -> Optional[str]:
+    def _aggregate_daily_to_weekly(self, year_week: str) -> str | None:
         """Aggregate all daily memories for a week into weekly content."""
         day_dir = self.base_dir / "day"
         if not day_dir.exists():
@@ -391,7 +392,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
 
         return aggregated if has_content else None
 
-    def _aggregate_weekly_to_monthly(self, year_month: str) -> Optional[str]:
+    def _aggregate_weekly_to_monthly(self, year_month: str) -> str | None:
         """Aggregate all weekly memories for a month into monthly content."""
         week_dir = self.base_dir / "week"
         if not week_dir.exists():
@@ -410,7 +411,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
 
         return aggregated if has_content else None
 
-    def _aggregate_monthly_to_yearly(self, year: str) -> Optional[str]:
+    def _aggregate_monthly_to_yearly(self, year: str) -> str | None:
         """Aggregate all monthly memories for a year into yearly content."""
         month_dir = self.base_dir / "month"
         if not month_dir.exists():
@@ -438,7 +439,6 @@ class LocalMemoryStorage(BaseMemoryStorage):
     def _trigger_automatic_archiving(self, current_date: str) -> None:
         """Trigger automatic hierarchical archiving after writing a new daily memory."""
         try:
-            import logging
             day_dir = self.base_dir / "day"
             if not day_dir.exists():
                 return
@@ -495,18 +495,18 @@ class LocalMemoryStorage(BaseMemoryStorage):
             if not month_dir.exists():
                 return
 
-            archived_years = set()
+            archived_years: set[str] = set()
             for file in month_dir.glob("*.md"):
                 year_month = file.stem
                 if self._should_archive_month_to_year(year_month):
-                    year = year_month.split('-')[0]
-                    archived_years.add(year)
+                    year_str = year_month.split('-')[0]
+                    archived_years.add(year_str)
 
-            for year in archived_years:
-                aggregated = self._aggregate_monthly_to_yearly(year)
+            for year_str in archived_years:
+                aggregated = self._aggregate_monthly_to_yearly(year_str)
                 if aggregated:
-                    self.write_yearly_memory(year, aggregated)
-                    log(f"[AutoArchive] Aggregated monthly memories to year {year}", "DEBUG")
+                    self.write_yearly_memory(year_str, aggregated)
+                    log(f"[AutoArchive] Aggregated monthly memories to year {year_str}", "DEBUG")
 
         except Exception as e:
             # Don't fail the write if auto-archiving fails
@@ -520,12 +520,12 @@ class LocalMemoryStorage(BaseMemoryStorage):
             self._trigger_automatic_archiving(date)
         return success
 
-    def read_weekly_memory(self, year_week: str) -> Optional[str]:
+    def read_weekly_memory(self, year_week: str) -> str | None:
         path = self._get_path("week", year_week)
         if not path.exists():
             return None
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
             log(f"Failed to read weekly memory for {year_week}: {e}", level="ERROR")
@@ -535,12 +535,12 @@ class LocalMemoryStorage(BaseMemoryStorage):
         path = self._get_path("week", year_week)
         return self._atomic_write(path, content, append)
 
-    def read_monthly_memory(self, year_month: str) -> Optional[str]:
+    def read_monthly_memory(self, year_month: str) -> str | None:
         path = self._get_path("month", year_month)
         if not path.exists():
             return None
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
             log(f"Failed to read monthly memory for {year_month}: {e}", level="ERROR")
@@ -550,12 +550,12 @@ class LocalMemoryStorage(BaseMemoryStorage):
         path = self._get_path("month", year_month)
         return self._atomic_write(path, content, append)
 
-    def read_yearly_memory(self, year: str) -> Optional[str]:
+    def read_yearly_memory(self, year: str) -> str | None:
         path = self._get_path("year", year)
         if not path.exists():
             return None
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
             log(f"Failed to read yearly memory for {year}: {e}", level="ERROR")
@@ -565,13 +565,13 @@ class LocalMemoryStorage(BaseMemoryStorage):
         path = self._get_path("year", year)
         return self._atomic_write(path, content, append)
 
-    def read_topic_memory(self, topic: str) -> Optional[str]:
+    def read_topic_memory(self, topic: str) -> str | None:
         # 先试活跃目录，再试归档
         sanitized = self._sanitize_topic(topic)
         path = self.base_dir / "topic" / f"{sanitized}.md"
         if path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     return f.read()
             except Exception as e:
                 log(f"Failed to read topic memory for {topic}: {e}", level="ERROR")
@@ -579,7 +579,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
         archive_path = self.base_dir / "topic" / "archive" / f"{sanitized}.md"
         if archive_path.exists():
             try:
-                with open(archive_path, "r", encoding="utf-8") as f:
+                with open(archive_path, encoding="utf-8") as f:
                     return f.read()
             except Exception as e:
                 log(f"Failed to read archived topic memory for {topic}: {e}", level="ERROR")
@@ -597,7 +597,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
             temp_path = f"{path}.tmp.{int(datetime.now().timestamp())}"
 
             if append and path.exists():
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     existing = f.read()
                 content = existing + "\n\n" + content
 
@@ -609,8 +609,8 @@ class LocalMemoryStorage(BaseMemoryStorage):
             log(f"Failed to write {path}: {e}", level="ERROR")
             return False
 
-    def list_topics(self, status: str = "active") -> List[Dict[str, str]]:
-        results: List[Dict[str, str]] = []
+    def list_topics(self, status: str = "active") -> list[dict[str, str]]:
+        results: list[dict[str, str]] = []
 
         if status in ["active", "all"]:
             active_dir = self.base_dir / "topic"
@@ -668,7 +668,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
             log(f"Failed to archive topic: {e}", level="ERROR")
             return False
 
-    def detect_conflict(self, topic: str, new_content: str) -> Optional[MemoryConflict]:
+    def detect_conflict(self, topic: str, new_content: str) -> MemoryConflict | None:
         """检测记忆冲突"""
         existing = self.read_topic_memory(topic)
         if existing is None or len(existing.strip()) == 0:
@@ -726,21 +726,21 @@ class LocalMemoryStorage(BaseMemoryStorage):
 class LocalSkillStorage(BaseSkillStorage):
     """本地文件系统技能规则存储实现"""
 
-    def __init__(self, project_root: Optional[Path] = None):
+    def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
         self.rules_dir = self.project_root / "src"
 
-    def read_base_rule(self, name: str) -> Optional[str]:
+    def read_base_rule(self, name: str) -> str | None:
         """读取基础规则，name 是文件名（不带 .md）"""
         path = self.rules_dir / f"{name}.md"
         if not path.exists():
             return None
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return f.read()
 
-    def list_available_rules(self) -> List[str]:
+    def list_available_rules(self) -> list[str]:
         """列出所有可用基础规则"""
-        rules: List[str] = []
+        rules: list[str] = []
         for file in self.rules_dir.glob("*.md"):
             if file.stem in ["SKILL", "soul_base", "memory_base", "master_base", "secure_base", "skills_base", "tasks_base"]:
                 rules.append(file.stem)

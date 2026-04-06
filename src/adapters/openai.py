@@ -8,30 +8,29 @@ AgentSoul · OpenAI 链路注入适配器
 - 记忆上下文自动插入
 - PAD 情绪状态感知响应调整
 """
+from __future__ import annotations
 
-from typing import List, Dict, Any, Optional, Tuple
-from dataclasses import dataclass
-import json
-from datetime import datetime
-
-import sys
 import os
+import sys
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from common import get_project_root, log
 from src.abstract import (
-    UnifiedSoulStorage,
-    BasePersonaStorage,
-    BaseSoulStateStorage,
     BaseMemoryStorage,
+    BasePersonaStorage,
     BaseSkillStorage,
+    BaseSoulStateStorage,
     SoulVersion,
+    UnifiedSoulStorage,
 )
 from src.storage.local import (
-    LocalPersonaStorage,
-    LocalSoulStateStorage,
     LocalMemoryStorage,
+    LocalPersonaStorage,
     LocalSkillStorage,
+    LocalSoulStateStorage,
 )
 
 
@@ -40,7 +39,7 @@ class OpenAIMessage:
     """OpenAI 消息格式"""
     role: str
     content: str
-    name: Optional[str] = None
+    name: str | None = None
 
 
 @dataclass
@@ -78,12 +77,12 @@ class OpenAIInjectionAdapter:
 
     def __init__(
         self,
-        storage: Optional[UnifiedSoulStorage] = None,
-        persona_storage: Optional[BasePersonaStorage] = None,
-        soul_state_storage: Optional[BaseSoulStateStorage] = None,
-        memory_storage: Optional[BaseMemoryStorage] = None,
-        skill_storage: Optional[BaseSkillStorage] = None,
-        config: Optional[InjectionConfig] = None,
+        storage: UnifiedSoulStorage | None = None,
+        persona_storage: BasePersonaStorage | None = None,
+        soul_state_storage: BaseSoulStateStorage | None = None,
+        memory_storage: BaseMemoryStorage | None = None,
+        skill_storage: BaseSkillStorage | None = None,
+        config: InjectionConfig | None = None,
     ):
         """初始化适配器
 
@@ -117,23 +116,23 @@ class OpenAIInjectionAdapter:
         master_name = master.get("name", "用户")
 
         prompt_parts = [
-            f"# 你的身份\n",
+            "# 你的身份\n",
             f"你是 {name}，{role}。\n",
         ]
 
         if personality:
-            prompt_parts.append(f"\n## 你的性格\n")
+            prompt_parts.append("\n## 你的性格\n")
             prompt_parts.append(", ".join(personality) + "\n")
 
         if core_values:
-            prompt_parts.append(f"\n## 核心价值观\n")
+            prompt_parts.append("\n## 核心价值观\n")
             prompt_parts.append(", ".join(core_values) + "\n")
 
         if interaction:
             tone = interaction.get("tone", "neutral")
             language = interaction.get("language", "chinese")
             emoji = interaction.get("emoji_usage", "minimal")
-            prompt_parts.append(f"\n## 交互风格\n")
+            prompt_parts.append("\n## 交互风格\n")
             prompt_parts.append(f"- 语气: {tone}\n")
             prompt_parts.append(f"- 语言: {language}\n")
             prompt_parts.append(f"- 表情使用: {emoji}\n")
@@ -189,7 +188,7 @@ class OpenAIInjectionAdapter:
     def _build_base_rules(self) -> str:
         """构建基础规则提示"""
         rules = ["SKILL", "soul_base", "memory_base"]
-        all_content: List[str] = []
+        all_content: list[str] = []
 
         for rule_name in rules:
             content = self.storage.skills.read_base_rule(rule_name)
@@ -203,8 +202,8 @@ class OpenAIInjectionAdapter:
 
     def inject_context(
         self,
-        messages: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        messages: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """注入 AgentSoul 上下文到消息列表
 
         Args:
@@ -213,7 +212,7 @@ class OpenAIInjectionAdapter:
         Returns:
             注入后的新消息列表
         """
-        injected_parts: List[str] = []
+        injected_parts: list[str] = []
 
         if self.config.include_persona:
             injected_parts.append(self._build_persona_prompt())
@@ -267,8 +266,8 @@ class OpenAIInjectionAdapter:
 
     def save_daily_summary(
         self,
-        conversation: List[Dict[str, Any]],
-        summary: Optional[str] = None
+        conversation: list[dict[str, Any]],
+        summary: str | None = None
     ) -> bool:
         """保存今日对话摘要到记忆
 
@@ -292,7 +291,7 @@ class OpenAIInjectionAdapter:
 
         return self.storage.memory.write_daily_memory(today, content)
 
-    def _generate_simple_summary(self, conversation: List[Dict[str, Any]]) -> str:
+    def _generate_simple_summary(self, conversation: list[dict[str, Any]]) -> str:
         """生成简单对话摘要"""
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         user_messages = [m["content"] for m in conversation if m["role"] == "user"]

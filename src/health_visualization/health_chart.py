@@ -2,11 +2,11 @@
 AgentSoul · 健康度图表导出
 导出 .soul_health.md 中的健康度历史为 SVG 图表
 """
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
 from common import get_project_root, log
 
@@ -25,19 +25,19 @@ class HealthRecord:
 class HealthChartExporter:
     """健康度图表导出器"""
 
-    def __init__(self, health_file: Optional[Path] = None):
+    def __init__(self, health_file: Path | None = None):
         if health_file is None:
             health_file = get_project_root() / ".soul_health.md"
         self.health_file = health_file
 
-    def parse_history(self) -> List[HealthRecord]:
+    def parse_history(self) -> list[HealthRecord]:
         """解析健康度历史"""
-        records: List[HealthRecord] = []
+        records: list[HealthRecord] = []
 
         if not self.health_file.exists():
             return records
 
-        with open(self.health_file, "r", encoding="utf-8") as f:
+        with open(self.health_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -79,7 +79,7 @@ class HealthChartExporter:
         records.sort(key=lambda r: r.iteration)
         return records
 
-    def export_json(self, output_path: Optional[Path] = None) -> Path:
+    def export_json(self, output_path: Path | None = None) -> Path:
         """导出健康度历史为 JSON"""
         if output_path is None:
             output_path = get_project_root() / "data" / "health_history.json"
@@ -104,7 +104,7 @@ class HealthChartExporter:
         log(f"健康度历史已导出 JSON: {output_path}", "OK")
         return output_path
 
-    def export_svg(self, output_path: Optional[Path] = None, width: int = 800, height: int = 400) -> Path:
+    def export_svg(self, output_path: Path | None = None, width: int = 800, height: int = 400) -> Path:
         """导出健康度历史为 SVG 折线图"""
         if output_path is None:
             output_path = get_project_root() / "data" / "health_chart.svg"
@@ -140,7 +140,7 @@ class HealthChartExporter:
         # Generate SVG
         svg_lines = [
             f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">',
-            f'  <rect width="100%" height="100%" fill="white"/>',
+            '  <rect width="100%" height="100%" fill="white"/>',
             f'  <text x="{width//2}" y="20" text-anchor="middle" font-size="16" font-family="sans-serif">AgentSoul 健康度成长曲线</text>',
         ]
 

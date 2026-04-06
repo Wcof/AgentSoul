@@ -9,23 +9,21 @@ AgentSoul · 灵魂快照与版本回滚
 - 自动清理旧快照（保留最近 N 个）
 - 导出/导入快照用于跨平台迁移
 """
+from __future__ import annotations
 
-import json
-import os
-import shutil
 import hashlib
+import json
+import shutil
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
+from typing import Any
 
 from common import get_project_root, log
-from src.abstract import SoulVersion, UnifiedSoulStorage
 from src.storage.local import (
+    LocalMemoryStorage,
     LocalPersonaStorage,
     LocalSoulStateStorage,
-    LocalMemoryStorage,
-    LocalSkillStorage,
 )
 
 
@@ -37,9 +35,9 @@ class SoulSnapshot:
     description: str
     persona_version: str
     persona_checksum: str
-    soul_state: Dict[str, Any]
-    memory_topics: List[str]
-    metadata: Dict[str, Any]
+    soul_state: dict[str, Any]
+    memory_topics: list[str]
+    metadata: dict[str, Any]
 
 
 class SnapshotManager:
@@ -47,7 +45,7 @@ class SnapshotManager:
 
     _counter: int = 0
 
-    def __init__(self, project_root: Optional[Path] = None, max_snapshots: int = 50):
+    def __init__(self, project_root: Path | None = None, max_snapshots: int = 50):
         self.project_root = project_root or get_project_root()
         self.max_snapshots = max_snapshots
         self._update_paths()
@@ -76,7 +74,7 @@ class SnapshotManager:
         """计算内容哈希"""
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
-    def create_snapshot(self, description: str = "", metadata: Optional[Dict[str, Any]] = None) -> SoulSnapshot:
+    def create_snapshot(self, description: str = "", metadata: dict[str, Any] | None = None) -> SoulSnapshot:
         """创建完整灵魂快照
 
         Args:
@@ -142,9 +140,9 @@ class SnapshotManager:
         log(f"Created soul snapshot: {snapshot_id} - {description}", level="INFO")
         return snapshot
 
-    def list_snapshots(self) -> List[SoulSnapshot]:
+    def list_snapshots(self) -> list[SoulSnapshot]:
         """列出所有可用快照，按时间倒序排列"""
-        snapshots: List[SoulSnapshot] = []
+        snapshots: list[SoulSnapshot] = []
 
         if not self.snapshot_dir.exists():
             return snapshots
@@ -153,7 +151,7 @@ class SnapshotManager:
             if file.name.endswith(("_persona.yaml", "_state.json")):
                 continue
             try:
-                with open(file, "r", encoding="utf-8") as f:
+                with open(file, encoding="utf-8") as f:
                     data = json.load(f)
                 snapshots.append(SoulSnapshot(**data))
             except Exception as e:
@@ -164,14 +162,14 @@ class SnapshotManager:
         snapshots.sort(key=lambda s: s.timestamp, reverse=True)
         return snapshots
 
-    def get_snapshot(self, snapshot_id: str) -> Optional[SoulSnapshot]:
+    def get_snapshot(self, snapshot_id: str) -> SoulSnapshot | None:
         """获取指定快照信息"""
         index_path = self.snapshot_dir / f"{snapshot_id}.json"
         if not index_path.exists():
             return None
 
         try:
-            with open(index_path, "r", encoding="utf-8") as f:
+            with open(index_path, encoding="utf-8") as f:
                 data = json.load(f)
             return SoulSnapshot(**data)
         except Exception as e:
@@ -205,7 +203,7 @@ class SnapshotManager:
             state_backup = self.snapshot_dir / f"{snapshot_id}_state.json"
             if state_backup.exists():
                 # 读取备份状态
-                with open(state_backup, "r", encoding="utf-8") as f:
+                with open(state_backup, encoding="utf-8") as f:
                     state_data = json.load(f)
                 # 写入回去
                 storage = LocalSoulStateStorage(self.project_root)
@@ -257,7 +255,7 @@ class SnapshotManager:
                 self.delete_snapshot(snap.snapshot_id)
             log(f"Cleaned up {len(to_delete)} old snapshots (keep last {self.max_snapshots})", level="INFO")
 
-    def export_snapshot(self, snapshot_id: str, output_dir: Path) -> Optional[Path]:
+    def export_snapshot(self, snapshot_id: str, output_dir: Path) -> Path | None:
         """导出快照到指定目录，可用于跨平台迁移
 
         Args:
@@ -299,7 +297,7 @@ class SnapshotManager:
         log(f"Exported snapshot to {zip_path}", level="INFO")
         return zip_path
 
-    def import_snapshot(self, zip_path: Path) -> Optional[SoulSnapshot]:
+    def import_snapshot(self, zip_path: Path) -> SoulSnapshot | None:
         """导入快照从 zip 文件
 
         Args:
@@ -332,7 +330,7 @@ class SnapshotManager:
             json_path = json_files[0]
             snapshot_id = json_path.stem
 
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(json_path, encoding="utf-8") as f:
                 data = json.load(f)
             snapshot = SoulSnapshot(**data)
 
@@ -381,7 +379,7 @@ class VersionRollback:
         """回滚到指定快照"""
         return self.manager.rollback(snapshot_id)
 
-    def list_available(self) -> List[Dict[str, Any]]:
+    def list_available(self) -> list[dict[str, Any]]:
         """列出可用版本"""
         snapshots = self.manager.list_snapshots()
         return [

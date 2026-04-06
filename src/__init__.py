@@ -3,58 +3,37 @@
 AgentSoul · 核心模块初始化
 提供重新导出公共符号
 """
+from __future__ import annotations
 
 from common import (
-    log,
+    __version__,
+    get_project_root,
     icons,
     load_config,
-    get_project_root,
-    __version__,
+    log,
 )
-from src.config_loader import ConfigLoader
-from src.path_compat import PathResolver, resolve_path
 from src.abstract import (
-    BasePersonaStorage,
-    BaseSoulStateStorage,
     BaseMemoryStorage,
+    BasePersonaStorage,
     BaseSkillStorage,
-    UnifiedSoulStorage,
+    BaseSoulStateStorage,
     InjectionRollback,
     MemoryConflict,
     SoulVersion,
-)
-from src.health_check import (
-    HealthChecker,
-    HealthReport,
-    HealthIssue,
+    UnifiedSoulStorage,
 )
 from src.adapters import (
-    OpenAIInjectionAdapter,
-    InjectionConfig,
     GeminiInjectionAdapter,
     GeminiInjectionConfig,
     GeminiMessage,
+    InjectionConfig,
+    OpenAIInjectionAdapter,
 )
-from src.storage.local import (
-    LocalPersonaStorage,
-    LocalSoulStateStorage,
-    LocalMemoryStorage,
-    LocalSkillStorage,
-)
-from src.storage.mcp_client import (
-    McpPersonaStorage,
-    McpSoulStateStorage,
-    McpMemoryStorage,
-    McpSkillStorage,
-    McpRetryConfig,
-    McpClientError,
-    McpConnectionError,
-    McpRequestError,
-)
-from src.snapshot import (
-    SnapshotManager,
-    SoulSnapshot,
-    VersionRollback,
+from src.config_loader import ConfigLoader
+from src.health_check import (
+    HealthChecker,
+    HealthIssue,
+    HealthReport,
 )
 from src.migration import (
     CrossPlatformMigrator,
@@ -63,6 +42,28 @@ from src.migration import (
     MigrationResult,
     export_archive,
     import_archive,
+)
+from src.path_compat import PathResolver, resolve_path
+from src.snapshot import (
+    SnapshotManager,
+    SoulSnapshot,
+    VersionRollback,
+)
+from src.storage.local import (
+    LocalMemoryStorage,
+    LocalPersonaStorage,
+    LocalSkillStorage,
+    LocalSoulStateStorage,
+)
+from src.storage.mcp_client import (
+    McpClientError,
+    McpConnectionError,
+    McpMemoryStorage,
+    McpPersonaStorage,
+    McpRequestError,
+    McpRetryConfig,
+    McpSkillStorage,
+    McpSoulStateStorage,
 )
 
 __all__ = [

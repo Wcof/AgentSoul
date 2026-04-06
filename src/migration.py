@@ -7,33 +7,34 @@ AgentSoul · 跨平台灵魂迁移
 - Claude (MCP 服务) → OpenAI (本地存储)
 - 完整迁移：人格配置 + 灵魂状态 + 所有分层记忆
 """
+from __future__ import annotations
 
 import json
-import shutil
-import zipfile
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, Callable
-from dataclasses import dataclass
-
-import sys
 import os
+import shutil
+import sys
+import zipfile
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common import get_project_root, log
 from src.abstract import (
+    BaseMemoryStorage,
     BasePersonaStorage,
     BaseSoulStateStorage,
-    BaseMemoryStorage,
 )
 from src.storage.local import (
+    LocalMemoryStorage,
     LocalPersonaStorage,
     LocalSoulStateStorage,
-    LocalMemoryStorage,
 )
 from src.storage.mcp_client import (
+    McpMemoryStorage,
     McpPersonaStorage,
     McpSoulStateStorage,
-    McpMemoryStorage,
 )
 
 
@@ -42,7 +43,7 @@ class MigrationResult:
     """迁移结果"""
     success: bool
     items_migrated: int
-    errors: List[str]
+    errors: list[str]
     message: str
 
 
@@ -54,8 +55,8 @@ class CrossPlatformMigrator:
 
     def __init__(
         self,
-        source_storage: Tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
-        target_storage: Tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
+        source_storage: tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
+        target_storage: tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
     ):
         """初始化迁移器
 
@@ -80,7 +81,7 @@ class CrossPlatformMigrator:
         Returns:
             迁移结果统计
         """
-        errors: List[str] = []
+        errors: list[str] = []
         total_migrated = 0
 
         try:
@@ -147,7 +148,7 @@ class CrossPlatformMigrator:
                 message=f"Migration failed: {str(e)}"
             )
 
-    def _migrate_persona(self, errors: List[str]) -> bool:
+    def _migrate_persona(self, errors: list[str]) -> bool:
         """迁移人格配置"""
         try:
             persona_config = self.source_persona.read_persona_config()
@@ -162,7 +163,7 @@ class CrossPlatformMigrator:
             errors.append(f"Persona migration error: {str(e)}")
             return False
 
-    def _migrate_soul_state(self, errors: List[str]) -> bool:
+    def _migrate_soul_state(self, errors: list[str]) -> bool:
         """迁移灵魂状态"""
         try:
             soul_state = self.source_soul.read_soul_state()
@@ -175,7 +176,7 @@ class CrossPlatformMigrator:
             errors.append(f"Soul state migration error: {str(e)}")
             return False
 
-    def _migrate_daily_memory(self, skip_existing: bool, errors: List[str]) -> int:
+    def _migrate_daily_memory(self, skip_existing: bool, errors: list[str]) -> int:
         """迁移所有日记忆"""
         migrated = 0
         # 如果源是本地，我们可以直接枚举文件
@@ -196,7 +197,7 @@ class CrossPlatformMigrator:
                         errors.append(f"Failed to write daily memory for {date}")
         return migrated
 
-    def _migrate_weekly_memory(self, skip_existing: bool, errors: List[str]) -> int:
+    def _migrate_weekly_memory(self, skip_existing: bool, errors: list[str]) -> int:
         """迁移所有周记忆"""
         migrated = 0
         if hasattr(self.source_memory, 'base_dir'):
@@ -215,7 +216,7 @@ class CrossPlatformMigrator:
                         errors.append(f"Failed to write weekly memory for {year_week}")
         return migrated
 
-    def _migrate_monthly_memory(self, skip_existing: bool, errors: List[str]) -> int:
+    def _migrate_monthly_memory(self, skip_existing: bool, errors: list[str]) -> int:
         """迁移所有月记忆"""
         migrated = 0
         if hasattr(self.source_memory, 'base_dir'):
@@ -234,7 +235,7 @@ class CrossPlatformMigrator:
                         errors.append(f"Failed to write monthly memory for {year_month}")
         return migrated
 
-    def _migrate_yearly_memory(self, skip_existing: bool, errors: List[str]) -> int:
+    def _migrate_yearly_memory(self, skip_existing: bool, errors: list[str]) -> int:
         """迁移所有年记忆"""
         migrated = 0
         if hasattr(self.source_memory, 'base_dir'):
@@ -253,7 +254,7 @@ class CrossPlatformMigrator:
                         errors.append(f"Failed to write yearly memory for {year}")
         return migrated
 
-    def _migrate_topic_memory(self, skip_existing: bool, errors: List[str]) -> int:
+    def _migrate_topic_memory(self, skip_existing: bool, errors: list[str]) -> int:
         """迁移所有主题记忆"""
         migrated = 0
         topics = self.source_memory.list_topics(status="all")
@@ -279,7 +280,7 @@ class CrossPlatformMigrator:
         identifier: str,
         new_content: str,
         skip_existing: bool,
-        read_func: Callable[[str], Optional[str]],
+        read_func: Callable[[str], str | None],
     ) -> bool:
         """检查是否已存在并且需要跳过"""
         if not skip_existing:
@@ -301,8 +302,8 @@ class LocalToMcpMigrator(CrossPlatformMigrator):
 
     def __init__(
         self,
-        project_root: Optional[Path] = None,
-        mcp_server_command: Optional[str] = None,
+        project_root: Path | None = None,
+        mcp_server_command: str | None = None,
     ):
         project_root = project_root or get_project_root()
         # 源：本地存储
@@ -324,8 +325,8 @@ class McpToLocalMigrator(CrossPlatformMigrator):
 
     def __init__(
         self,
-        project_root: Optional[Path] = None,
-        mcp_server_command: Optional[str] = None,
+        project_root: Path | None = None,
+        mcp_server_command: str | None = None,
     ):
         project_root = project_root or get_project_root()
         # 源：MCP 客户端
@@ -340,7 +341,7 @@ class McpToLocalMigrator(CrossPlatformMigrator):
 
 
 def export_archive(
-    source_storage: Tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
+    source_storage: tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
     output_path: Path,
 ) -> Path:
     """导出完整灵魂数据到 zip 归档文件，用于手动迁移
@@ -414,7 +415,7 @@ def export_archive(
 
 def import_archive(
     archive_path: Path,
-    target_storage: Tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
+    target_storage: tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
     skip_existing: bool = True,
 ) -> MigrationResult:
     """从 zip 归档导入灵魂数据
@@ -428,7 +429,7 @@ def import_archive(
         迁移结果
     """
     import tempfile
-    errors: List[str] = []
+    errors: list[str] = []
     total_migrated = 0
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -442,7 +443,7 @@ def import_archive(
         # 导入人格
         persona_file = tmp_path / "persona.json"
         if persona_file.exists():
-            with open(persona_file, "r", encoding="utf-8") as f:
+            with open(persona_file, encoding="utf-8") as f:
                 persona_config = json.load(f)
             if hasattr(target_p, 'write_persona_config'):
                 if target_p.write_persona_config(persona_config):
@@ -455,7 +456,7 @@ def import_archive(
         # 导入灵魂状态
         soul_file = tmp_path / "soul_state.json"
         if soul_file.exists():
-            with open(soul_file, "r", encoding="utf-8") as f:
+            with open(soul_file, encoding="utf-8") as f:
                 soul_state = json.load(f)
             if hasattr(target_s, 'write_soul_state'):
                 if target_s.write_soul_state(soul_state):
@@ -473,7 +474,7 @@ def import_archive(
         if daily_dir.exists():
             for file in daily_dir.glob("*.md"):
                 date = file.stem
-                with open(file, "r", encoding="utf-8") as f:
+                with open(file, encoding="utf-8") as f:
                     content = f.read()
                 if len(content.strip()) == 0:
                     continue
@@ -489,7 +490,7 @@ def import_archive(
         if weekly_dir.exists():
             for file in weekly_dir.glob("*.md"):
                 year_week = file.stem
-                with open(file, "r", encoding="utf-8") as f:
+                with open(file, encoding="utf-8") as f:
                     content = f.read()
                 if len(content.strip()) == 0:
                     continue
@@ -505,7 +506,7 @@ def import_archive(
         if monthly_dir.exists():
             for file in monthly_dir.glob("*.md"):
                 year_month = file.stem
-                with open(file, "r", encoding="utf-8") as f:
+                with open(file, encoding="utf-8") as f:
                     content = f.read()
                 if len(content.strip()) == 0:
                     continue
@@ -521,7 +522,7 @@ def import_archive(
         if yearly_dir.exists():
             for file in yearly_dir.glob("*.md"):
                 year = file.stem
-                with open(file, "r", encoding="utf-8") as f:
+                with open(file, encoding="utf-8") as f:
                     content = f.read()
                 if len(content.strip()) == 0:
                     continue
@@ -537,7 +538,7 @@ def import_archive(
         if topic_dir.exists():
             for file in topic_dir.glob("*.md"):
                 topic = file.stem
-                with open(file, "r", encoding="utf-8") as f:
+                with open(file, encoding="utf-8") as f:
                     content = f.read()
                 if len(content.strip()) == 0:
                     continue
@@ -553,7 +554,7 @@ def import_archive(
             if archive_dir.exists():
                 for file in archive_dir.glob("*.md"):
                     topic = file.stem
-                    with open(file, "r", encoding="utf-8") as f:
+                    with open(file, encoding="utf-8") as f:
                         content = f.read()
                     if len(content.strip()) == 0:
                         continue

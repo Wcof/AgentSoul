@@ -11,11 +11,12 @@ text
 - 注入失败回滚支持
 - 记忆冲突检测与解决
 """
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -23,8 +24,8 @@ class SoulVersion:
     """灵魂版本信息 - 用于版本追踪和回滚"""
     version: str
     timestamp: str
-    checksum: Optional[str] = None
-    description: Optional[str] = None
+    checksum: str | None = None
+    description: str | None = None
 
 
 @dataclass
@@ -34,19 +35,19 @@ class MemoryConflict:
     existing_content: str
     new_content: str
     conflict_type: str  # "timestamp", "content", "structure"
-    resolution: Optional[str] = None
+    resolution: str | None = None
 
 
 class BasePersonaStorage(ABC):
     """人格存储抽象接口 - AI身份和用户配置"""
 
     @abstractmethod
-    def read_persona_config(self) -> Dict[str, Any]:
+    def read_persona_config(self) -> dict[str, Any]:
         """读取人格配置"""
         pass
 
     @abstractmethod
-    def write_persona_config(self, config: Dict[str, Any]) -> bool:
+    def write_persona_config(self, config: dict[str, Any]) -> bool:
         """写入人格配置"""
         pass
 
@@ -60,12 +61,12 @@ class BaseSoulStateStorage(ABC):
     """灵魂状态存储抽象接口 - PAD情感状态"""
 
     @abstractmethod
-    def read_soul_state(self) -> Dict[str, Any]:
+    def read_soul_state(self) -> dict[str, Any]:
         """读取灵魂状态"""
         pass
 
     @abstractmethod
-    def write_soul_state(self, state: Dict[str, Any]) -> bool:
+    def write_soul_state(self, state: dict[str, Any]) -> bool:
         """写入灵魂状态"""
         pass
 
@@ -79,7 +80,7 @@ class BaseMemoryStorage(ABC):
     """记忆存储抽象接口 - 分层记忆系统"""
 
     @abstractmethod
-    def read_daily_memory(self, date: str) -> Optional[str]:
+    def read_daily_memory(self, date: str) -> str | None:
         """读取日记忆"""
         pass
 
@@ -89,7 +90,7 @@ class BaseMemoryStorage(ABC):
         pass
 
     @abstractmethod
-    def read_weekly_memory(self, year_week: str) -> Optional[str]:
+    def read_weekly_memory(self, year_week: str) -> str | None:
         """读取周记忆"""
         pass
 
@@ -99,7 +100,7 @@ class BaseMemoryStorage(ABC):
         pass
 
     @abstractmethod
-    def read_monthly_memory(self, year_month: str) -> Optional[str]:
+    def read_monthly_memory(self, year_month: str) -> str | None:
         """读取月记忆"""
         pass
 
@@ -109,7 +110,7 @@ class BaseMemoryStorage(ABC):
         pass
 
     @abstractmethod
-    def read_yearly_memory(self, year: str) -> Optional[str]:
+    def read_yearly_memory(self, year: str) -> str | None:
         """读取年记忆"""
         pass
 
@@ -119,7 +120,7 @@ class BaseMemoryStorage(ABC):
         pass
 
     @abstractmethod
-    def read_topic_memory(self, topic: str) -> Optional[str]:
+    def read_topic_memory(self, topic: str) -> str | None:
         """读取主题记忆"""
         pass
 
@@ -129,7 +130,7 @@ class BaseMemoryStorage(ABC):
         pass
 
     @abstractmethod
-    def list_topics(self, status: str = "active") -> List[Dict[str, str]]:
+    def list_topics(self, status: str = "active") -> list[dict[str, str]]:
         """列出所有主题"""
         pass
 
@@ -139,7 +140,7 @@ class BaseMemoryStorage(ABC):
         pass
 
     @abstractmethod
-    def detect_conflict(self, topic: str, new_content: str) -> Optional[MemoryConflict]:
+    def detect_conflict(self, topic: str, new_content: str) -> MemoryConflict | None:
         """检测记忆冲突"""
         pass
 
@@ -153,12 +154,12 @@ class BaseSkillStorage(ABC):
     """技能存储抽象接口"""
 
     @abstractmethod
-    def read_base_rule(self, name: str) -> Optional[str]:
+    def read_base_rule(self, name: str) -> str | None:
         """读取基础规则"""
         pass
 
     @abstractmethod
-    def list_available_rules(self) -> List[str]:
+    def list_available_rules(self) -> list[str]:
         """列出可用规则"""
         pass
 
@@ -180,7 +181,7 @@ class UnifiedSoulStorage:
         self.memory = memory
         self.skills = skills
 
-    def get_full_context(self) -> Dict[str, Any]:
+    def get_full_context(self) -> dict[str, Any]:
         """获取完整灵魂上下文"""
         return {
             "persona": self.persona.read_persona_config(),
@@ -195,7 +196,7 @@ class InjectionRollback:
     """
 
     def __init__(self) -> None:
-        self._snapshots: Dict[str, Tuple[str, Any]] = {}
+        self._snapshots: dict[str, tuple[str, Any]] = {}
 
     def snapshot(self, storage: BaseSoulStateStorage, snapshot_name: str) -> None:
         """创建当前状态的快照"""
@@ -212,6 +213,6 @@ class InjectionRollback:
         _, state = self._snapshots[snapshot_name]
         return storage.write_soul_state(state)
 
-    def list_snapshots(self) -> List[str]:
+    def list_snapshots(self) -> list[str]:
         """列出所有可用快照"""
         return list(self._snapshots.keys())

@@ -2,10 +2,10 @@
 AgentSoul · 通用 TTL 缓存模块
 提供可复用的基于时间的缓存失效基类
 """
+from __future__ import annotations
 
 import time
-from typing import Optional, Generic, TypeVar
-
+from typing import Generic, TypeVar
 
 T = TypeVar('T')
 
@@ -24,7 +24,7 @@ class TTLCacheBase:
             default_ttl: Default cache TTL in seconds (default: 300 = 5 minutes)
         """
         super().__init__()
-        self._cache_timestamp: Optional[float] = None
+        self._cache_timestamp: float | None = None
         self._cache_ttl = max(1, default_ttl)
 
     def _cache_is_valid(self) -> bool:
@@ -54,9 +54,9 @@ class CachedValue(Generic[T], TTLCacheBase):
 
     def __init__(self, default_ttl: int = 300):
         super().__init__(default_ttl)
-        self._value: Optional[T] = None
+        self._value: T | None = None
 
-    def get(self) -> Optional[T]:
+    def get(self) -> T | None:
         """Get the cached value if still valid."""
         if self._cache_is_valid() and self._value is not None:
             return self._value

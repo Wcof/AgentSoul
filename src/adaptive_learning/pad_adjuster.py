@@ -2,14 +2,15 @@
 AgentSoul · PAD渐进式调整模块
 根据用户反馈微调PAD情感状态
 """
+from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
-import json
+from typing import Any
 
-from common import log, get_project_root
+from common import get_project_root, log
 
 
 @dataclass
@@ -17,11 +18,11 @@ class PADState:
     pleasure: float = 0.3
     arousal: float = 0.2
     dominance: float = 0.3
-    last_updated: Optional[datetime] = None
+    last_updated: datetime | None = None
 
 
 class PADAdjuster:
-    def __init__(self, data_path: Optional[Path] = None, learning_intensity: float = 0.3):
+    def __init__(self, data_path: Path | None = None, learning_intensity: float = 0.3):
         if data_path is None:
             data_path = get_project_root() / "data" / "learning"
         self.data_path = data_path
@@ -34,7 +35,7 @@ class PADAdjuster:
     def _load_state(self) -> None:
         if self.state_file.exists():
             try:
-                with open(self.state_file, "r", encoding="utf-8") as f:
+                with open(self.state_file, encoding="utf-8") as f:
                     data = json.load(f)
                     last_updated = None
                     if data.get("last_updated"):
@@ -64,7 +65,7 @@ class PADAdjuster:
         except Exception as e:
             log(f"Failed to save PAD state: {e}", "ERROR")
 
-    def adjust_from_feedback(self, current_state: Optional[PADState] = None, feedback: str = "positive") -> PADState:
+    def adjust_from_feedback(self, current_state: PADState | None = None, feedback: str = "positive") -> PADState:
         if current_state is None:
             current_state = self._state
 
@@ -147,7 +148,7 @@ class PADAdjuster:
         self._save_state()
         return new_state
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "pleasure": self._state.pleasure,
             "arousal": self._state.arousal,

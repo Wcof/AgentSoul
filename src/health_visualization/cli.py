@@ -3,6 +3,7 @@
 AgentSoul 健康度可视化 CLI
 命令行入口
 """
+from __future__ import annotations
 
 import argparse
 import sys
@@ -57,7 +58,7 @@ def main() -> None:
         print(f"\n✅ JSON 数据已保存到: {result}")
 
     summary = exporter.get_summary()
-    print(f"\n📊 健康度统计摘要:")
+    print("\n📊 健康度统计摘要:")
     print(f"   总迭代次数: {summary['total_iterations']}")
     print(f"   当前健康度: {summary['current_health']}")
     print(f"   平均健康度: {summary['avg_health']:.1f}")
