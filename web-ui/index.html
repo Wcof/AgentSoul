@@ -142,6 +142,74 @@
             background: #e3f2fd;
         }
 
+        body[data-theme="dark"] .memory-item.active {
+            background: #0d47a1;
+        }
+
+        .memory-group {
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        body[data-theme="dark"] .memory-group {
+            border-bottom-color: #444;
+        }
+
+        .memory-group-header {
+            padding: 8px 10px;
+            background: #f8f9fa;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        body[data-theme="dark"] .memory-group-header {
+            background: #383838;
+        }
+
+        .memory-group-header:hover {
+            background: #e9ecef;
+        }
+
+        body[data-theme="dark"] .memory-group-header:hover {
+            background: #404040;
+        }
+
+        .memory-group-title {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 0.9rem;
+        }
+
+        body[data-theme="dark"] .memory-group-title {
+            color: #e0e0e0;
+        }
+
+        .memory-group-count {
+            color: #7f8c8d;
+            font-size: 0.8rem;
+        }
+
+        .memory-group-toggle {
+            color: #7f8c8d;
+            transition: transform 0.2s;
+        }
+
+        .memory-group.collapsed .memory-group-toggle {
+            transform: rotate(-90deg);
+        }
+
+        .memory-group.collapsed .memory-group-content {
+            display: none;
+        }
+
+        .memory-group-content {
+            padding-left: 10px;
+        }
+
         .memory-date {
             font-weight: bold;
             color: #2c3e50;
@@ -218,7 +286,6 @@
                 background-color: #ffc107;
                 color: #000;
             }
-        }
             .search-section {
                 background: #383838;
             }
@@ -236,7 +303,6 @@
             .search-stats {
                 color: #999;
             }
-
             .search-highlight {
                 background-color: #ffc107;
                 color: #000;
@@ -901,17 +967,64 @@
                 return;
             }
 
+            // 按年份-月份分组 (YYYY-MM-DD -> YYYY-MM)
+            const groups = {};
             names.forEach(name => {
-                const item = document.createElement('div');
-                item.className = 'memory-item';
-                item.dataset.name = name;
-                const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
-                item.innerHTML = `
-                    <div class="memory-date">${name}</div>
-                    <div class="memory-preview">${preview}</div>
+                // 尝试匹配日期格式 YYYY-MM-DD
+                const match = name.match(/^(\d{4})-(\d{2})/);
+                let key = '其他';
+                let display = '其他';
+                if (match) {
+                    const year = match[1];
+                    const month = match[2];
+                    key = `${year}-${month}`;
+                    display = `${year}年${parseInt(month)}月`;
+                }
+                if (!groups[key]) {
+                    groups[key] = { display: display, items: [] };
+                }
+                groups[key].items.push(name);
+            });
+
+            // 分组显示，按键降序排列（最新的在前）
+            const sortedKeys = Object.keys(groups).sort().reverse();
+
+            sortedKeys.forEach(key => {
+                const group = groups[key];
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'memory-group';
+                groupDiv.innerHTML = `
+                    <div class="memory-group-header">
+                        <span>
+                            <span class="memory-group-title">${group.display}</span>
+                            <span class="memory-group-count"> (${group.items.length} 条)</span>
+                        </span>
+                        <span class="memory-group-toggle">▼</span>
+                    </div>
+                    <div class="memory-group-content"></div>
                 `;
-                item.addEventListener('click', () => selectMemory(name));
-                container.appendChild(item);
+
+                // 点击折叠/展开
+                const header = groupDiv.querySelector('.memory-group-header');
+                header.addEventListener('click', () => {
+                    groupDiv.classList.toggle('collapsed');
+                });
+
+                const contentDiv = groupDiv.querySelector('.memory-group-content');
+                group.items.forEach(name => {
+                    const item = document.createElement('div');
+                    item.className = 'memory-item';
+                    item.dataset.name = name;
+                    const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
+                    item.innerHTML = `
+                        <div class="memory-date">${name}</div>
+                        <div class="memory-preview">${preview}</div>
+                    `;
+                    item.addEventListener('click', () => selectMemory(name));
+                    contentDiv.appendChild(item);
+                });
+
+                container.appendChild(groupDiv);
             });
         }
 
@@ -991,6 +1104,9 @@
             } else {
                 detail.textContent = content;
             }
+
+            // 平滑滚动到记忆详情区域
+            document.getElementById('memoryDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         };
 
         // 导出当前记忆
