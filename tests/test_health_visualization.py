@@ -93,3 +93,10 @@ class TestHealthVisualization:
             assert summary['min_health'] == 80
             assert summary['max_health'] == 100
             Path(f.name).unlink()
+
+    def test_cli_module_importable(self):
+        """Test that CLI module can be imported"""
+        # Just test import - main guarded by if __name__ == '__main__'
+        from src.health_visualization import cli
+        assert cli is not None
+        assert hasattr(cli, 'main')
