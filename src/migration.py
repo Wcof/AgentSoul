@@ -582,3 +582,100 @@ def import_archive(
         errors=errors,
         message=message
     )
+
+
+def main() -> None:
+    """跨平台灵魂迁移 CLI 入口
+
+    用法:
+        python -m src.migration export <output.zip>
+        python -m src.migration import import <archive.zip>
+        python -m src.migration migrate-local-to-mcp
+        python -m src.migration migrate-mcp-to-local
+    """
+    import argparse
+
+    from common import get_project_root, log
+
+    parser = argparse.ArgumentParser(description="AgentSoul 跨平台灵魂迁移工具")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # export command
+    export_parser = subparsers.add_parser("export", help="导出完整灵魂数据到 zip 归档文件")
+    export_parser.add_argument("output", help="输出 zip 文件路径")
+
+    # import command
+    import_parser = subparsers.add_parser("import", help="从 zip 归档导入灵魂数据")
+    import_parser.add_argument("archive", help="输入 zip 文件路径")
+    import_parser.add_argument("--no-skip-existing", action="store_false", dest="skip_existing",
+                            default=True, help="不跳过已存在文件（覆盖）")
+
+    # migrate-local-to-mcp command
+    subparsers.add_parser("migrate-local-to-mcp", help="从本地存储迁移到 MCP 服务")
+
+    # migrate-mcp-to-local command
+    subparsers.add_parser("migrate-mcp-to-local", help="从 MCP 服务迁移到本地存储")
+
+    args = parser.parse_args()
+    project_root = get_project_root()
+
+    if args.command == "export":
+        from src.storage.local import (
+            LocalMemoryStorage,
+            LocalPersonaStorage,
+            LocalSoulStateStorage,
+        )
+        source_storage = (
+            LocalPersonaStorage(project_root),
+            LocalSoulStateStorage(project_root),
+            LocalMemoryStorage(project_root),
+        )
+        output_path = Path(args.output)
+        zip_path = export_archive(source_storage, output_path)
+        log(f"✓ Export completed: {zip_path}", level="INFO")
+        exit(0)
+
+    elif args.command == "import":
+        from src.storage.local import (
+            LocalMemoryStorage,
+            LocalPersonaStorage,
+            LocalSoulStateStorage,
+        )
+        target_storage = (
+            LocalPersonaStorage(project_root),
+            LocalSoulStateStorage(project_root),
+            LocalMemoryStorage(project_root),
+        )
+        archive_path = Path(args.archive)
+        result = import_archive(archive_path, target_storage, args.skip_existing)
+        log(result.message, level="INFO" if result.success else "ERROR")
+        if not result.success:
+            for err in result.errors:
+                log(f"  - {err}", level="ERROR")
+        exit(0 if result.success else 1)
+
+    elif args.command == "migrate-local-to-mcp":
+        migrator_lt = LocalToMcpMigrator(project_root)
+        result = migrator_lt.migrate_all()
+        log(result.message, level="INFO" if result.success else "ERROR")
+        if not result.success:
+            for err in result.errors:
+                log(f"  - {err}", level="ERROR")
+        exit(0 if result.success else 1)
+
+    elif args.command == "migrate-mcp-to-local":
+        migrator_ml = McpToLocalMigrator(project_root)
+        result = migrator_ml.migrate_all()
+        log(result.message, level="INFO" if result.success else "ERROR")
+        if not result.success:
+            for err in result.errors:
+                log(f"  - {err}", level="ERROR")
+        exit(0 if result.success else 1)
+
+    else:
+        parser.print_help()
+        exit(1)
+
+
+if __name__ == "__main__":
+    main()
