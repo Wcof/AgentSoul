@@ -158,6 +158,19 @@
             font-size: 0.85rem;
         }
 
+        .memory-detail textarea {
+            width: 100%;
+            min-height: 400px;
+            border: none;
+            background: transparent;
+            color: inherit;
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+            resize: vertical;
+            outline: none;
+        }
+
         .search-section {
             margin-bottom: 15px;
             padding: 15px;
@@ -332,6 +345,10 @@
                 background: #383838;
             }
 
+            .memory-detail textarea {
+                color: #e0e0e0;
+            }
+
             .card h2 {
                 border-bottom-color: #444;
             }
@@ -412,11 +429,14 @@
         <div class="export-section">
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="exportCurrentMemoryBtn" disabled style="padding: 8px 16px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer;">导出当前记忆</button>
+                <button id="editCurrentMemoryBtn" disabled style="padding: 8px 16px; background: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer;">编辑记忆</button>
+                <button id="saveEditedMemoryBtn" disabled style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">保存编辑</button>
+                <button id="cancelEditBtn" disabled style="padding: 8px 16px; background: #95a5a6; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">取消编辑</button>
                 <button id="exportAllMemoryBtn" style="padding: 8px 16px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer;">导出所有已加载记忆</button>
                 <button id="exportHealthSvgBtn" style="padding: 8px 16px; background: #8e44ad; color: white; border: none; border-radius: 4px; cursor: pointer;">导出健康度 SVG</button>
                 <button id="exportHealthPngBtn" style="padding: 8px 16px; background: #e17055; color: white; border: none; border-radius: 4px; cursor: pointer;">导出健康度 PNG</button>
             </div>
-            <p class="help-text">导出功能：将记忆或图表保存为本地文件（SVG 适合编辑，PNG 适合分享）</p>
+            <p class="help-text">导出功能：将记忆或图表保存为本地文件（SVG 适合编辑，PNG 适合分享）；编辑功能：修改当前记忆内容后保存下载</p>
         </div>
 
         <div class="search-section">
@@ -931,6 +951,85 @@
 
             img.src = url;
         });
+
+        // 编辑记忆功能
+        let isEditing = false;
+        let originalContent = '';
+
+        document.getElementById('editCurrentMemoryBtn').addEventListener('click', function() {
+            if (!currentSelectedMemory || !memoryCache[currentSelectedMemory]) return;
+
+            // 启用编辑模式
+            isEditing = true;
+            originalContent = memoryCache[currentSelectedMemory].content;
+            const detail = document.getElementById('memoryDetail');
+
+            // 切换到 textarea
+            detail.innerHTML = `<textarea id="memoryEditArea">${originalContent}</textarea>`;
+
+            // 切换按钮显示
+            this.disabled = true;
+            this.style.display = 'none';
+            document.getElementById('exportCurrentMemoryBtn').disabled = true;
+            document.getElementById('saveEditedMemoryBtn').disabled = false;
+            document.getElementById('saveEditedMemoryBtn').style.display = 'inline-block';
+            document.getElementById('cancelEditBtn').disabled = false;
+            document.getElementById('cancelEditBtn').style.display = 'inline-block';
+        });
+
+        document.getElementById('cancelEditBtn').addEventListener('click', function() {
+            if (!currentSelectedMemory) return;
+
+            // 取消编辑，恢复原内容
+            isEditing = false;
+            selectMemory(currentSelectedMemory);
+
+            // 恢复按钮状态
+            document.getElementById('editCurrentMemoryBtn').disabled = false;
+            document.getElementById('editCurrentMemoryBtn').style.display = 'inline-block';
+            document.getElementById('exportCurrentMemoryBtn').disabled = false;
+            document.getElementById('saveEditedMemoryBtn').disabled = true;
+            document.getElementById('saveEditedMemoryBtn').style.display = 'none';
+            document.getElementById('cancelEditBtn').disabled = true;
+            document.getElementById('cancelEditBtn').style.display = 'none';
+        });
+
+        document.getElementById('saveEditedMemoryBtn').addEventListener('click', function() {
+            if (!currentSelectedMemory || !memoryCache[currentSelectedMemory]) return;
+
+            const textarea = document.getElementById('memoryEditArea');
+            if (!textarea) return;
+
+            // 获取编辑后的内容并更新缓存
+            const newContent = textarea.value;
+            memoryCache[currentSelectedMemory].content = newContent;
+
+            // 退出编辑模式，显示编辑后的内容
+            isEditing = false;
+            selectMemory(currentSelectedMemory);
+
+            // 恢复按钮状态
+            document.getElementById('editCurrentMemoryBtn').disabled = false;
+            document.getElementById('editCurrentMemoryBtn').style.display = 'inline-block';
+            document.getElementById('exportCurrentMemoryBtn').disabled = false;
+            document.getElementById('saveEditedMemoryBtn').disabled = true;
+            document.getElementById('saveEditedMemoryBtn').style.display = 'none';
+            document.getElementById('cancelEditBtn').disabled = true;
+            document.getElementById('cancelEditBtn').style.display = 'none';
+
+            // 自动下载编辑后的文件
+            downloadFile(newContent, `${currentSelectedMemory}.md`, 'text/plain');
+            alert('记忆已保存，请下载更新后的文件');
+        });
+
+        // 修改原有的 selectMemory，在选择记忆时启用编辑按钮
+        const originalSelectMemoryWithEdit = selectMemory;
+        selectMemory = function(name) {
+            originalSelectMemoryWithEdit(name);
+            if (!isEditing) {
+                document.getElementById('editCurrentMemoryBtn').disabled = false;
+            }
+        };
     </script>
 </body>
 </html>
