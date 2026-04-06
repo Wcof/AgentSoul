@@ -1,6 +1,7 @@
 # AgentSoul · 项目说明
 
 [![Tests](https://github.com/ldhuan/AgentSoul/actions/workflows/tests.yml/badge.svg)](https://github.com/ldhuan/AgentSoul/actions/workflows/tests.yml)
+![Health](https://img.shields.io/badge/Health-100%2F100-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
