@@ -30,6 +30,16 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header-content {
+            flex: 1;
+            min-width: 200px;
         }
 
         h1 {
@@ -314,6 +324,125 @@
             margin-top: 5px;
         }
 
+        .theme-switcher {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: flex-end;
+        }
+
+        .theme-switcher-label {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+
+        .theme-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .theme-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: #f8f9fa;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .theme-btn:hover {
+            background: #e9ecef;
+        }
+
+        .theme-btn.active {
+            background: #2980b9;
+            color: white;
+            border-color: #2980b9;
+        }
+
+        body[data-theme="light"] {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        body[data-theme="light"] header,
+        body[data-theme="light"] .card {
+            background: white;
+            color: #333;
+        }
+
+        body[data-theme="dark"] {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        body[data-theme="dark"] header,
+        body[data-theme="dark"] .card {
+            background: #2d2d2d;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        body[data-theme="dark"] h1,
+        body[data-theme="dark"] h2,
+        body[data-theme="dark"] .emotion-label,
+        body[data-theme="dark"] .memory-date {
+            color: #e0e0e0;
+        }
+
+        body[data-theme="dark"] .subtitle,
+        body[data-theme="dark"] .stat-label,
+        body[data-theme="dark"] .memory-preview,
+        body[data-theme="dark"] .help-text,
+        body[data-theme="dark"] .emotion-value,
+        body[data-theme="dark"] .footer {
+            color: #999;
+        }
+
+        body[data-theme="dark"] .stat-box,
+        body[data-theme="dark"] .memory-detail,
+        body[data-theme="dark"] .file-input-section,
+        body[data-theme="dark"] .export-section,
+        body[data-theme="dark"] .search-section {
+            background: #383838;
+        }
+
+        body[data-theme="dark"] .memory-detail textarea {
+            color: #e0e0e0;
+        }
+
+        body[data-theme="dark"] .card h2 {
+            border-bottom-color: #444;
+        }
+
+        body[data-theme="dark"] .memory-item {
+            border-bottom-color: #444;
+        }
+
+        body[data-theme="dark"] .memory-item:hover {
+            background: #404040;
+        }
+
+        body[data-theme="dark"] .memory-item.active {
+            background: #0d47a1;
+        }
+
+        body[data-theme="dark"] .emotion-bar-container {
+            background: #444;
+        }
+
+        body[data-theme="dark"] ::-webkit-scrollbar-track {
+            background: #333;
+        }
+
+        body[data-theme="dark"] ::-webkit-scrollbar-thumb {
+            background: #555;
+        }
+
+        body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+
         .footer {
             text-align: center;
             padding: 20px;
@@ -321,8 +450,10 @@
             font-size: 0.8rem;
         }
 
-        /* 深色模式支持 */
+        /* 深色模式支持 - 自动模式 */
         @media (prefers-color-scheme: dark) {
+            /* 只有当主题为 auto 时才应用自动深色模式 */
+            body:not([data-theme]) {
             body {
                 background: #1a1a1a;
                 color: #e0e0e0;
@@ -410,8 +541,18 @@
 <body>
     <div class="container">
         <header>
-            <h1>AgentSoul 控制面板</h1>
-            <p class="subtitle">查看记忆、健康度历史和情绪状态</p>
+            <div class="header-content">
+                <h1>AgentSoul 控制面板</h1>
+                <p class="subtitle">查看记忆、健康度历史和情绪状态</p>
+            </div>
+            <div class="theme-switcher">
+                <div class="theme-switcher-label">主题</div>
+                <div class="theme-buttons">
+                    <button class="theme-btn" data-theme="auto">自动</button>
+                    <button class="theme-btn" data-theme="light">亮色</button>
+                    <button class="theme-btn" data-theme="dark">深色</button>
+                </div>
+            </div>
         </header>
 
         <div class="file-input-section">
@@ -1030,6 +1171,43 @@
                 document.getElementById('editCurrentMemoryBtn').disabled = false;
             }
         };
+
+        // ========== 主题切换功能 ==========
+        function applyTheme(theme) {
+            // 移除 active 类从所有按钮
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            if (theme === 'auto') {
+                // 移除 data-theme 属性，让系统自动决定
+                document.body.removeAttribute('data-theme');
+                localStorage.setItem('agentsoul-theme', 'auto');
+                document.querySelector('.theme-btn[data-theme="auto"]').classList.add('active');
+            } else {
+                document.body.setAttribute('data-theme', theme);
+                localStorage.setItem('agentsoul-theme', theme);
+                document.querySelector(`.theme-btn[data-theme="${theme}"]`).classList.add('active');
+            }
+        }
+
+        // 绑定按钮点击事件
+        document.querySelectorAll('.theme-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const theme = this.getAttribute('data-theme');
+                applyTheme(theme);
+            });
+        });
+
+        // 加载保存的主题偏好
+        (function initTheme() {
+            const savedTheme = localStorage.getItem('agentsoul-theme');
+            if (savedTheme) {
+                applyTheme(savedTheme);
+            } else {
+                applyTheme('auto');
+            }
+        })();
     </script>
 </body>
 </html>
