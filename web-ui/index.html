@@ -414,8 +414,9 @@
                 <button id="exportCurrentMemoryBtn" disabled style="padding: 8px 16px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer;">导出当前记忆</button>
                 <button id="exportAllMemoryBtn" style="padding: 8px 16px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer;">导出所有已加载记忆</button>
                 <button id="exportHealthSvgBtn" style="padding: 8px 16px; background: #8e44ad; color: white; border: none; border-radius: 4px; cursor: pointer;">导出健康度 SVG</button>
+                <button id="exportHealthPngBtn" style="padding: 8px 16px; background: #e17055; color: white; border: none; border-radius: 4px; cursor: pointer;">导出健康度 PNG</button>
             </div>
-            <p class="help-text">导出功能：将记忆或图表保存为本地文件</p>
+            <p class="help-text">导出功能：将记忆或图表保存为本地文件（SVG 适合编辑，PNG 适合分享）</p>
         </div>
 
         <div class="search-section">
@@ -880,6 +881,56 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+
+        // 导出健康度 PNG
+        document.getElementById('exportHealthPngBtn').addEventListener('click', function() {
+            const svg = document.getElementById('healthChart');
+            if (!svg || svg.innerHTML.trim() === '') {
+                alert('请先导入健康度历史文件再导出');
+                return;
+            }
+
+            // 获取 SVG 数据
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const svgWidth = parseInt(svg.getAttribute('width')) || svg.parentElement.clientWidth;
+            const svgHeight = parseInt(svg.getAttribute('height')) || 280;
+
+            // 创建 canvas
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = svgWidth * 2;  // 2x for better resolution
+            canvas.height = svgHeight * 2;
+
+            // Fill white background for PNG
+            ctx.fillStyle = getComputedStyle(document.body).background;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Create image from SVG
+            const img = new Image();
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(url);
+
+                // Convert canvas to PNG
+                canvas.toBlob(function(blob) {
+                    const timestamp = new Date().toISOString().slice(0, 10);
+                    const filename = `agentsoul-health-chart-${timestamp}.png`;
+                    const pngUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = pngUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(pngUrl);
+                }, 'image/png');
+            };
+
+            img.src = url;
+        });
     </script>
 </body>
 </html>
