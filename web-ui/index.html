@@ -1324,6 +1324,41 @@
                 applyTheme('auto');
             }
         })();
+
+        // ========== 键盘导航功能 ==========
+        // 上下箭头切换记忆，Enter 打开选中
+        document.addEventListener('keydown', function(e) {
+            // 如果正在编辑，不拦截键盘事件
+            if (isEditing) return;
+
+            const memoryItems = Array.from(document.querySelectorAll('.memory-item'));
+            if (memoryItems.length === 0) return;
+
+            // 找到当前选中的索引
+            let currentIndex = -1;
+            if (currentSelectedMemory) {
+                currentIndex = memoryItems.findIndex(item => item.dataset.name === currentSelectedMemory);
+            }
+
+            let newIndex = currentIndex;
+
+            if (e.key === 'ArrowDown') {
+                // 向下
+                e.preventDefault();
+                newIndex = currentIndex >= memoryItems.length - 1 ? 0 : currentIndex + 1;
+            } else if (e.key === 'ArrowUp') {
+                // 向上
+                e.preventDefault();
+                newIndex = currentIndex <= 0 ? memoryItems.length - 1 : currentIndex - 1;
+            }
+
+            if (newIndex !== currentIndex && newIndex >= 0 && newIndex < memoryItems.length) {
+                const newName = memoryItems[newIndex].dataset.name;
+                selectMemory(newName);
+                // 滚动到可见区域
+                memoryItems[newIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
     </script>
 </body>
 </html>
