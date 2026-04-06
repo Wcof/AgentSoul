@@ -128,6 +128,8 @@ AgentSoul/
 │   └── test_agent_soul.py        # Unit tests
 ├── common/
 │   └── __init__.py               # Common utilities (logging, etc)
+├── web-ui/
+│   └── index.html                # Pure static Web UI for health/ emotion visualization
 └── install.py                    # Main installation script
 ```
 
@@ -214,11 +216,33 @@ Project state management and multi-agent safety:
 - `board_claim_file`: Claim file ownership (prevents multi-agent conflicts)
 - `board_release_file`: Release all files claimed by this agent
 - `board_set_active_work`: Set the current active work task
+- `board_add_labels`: Add custom labels for project classification
+- `board_remove_labels`: Remove custom labels from the project
+- `board_list_labels`: List all custom labels for the project
+- `board_search_decisions`: Search project decisions by labels
 
 #### Ledger Tools (P2)
 Immutable work session ledger:
 - `ledger_list`: List ledger entries for a project
 - `ledger_read`: Read a specific ledger entry by ID
+
+#### Enhanced Memory Tools
+Enhanced memory with priority, tags, and search:
+- `enhanced_memory_search`: Enhanced memory search (fuzzy matching, date filtering, tag filtering, priority sorting)
+- `set_memory_priority`: Set memory priority (high/medium/low)
+- `add_memory_tags`: Add tags to an enhanced memory
+- `remove_memory_tags`: Remove tags from an enhanced memory
+- `get_memory_tags`: Get all tags for a specific memory
+- `list_all_tags`: List all tags with usage statistics
+- `get_high_priority_memories`: Get all high priority enhanced memory entries
+
+#### Adaptive Learning Tools
+Adaptive learning system that learns user preferences:
+- `get_learning_preferences`: Get current learned user preferences
+- `get_interaction_statistics`: Get collected interaction statistics
+- `submit_feedback`: Submit user feedback for adaptive learning improvement
+- `reset_learning`: Reset all adaptive learning data to default
+- `set_learning_intensity`: Set adaptive learning intensity (0 to 1)
 
 ### Security Model
 
