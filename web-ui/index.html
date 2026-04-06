@@ -281,6 +281,49 @@
             color: #856404;
         }
 
+        .quick-tags {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .quick-tag {
+            padding: 4px 8px;
+            background: #e9ecef;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-tag:hover {
+            background: #dee2e6;
+        }
+
+        .quick-tag.active {
+            background: #2980b9;
+            color: white;
+            border-color: #2980b9;
+        }
+
+        body[data-theme="dark"] .quick-tag {
+            background: #444;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body[data-theme="dark"] .quick-tag:hover {
+            background: #505050;
+        }
+
+        body[data-theme="dark"] .quick-tag.active {
+            background: #2980b9;
+            color: white;
+            border-color: #2980b9;
+        }
+
         @media (prefers-color-scheme: dark) {
             .search-highlight {
                 background-color: #ffc107;
@@ -650,6 +693,7 @@
             <label for="searchInput">全文搜索（已加载记忆中）</label>
             <input type="text" id="searchInput" class="search-input" placeholder="输入关键词搜索...">
             <div class="search-stats" id="searchStats"></div>
+            <div class="quick-tags" id="quickTags"></div>
         </div>
 
         <div class="grid">
@@ -1358,6 +1402,243 @@
                 // 滚动到可见区域
                 memoryItems[newIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
+        });
+
+        // ========== 快速标签筛选功能 ==========
+        let currentActiveTag = null;
+
+        // 从记忆内容中提取所有 #tag 格式的标签
+        function extractAllTags() {
+            const tagCounts = {};
+            // #标签 匹配
+            const tagRegex = /#([a-zA-Z\u4e00-\u9fa5][a-zA-Z0-9\u4e00-\u9fa5-_]*)/g;
+
+            Object.keys(memoryCache).forEach(name => {
+                const content = memoryCache[name].content;
+                let match;
+                while ((match = tagRegex.exec(content)) !== null) {
+                    const tag = match[1];
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                }
+            });
+
+            // 转换为数组并按出现次数降序排序
+            const tags = Object.entries(tagCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([tag, count]) => ({ tag, count }));
+
+            return tags;
+        }
+
+        // 渲染快速标签
+        function renderQuickTags() {
+            const container = document.getElementById('quickTags');
+            container.innerHTML = '';
+
+            const tags = extractAllTags();
+            if (tags.length === 0) {
+                return;
+            }
+
+            // 最多显示 20 个标签，避免太拥挤
+            const displayTags = tags.slice(0, 20);
+
+            displayTags.forEach(({ tag, count }) => {
+                const tagEl = document.createElement('span');
+                tagEl.className = 'quick-tag' + (currentActiveTag === tag ? ' active' : '');
+                tagEl.dataset.tag = tag;
+                tagEl.innerHTML = `${tag} <small>(${count})</small>`;
+                tagEl.addEventListener('click', () => toggleTagFilter(tag));
+                container.appendChild(tagEl);
+            });
+        }
+
+        // 切换标签筛选
+        function toggleTagFilter(tag) {
+            if (currentActiveTag === tag) {
+                // 点击已激活的标签，清除筛选
+                currentActiveTag = null;
+            } else {
+                currentActiveTag = tag;
+            }
+
+            renderMemoryList();
+            updateQuickTagsActive();
+            updateSearchStats();
+        }
+
+        // 更新标签按钮激活状态
+        function updateQuickTagsActive() {
+            document.querySelectorAll('.quick-tag').forEach(el => {
+                const tag = el.dataset.tag;
+                if (tag === currentActiveTag) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+        }
+
+        // 更新搜索统计信息
+        function updateSearchStats() {
+            const query = document.getElementById('searchInput').value.trim();
+            let stats = [];
+            let total = Object.keys(memoryCache).length;
+            let filtered = 0;
+
+            // 计算当前显示数量
+            const allNames = Object.keys(memoryCache);
+            filtered = allNames.filter(name => {
+                if (currentActiveTag) {
+                    const content = memoryCache[name].content.toLowerCase();
+                    if (!content.includes('#' + currentActiveTag.toLowerCase())) {
+                        return false;
+                    }
+                }
+                if (query && searchResults.length > 0 && !searchResults.includes(name)) {
+                    return false;
+                }
+                return true;
+            }).length;
+
+            if (currentActiveTag) {
+                stats.push(`标签"${currentActiveTag}"`);
+            }
+            if (query) {
+                stats.push(`关键词"${query}"`);
+            }
+
+            const statsEl = document.getElementById('searchStats');
+            if (stats.length > 0) {
+                statsEl.textContent = `${stats.join(', ')} → 显示 ${filtered}/${total} 个记忆`;
+            } else if (filtered !== total) {
+                statsEl.textContent = `显示 ${filtered}/${total} 个记忆`;
+            } else {
+                statsEl.textContent = '';
+            }
+        }
+
+        // 在原有过滤逻辑基础上添加标签筛选
+        const originalRenderMemoryList = renderMemoryList;
+        renderMemoryList = function() {
+            // 先让原有渲染完成，然后应用标签筛选
+            // 这里需要修改原有的过滤逻辑
+            const container = document.getElementById('memoryList');
+            container.innerHTML = '';
+
+            let names = Object.keys(memoryCache).sort().reverse();
+
+            // 如果有搜索结果，只显示搜索结果
+            if (searchResults.length > 0 && document.getElementById('searchInput').value.trim()) {
+                names = names.filter(name => searchResults.includes(name));
+            }
+
+            // 如果有标签筛选，进一步过滤
+            if (currentActiveTag) {
+                names = names.filter(name => {
+                    const content = memoryCache[name].content.toLowerCase();
+                    return content.includes('#' + currentActiveTag.toLowerCase());
+                });
+            }
+
+            if (names.length === 0) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">没有找到匹配的记忆</div>';
+                return;
+            }
+
+            // 按年份-月份分组 (YYYY-MM-DD -> YYYY-MM)
+            const groups = {};
+            names.forEach(name => {
+                // 尝试匹配日期格式 YYYY-MM-DD
+                const match = name.match(/^(\d{4})-(\d{2})/);
+                let key = '其他';
+                let display = '其他';
+                if (match) {
+                    const year = match[1];
+                    const month = match[2];
+                    key = `${year}-${month}`;
+                    display = `${year}年${parseInt(month)}月`;
+                }
+                if (!groups[key]) {
+                    groups[key] = { display: display, items: [] };
+                }
+                groups[key].items.push(name);
+            });
+
+            // 分组显示，按键降序排列（最新的在前）
+            const sortedKeys = Object.keys(groups).sort().reverse();
+
+            sortedKeys.forEach(key => {
+                const group = groups[key];
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'memory-group';
+                groupDiv.innerHTML = `
+                    <div class="memory-group-header">
+                        <span>
+                            <span class="memory-group-title">${group.display}</span>
+                            <span class="memory-group-count"> (${group.items.length} 条)</span>
+                        </span>
+                        <span class="memory-group-toggle">▼</span>
+                    </div>
+                    <div class="memory-group-content"></div>
+                `;
+
+                // 点击折叠/展开
+                const header = groupDiv.querySelector('.memory-group-header');
+                header.addEventListener('click', () => {
+                    groupDiv.classList.toggle('collapsed');
+                });
+
+                const contentDiv = groupDiv.querySelector('.memory-group-content');
+                group.items.forEach(name => {
+                    const item = document.createElement('div');
+                    item.className = 'memory-item';
+                    item.dataset.name = name;
+                    const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
+                    item.innerHTML = `
+                        <div class="memory-date">${name}</div>
+                        <div class="memory-preview">${preview}</div>
+                    `;
+                    item.addEventListener('click', () => selectMemory(name));
+                    contentDiv.appendChild(item);
+                });
+
+                container.appendChild(groupDiv);
+            });
+        };
+
+        // 加载完文件后重新渲染标签
+        const originalLoadMemoryFile = loadMemoryFile;
+        loadMemoryFile = function(file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const content = event.target.result;
+                const name = file.name.replace('.md', '');
+                memoryCache[name] = { name: name, content: content };
+                renderMemoryList();
+                renderQuickTags();
+                selectMemory(name);
+            };
+            reader.readAsText(file);
+        };
+
+        // 搜索输入后更新统计
+        const originalSearchInputHandler = document.getElementById('searchInput').oninput;
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.trim().toLowerCase();
+            if (!query) {
+                searchResults = [];
+            } else {
+                searchResults = [];
+                Object.keys(memoryCache).forEach(name => {
+                    const content = memoryCache[name].content.toLowerCase();
+                    if (content.includes(query)) {
+                        searchResults.push(name);
+                    }
+                });
+            }
+            updateSearchStats();
+            renderMemoryList();
         });
     </script>
 </body>
