@@ -310,6 +310,372 @@ class TestMigration(BaseTest):
         from src.migration import main
         self.assertIsNotNone(main)
 
+    def test_migration_unexpected_exception_caught(self):
+        """测试migrate_all捕获顶层异常"""
+        from src.abstract import BaseMemoryStorage
+
+        # Mock that only implements list_topics which raises
+        class BadMemoryStorage(BaseMemoryStorage):
+            def list_topics(self, status="active"):
+                raise RuntimeError("This is an unexpected error")
+            # Implement all other abstract methods
+            def archive_topic(self, topic): pass
+            def detect_conflict(self, topic): return False
+            def read_daily_memory(self, i): return None
+            def read_monthly_memory(self, i): return None
+            def read_topic_memory(self, t): return None
+            def read_weekly_memory(self, w): return None
+            def read_yearly_memory(self, y): return None
+            def resolve_conflict(self, t, s, strategy): return False
+            def write_daily_memory(self, i, c): return True
+            def write_monthly_memory(self, i, c): return True
+            def write_topic_memory(self, t, c): return True
+            def write_weekly_memory(self, w, c): return True
+            def write_yearly_memory(self, y, c): return True
+
+        source_p = LocalPersonaStorage(self.project_root)
+        source_s = LocalSoulStateStorage(self.project_root)
+        source_m = BadMemoryStorage()
+
+        target_p = LocalPersonaStorage(self.project_root / "target_err")
+        target_s = LocalSoulStateStorage(self.project_root / "target_err")
+        target_m = LocalMemoryStorage(self.project_root / "target_err")
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        self.assertFalse(result.success)
+        self.assertGreater(len(result.errors), 0)
+        self.assertIn("unexpected error", result.errors[0])
+
+    def test_persona_write_failure_adds_error(self):
+        """测试人格写入失败添加错误"""
+        from src.abstract import BasePersonaStorage
+
+        class FailWritePersona(BasePersonaStorage):
+            def read_persona_config(self):
+                return {"name": "Test"}
+            def write_persona_config(self, config):
+                return False
+            def get_version(self): return "1.0"
+
+        source_p = LocalPersonaStorage(self.project_root)
+        source_s = LocalSoulStateStorage(self.project_root)
+        source_m = LocalMemoryStorage(self.project_root)
+
+        target_p = FailWritePersona()
+        target_s = LocalSoulStateStorage(self.project_root)
+        target_m = LocalMemoryStorage(self.project_root)
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        self.assertFalse(result.success)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("Failed to migrate persona", result.errors[0])
+
+    def test_soul_state_write_failure_adds_error(self):
+        """测试灵魂状态写入失败添加错误"""
+        from src.abstract import BaseSoulStateStorage
+
+        class FailWriteSoul(BaseSoulStateStorage):
+            def read_soul_state(self):
+                return {"pleasure": 0.0}
+            def write_soul_state(self, state):
+                return False
+            def rollback(self): pass
+
+        source_p = LocalPersonaStorage(self.project_root)
+        source_s = LocalSoulStateStorage(self.project_root)
+        source_m = LocalMemoryStorage(self.project_root)
+
+        target_p = LocalPersonaStorage(self.project_root)
+        target_s = FailWriteSoul()
+        target_m = LocalMemoryStorage(self.project_root)
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        self.assertFalse(result.success)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("Failed to migrate soul state", result.errors[0])
+
+    def test_memory_write_failure_adds_error(self):
+        """测试记忆写入失败添加错误"""
+        from src.abstract import BaseMemoryStorage
+
+        class FailWriteMemory(BaseMemoryStorage):
+            def read_daily_memory(self, ident):
+                return "content"
+            def write_daily_memory(self, ident, content):
+                return False
+            # Implement other abstract methods
+            def archive_topic(self, topic): pass
+            def detect_conflict(self, topic): return False
+            def list_topics(self, status="active"): return []
+            def read_monthly_memory(self, i): return None
+            def read_topic_memory(self, t): return None
+            def read_weekly_memory(self, w): return None
+            def read_yearly_memory(self, y): return None
+            def resolve_conflict(self, t, s, strategy): return False
+            def write_monthly_memory(self, i, c): return True
+            def write_topic_memory(self, t, c): return True
+            def write_weekly_memory(self, w, c): return True
+            def write_yearly_memory(self, y, c): return True
+
+        # Add a file to source so it will be processed
+        (self.project_root / "data" / "memory" / "day").mkdir(exist_ok=True)
+        (self.project_root / "data" / "memory" / "day" / "test.md").write_text("content")
+
+        source_p = LocalPersonaStorage(self.project_root)
+        source_s = LocalSoulStateStorage(self.project_root)
+        source_m = LocalMemoryStorage(self.project_root)
+        # Override base_dir
+        source_m.base_dir = self.project_root / "data" / "memory"
+
+        target_p = LocalPersonaStorage(self.project_root / "target_fail")
+        target_s = LocalSoulStateStorage(self.project_root / "target_fail")
+        target_m = FailWriteMemory()
+        (self.project_root / "target_fail" / "data" / "memory" / "day").mkdir(parents=True)
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        # Persona + soul succeed, one memory write fails → overall success is False because there is at least one error
+        self.assertFalse(result.success)
+        self.assertEqual(len(result.errors), 1)
+
+    def test_target_persona_write_returns_false(self):
+        """测试目标人格存储write_persona_config返回False添加错误"""
+        from src.abstract import BasePersonaStorage
+
+        # This matches what McpPersonaStorage actually does - write exists but returns False
+        class FailWritePersona(BasePersonaStorage):
+            def read_persona_config(self):
+                return {"name": "Test"}
+            def write_persona_config(self, config):
+                # MCP doesn't support writing via client
+                return False
+            def get_version(self): return "1.0"
+
+        source_p = LocalPersonaStorage(self.project_root)
+        source_s = LocalSoulStateStorage(self.project_root)
+        source_m = LocalMemoryStorage(self.project_root)
+
+        target_p = FailWritePersona()
+        target_s = LocalSoulStateStorage(self.project_root / "target_ro")
+        target_m = LocalMemoryStorage(self.project_root / "target_ro")
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        self.assertFalse(result.success)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("Failed to migrate persona", result.errors[0])
+
+    def test_target_soul_write_returns_false(self):
+        """测试目标灵魂状态存储write_soul_state返回False添加错误"""
+        from src.abstract import BaseSoulStateStorage
+
+        # This matches what McpSoulStateStorage actually does - write exists but returns False
+        class FailWriteSoul(BaseSoulStateStorage):
+            def read_soul_state(self):
+                return {"pleasure": 0.0}
+            def write_soul_state(self, state):
+                # MCP doesn't support writing via client
+                return False
+            def rollback(self, to_version=None): return False
+
+        source_p = LocalPersonaStorage(self.project_root)
+        source_s = LocalSoulStateStorage(self.project_root)
+        source_m = LocalMemoryStorage(self.project_root)
+
+        target_p = LocalPersonaStorage(self.project_root / "target_ro_soul")
+        target_s = FailWriteSoul()
+        target_m = LocalMemoryStorage(self.project_root / "target_ro_soul")
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        self.assertFalse(result.success)
+        self.assertEqual(len(result.errors), 1)
+        self.assertIn("Failed to migrate soul state", result.errors[0])
+
+    def test_persona_migration_exception_caught(self):
+        """测试人格迁移异常被捕获并添加错误"""
+        from src.abstract import BasePersonaStorage
+
+        class ErrorPersona(BasePersonaStorage):
+            def read_persona_config(self):
+                raise RuntimeError("Cannot read persona config")
+            def write_persona_config(self, config):
+                return False
+            def get_version(self): return "1.0"
+
+        source_p = ErrorPersona()
+        source_s = LocalSoulStateStorage(self.project_root)
+        source_m = LocalMemoryStorage(self.project_root)
+
+        target_p = LocalPersonaStorage(self.project_root / "target_err_persona")
+        target_s = LocalSoulStateStorage(self.project_root / "target_err_persona")
+        target_m = LocalMemoryStorage(self.project_root / "target_err_persona")
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        self.assertFalse(result.success)
+        self.assertGreater(len(result.errors), 0)
+        self.assertIn("Persona migration error", result.errors[0])
+
+    def test_soul_state_migration_exception_caught(self):
+        """测试灵魂状态迁移异常被捕获并添加错误"""
+        from src.abstract import BaseSoulStateStorage
+
+        class ErrorSoul(BaseSoulStateStorage):
+            def read_soul_state(self):
+                raise RuntimeError("Cannot read soul state")
+            def write_soul_state(self, state):
+                return False
+            def rollback(self, to_version=None): return False
+
+        source_p = LocalPersonaStorage(self.project_root)
+        source_s = ErrorSoul()
+        source_m = LocalMemoryStorage(self.project_root)
+
+        target_p = LocalPersonaStorage(self.project_root / "target_err_soul")
+        target_s = LocalSoulStateStorage(self.project_root / "target_err_soul")
+        target_m = LocalMemoryStorage(self.project_root / "target_err_soul")
+
+        migrator = CrossPlatformMigrator(
+            (source_p, source_s, source_m),
+            (target_p, target_s, target_m)
+        )
+        result = migrator.migrate_all()
+        self.assertFalse(result.success)
+        self.assertGreater(len(result.errors), 0)
+        self.assertIn("Soul state migration error", result.errors[0])
+
+    def test_cli_argparse_export_command(self):
+        """测试CLI导出命令参数解析"""
+        import argparse
+        from src.migration import main
+        # Test that argument parsing works for export
+        import sys
+        from unittest.mock import patch
+
+        with patch('sys.argv', ['src.migration', 'export', 'test.zip']):
+            try:
+                # Just check it parses args, won't execute because we catch SystemExit
+                with patch('src.migration.export_archive') as mock_export:
+                    mock_export.return_value = Path('test.zip')
+                    with patch('sys.exit') as mock_exit:
+                        mock_exit.side_effect = SystemExit
+                        try:
+                            main()
+                        except SystemExit:
+                            pass
+                    mock_export.assert_called_once()
+            except SystemExit:
+                pass
+            # Should reach here without errors
+            self.assertTrue(True)
+
+    def test_cli_argparse_import_command(self):
+        """测试CLI导入命令参数解析"""
+        from unittest.mock import patch
+        import sys
+
+        with patch('sys.argv', ['src.migration', 'import', 'test.zip', '--no-skip-existing']):
+            try:
+                with patch('src.migration.import_archive') as mock_import:
+                    from src.migration import MigrationResult
+                    mock_import.return_value = MigrationResult(
+                        success=True, items_migrated=5, errors=[], message='ok'
+                    )
+                    with patch('sys.exit') as mock_exit:
+                        mock_exit.side_effect = SystemExit
+                        try:
+                            from src.migration import main
+                            main()
+                        except SystemExit:
+                            pass
+                    mock_import.assert_called_once()
+                    # Check that skip_existing is False because --no-skip-existing is passed
+                    args = mock_import.call_args
+                    self.assertEqual(args[0][2], False)
+            except SystemExit:
+                pass
+            self.assertTrue(True)
+
+    def test_cli_argparse_migrate_local_to_mcp(self):
+        """测试CLI migrate-local-to-mcp命令参数解析"""
+        from unittest.mock import patch
+        import sys
+
+        with patch('sys.argv', ['src.migration', 'migrate-local-to-mcp']):
+            try:
+                with patch('src.migration.LocalToMcpMigrator') as mock_ctor:
+                    from src.migration import MigrationResult
+                    mock_instance = mock_ctor.return_value
+                    mock_instance.migrate_all.return_value = MigrationResult(
+                        success=True, items_migrated=5, errors=[], message='ok'
+                    )
+                    with patch('sys.exit') as mock_exit:
+                        mock_exit.side_effect = SystemExit
+                        try:
+                            from src.migration import main
+                            main()
+                        except SystemExit:
+                            pass
+                    mock_ctor.assert_called_once()
+                    mock_instance.migrate_all.assert_called_once()
+            except SystemExit:
+                pass
+            self.assertTrue(True)
+
+    def test_cli_argparse_migrate_mcp_to_local(self):
+        """测试CLI migrate-mcp-to-local命令参数解析"""
+        from unittest.mock import patch
+        import sys
+
+        with patch('sys.argv', ['src.migration', 'migrate-mcp-to-local']):
+            try:
+                with patch('src.migration.McpToLocalMigrator') as mock_ctor:
+                    from src.migration import MigrationResult
+                    mock_instance = mock_ctor.return_value
+                    mock_instance.migrate_all.return_value = MigrationResult(
+                        success=True, items_migrated=5, errors=[], message='ok'
+                    )
+                    with patch('sys.exit') as mock_exit:
+                        mock_exit.side_effect = SystemExit
+                        try:
+                            from src.migration import main
+                            main()
+                        except SystemExit:
+                            pass
+                    mock_ctor.assert_called_once()
+                    mock_instance.migrate_all.assert_called_once()
+            except SystemExit:
+                pass
+            self.assertTrue(True)
+
+    # Note: unknown command is handled by argparse and exits before reaching the else clause
+    # The else at line 603-605 is unreachable due to required=True on subparsers
+
 
 if __name__ == "__main__":
     unittest.main()
