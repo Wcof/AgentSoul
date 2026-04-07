@@ -105,6 +105,209 @@ class TestOpenAIAdapter(unittest.TestCase):
         self.assertIn("OpenAIInjectionAdapter", repr_str)
 
 
+    def test_inject_context_no_injected_content(self):
+        """测试当没有任何注入内容时返回原始消息"""
+        config = InjectionConfig(
+            include_persona=False,
+            include_soul_state=False,
+            include_recent_memory=False,
+            include_rules=False
+        )
+        adapter = OpenAIInjectionAdapter(config=config)
+        messages = [{"role": "user", "content": "Hello"}]
+        result = adapter.inject_context(messages)
+        self.assertEqual(result, messages)
+
+    def test_inject_context_system_prompt_position_bottom(self):
+        """测试系统提示插入到底部"""
+        config = InjectionConfig(
+            system_prompt_position="bottom"
+        )
+        adapter = OpenAIInjectionAdapter(config=config)
+        messages = [
+            {"role": "user", "content": "Hello"}
+        ]
+        result = adapter.inject_context(messages)
+        # Injected system should be last message
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[-1]["role"], "system")
+
+    def test_inject_context_system_prompt_bottom_with_existing_system(self):
+        """测试系统提示插入到底部找到最后一个系统消息后"""
+        config = InjectionConfig(
+            system_prompt_position="bottom"
+        )
+        adapter = OpenAIInjectionAdapter(config=config)
+        messages = [
+            {"role": "system", "content": "First system"},
+            {"role": "user", "content": "User message"},
+            {"role": "system", "content": "Second system"},
+            {"role": "assistant", "content": "Response"}
+        ]
+        original_length = len(messages)
+        result = adapter.inject_context(messages)
+        self.assertEqual(len(result), original_length + 1)
+        # Inserted after last system at index 2
+        self.assertEqual(result[3]["role"], "system")
+
+    def test_inject_context_system_prompt_bottom_no_existing_system(self):
+        """测试系统提示插入到底部没有已有系统消息，直接追加"""
+        config = InjectionConfig(
+            system_prompt_position="bottom"
+        )
+        adapter = OpenAIInjectionAdapter(config=config)
+        messages = [
+            {"role": "user", "content": "Hello"}
+        ]
+        result = adapter.inject_context(messages)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[-1]["role"], "system")
+
+    def test_save_daily_summary(self):
+        """测试保存对话摘要"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+
+        from src.storage.local import LocalMemoryStorage
+
+        adapter = OpenAIInjectionAdapter(
+            memory_storage=LocalMemoryStorage(project_root))
+
+        conversation = [
+            {"role": "user", "content": "Hello world"},
+            {"role": "assistant", "content": "Hi there"}
+        ]
+
+        result = adapter.save_daily_summary(conversation, "Test summary")
+        self.assertTrue(result)
+        temp_dir.cleanup()
+
+    def test_save_daily_summary_auto_generate(self):
+        """测试自动生成对话摘要"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+
+        from src.storage.local import LocalMemoryStorage
+
+        adapter = OpenAIInjectionAdapter(
+            memory_storage=LocalMemoryStorage(project_root))
+
+        conversation = [
+            {"role": "user", "content": "First question"},
+            {"role": "assistant", "content": "First answer"},
+            {"role": "user", "content": "Second question with very long content that should be truncated because it exceeds two hundred characters... " * 10},
+        ]
+
+        result = adapter.save_daily_summary(conversation)
+        self.assertTrue(result)
+        temp_dir.cleanup()
+
+    def test_build_persona_prompt_minimal(self):
+        """测试构建人格提示词最小配置（没有可选字段）"""
+        import tempfile
+        import yaml
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "config").mkdir()
+
+        persona_config = {
+            "ai": {
+                "name": "Minimal",
+                "role": "Assistant"
+            },
+            "master": {}
+        }
+        with open(project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        from src.storage.local import LocalPersonaStorage
+        adapter = OpenAIInjectionAdapter(persona_storage=LocalPersonaStorage(project_root))
+        prompt = adapter._build_persona_prompt()
+
+        self.assertIn("Minimal", prompt)
+        self.assertIn("Assistant", prompt)
+        # No personality section should not be present
+        self.assertNotIn("性格", prompt)
+        self.assertNotIn("核心价值观", prompt)
+        self.assertNotIn("交互风格", prompt)
+
+        temp_dir.cleanup()
+
+    def test_build_recent_memory_prompt_with_content(self):
+        """测试构建最近记忆提示词有内容的情况"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+
+        from src.storage.local import LocalMemoryStorage
+        adapter = OpenAIInjectionAdapter(memory_storage=LocalMemoryStorage(project_root))
+        today = adapter._today
+        with open(project_root / "data" / "memory" / "day" / f"{today}.md", "w", encoding="utf-8") as f:
+            f.write("# Today's memory content")
+
+        prompt = adapter._build_recent_memory_prompt()
+
+        self.assertIn("今日记忆", prompt)
+        self.assertIn("memory content", prompt)
+        temp_dir.cleanup()
+
+    def test_build_base_rules(self):
+        """测试构建基础规则"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "src").mkdir(parents=True)
+
+        from src.storage.local import LocalSkillStorage
+        adapter = OpenAIInjectionAdapter(skill_storage=LocalSkillStorage(project_root))
+        with open(project_root / "src" / "SKILL.md", "w", encoding="utf-8") as f:
+            f.write("# SKILL rules content")
+
+        prompt = adapter._build_base_rules()
+
+        self.assertIn("系统规则", prompt)
+        self.assertIn("SKILL", prompt)
+        self.assertIn("rules content", prompt)
+        temp_dir.cleanup()
+
+    def test_build_base_rules_empty(self):
+        """测试构建基础规则没有规则文件"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "src").mkdir(parents=True)
+
+        from src.storage.local import LocalSkillStorage
+        adapter = OpenAIInjectionAdapter(skill_storage=LocalSkillStorage(project_root))
+        prompt = adapter._build_base_rules()
+
+        self.assertEqual(prompt, "")
+        temp_dir.cleanup()
+
+    def test_generate_simple_summary_truncation(self):
+        """测试生成简单摘要超长截断"""
+        adapter = OpenAIInjectionAdapter()
+        long_text = "x" * 300
+        conversation = [
+            {"role": "user", "content": long_text},
+            {"role": "assistant", "content": "Response"},
+        ]
+        summary = adapter._generate_simple_summary(conversation)
+        self.assertIn("...", summary)
+        self.assertLessEqual(len(summary), 500)
+
+
 class TestInjectionConfig(unittest.TestCase):
     """测试注入配置"""
 

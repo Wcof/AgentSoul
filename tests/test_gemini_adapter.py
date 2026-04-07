@@ -177,5 +177,197 @@ class TestGeminiAdapter(BaseTest):
         self.assertIn("TestAgent", string_repr)
 
 
+    def test_inject_context_no_injected_content(self):
+        """测试当没有任何注入内容时返回原始消息"""
+        config = GeminiInjectionConfig(
+            include_persona=False,
+            include_soul_state=False,
+            include_recent_memory=False,
+            include_rules=False
+        )
+        adapter = GeminiInjectionAdapter(config=config)
+        messages = [{"role": "user", "parts": [{"text": "Hello"}]}]
+        result = adapter.inject_context(messages)
+        self.assertEqual(result["messages"], messages)
+        self.assertNotIn("system_instruction", result)
+
+    def test_inject_context_without_system_instruction(self):
+        """测试不使用 system_instruction 特性，直接插入消息"""
+        config = GeminiInjectionConfig(
+            use_system_instruction=False
+        )
+        adapter = GeminiInjectionAdapter(config=config)
+        messages = [{"role": "user", "parts": [{"text": "Hello"}]}]
+        result = adapter.inject_context(messages)
+        self.assertIn("messages", result)
+        messages_result = result["messages"]
+        self.assertEqual(len(messages_result), 2)
+        self.assertEqual(messages_result[0]["role"], "system")
+
+    def test_inject_context_without_system_instruction_existing_system(self):
+        """测试不使用 system_instruction 特性，合并到已有 system 消息"""
+        config = GeminiInjectionConfig(
+            use_system_instruction=False
+        )
+        adapter = GeminiInjectionAdapter(config=config)
+        messages = [
+            {"role": "system", "parts": [{"text": "Existing system"}]},
+            {"role": "user", "parts": [{"text": "Hello"}]}
+        ]
+        result = adapter.inject_context(messages)
+        messages_result = result["messages"]
+        self.assertEqual(len(messages_result), 2)
+        # Merged into existing system
+        self.assertIn("Existing system", messages_result[0]["parts"][0]["text"])
+
+    def test_inject_context_with_existing_system_instruction(self):
+        """测试合并已有的 system_instruction"""
+        adapter = GeminiInjectionAdapter()
+        messages = [{"role": "user", "parts": [{"text": "Hello"}]}]
+        result = adapter.inject_context(messages, existing_system_instruction="Original prompt")
+        self.assertIn("system_instruction", result)
+        self.assertIn("Original prompt", result["system_instruction"])
+
+    def test_save_daily_summary(self):
+        """测试保存对话摘要"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+
+        from src.storage.local import LocalMemoryStorage
+
+        adapter = GeminiInjectionAdapter(
+            memory_storage=LocalMemoryStorage(project_root))
+
+        conversation = [
+            {"role": "user", "parts": [{"text": "Hello world"}]}
+        ]
+
+        result = adapter.save_daily_summary(conversation, "Response text", "Test summary")
+        self.assertTrue(result)
+        temp_dir.cleanup()
+
+    def test_save_daily_summary_auto_generate(self):
+        """测试自动生成对话摘要"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+
+        from src.storage.local import LocalMemoryStorage
+
+        adapter = GeminiInjectionAdapter(
+            memory_storage=LocalMemoryStorage(project_root))
+
+        conversation = [
+            {"role": "user", "parts": [{"text": "First question"}]},
+            {"role": "model", "parts": [{"text": "First answer"}]},
+            {"role": "user", "parts": [{"text": "Second question " * 20}]},
+        ]
+
+        result = adapter.save_daily_summary(conversation, "Last response")
+        self.assertTrue(result)
+        temp_dir.cleanup()
+
+    def test_build_persona_prompt_minimal(self):
+        """测试构建人格提示词最小配置（没有可选字段）"""
+        import tempfile
+        import yaml
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "config").mkdir()
+
+        persona_config = {
+            "ai": {
+                "name": "Minimal",
+                "role": "Assistant"
+            },
+            "master": {}
+        }
+        with open(project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        from src.storage.local import LocalPersonaStorage
+        adapter = GeminiInjectionAdapter(persona_storage=LocalPersonaStorage(project_root))
+        prompt = adapter._build_persona_prompt()
+
+        self.assertIn("Minimal", prompt)
+        self.assertIn("Assistant", prompt)
+        self.assertNotIn("性格", prompt)
+        self.assertNotIn("核心价值观", prompt)
+        self.assertNotIn("交互风格", prompt)
+
+        temp_dir.cleanup()
+
+    def test_build_recent_memory_prompt_with_content(self):
+        """测试构建最近记忆提示词有内容的情况"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+
+        from src.storage.local import LocalMemoryStorage
+        adapter = GeminiInjectionAdapter(memory_storage=LocalMemoryStorage(project_root))
+        today = adapter._today
+        with open(project_root / "data" / "memory" / "day" / f"{today}.md", "w", encoding="utf-8") as f:
+            f.write("# Today's memory content")
+
+        prompt = adapter._build_recent_memory_prompt()
+
+        self.assertIn("今日记忆", prompt)
+        self.assertIn("memory content", prompt)
+        temp_dir.cleanup()
+
+    def test_build_base_rules(self):
+        """测试构建基础规则"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "src").mkdir(parents=True)
+
+        from src.storage.local import LocalSkillStorage
+        adapter = GeminiInjectionAdapter(skill_storage=LocalSkillStorage(project_root))
+        with open(project_root / "src" / "SKILL.md", "w", encoding="utf-8") as f:
+            f.write("# SKILL rules content")
+
+        prompt = adapter._build_base_rules()
+
+        self.assertIn("系统规则", prompt)
+        self.assertIn("SKILL", prompt)
+        self.assertIn("rules content", prompt)
+        temp_dir.cleanup()
+
+    def test_build_base_rules_empty(self):
+        """测试构建基础规则没有规则文件"""
+        import tempfile
+        from pathlib import Path
+        temp_dir = tempfile.TemporaryDirectory()
+        project_root = Path(temp_dir.name)
+        (project_root / "src").mkdir(parents=True)
+
+        from src.storage.local import LocalSkillStorage
+        adapter = GeminiInjectionAdapter(skill_storage=LocalSkillStorage(project_root))
+        prompt = adapter._build_base_rules()
+
+        self.assertEqual(prompt, "")
+        temp_dir.cleanup()
+
+    def test_generate_simple_summary_truncation(self):
+        """测试生成简单摘要超长截断"""
+        adapter = GeminiInjectionAdapter()
+        long_text = "x" * 300
+        conversation = [
+            {"role": "user", "parts": [{"text": long_text}]},
+        ]
+        summary = adapter._generate_simple_summary(conversation, "Response text")
+        self.assertIn("...", summary)
+
+
 if __name__ == "__main__":
     unittest.main()
