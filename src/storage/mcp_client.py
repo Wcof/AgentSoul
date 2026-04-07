@@ -177,8 +177,11 @@ class McpPersonaStorage(BasePersonaStorage):
     def read_persona_config(self) -> dict[str, Any]:
         result = self._call_tool("get_persona_config", {})
         if isinstance(result, str):
-            config: dict[str, Any] = json.loads(result)
-            return config
+            try:
+                config: dict[str, Any] = json.loads(result)
+                return config
+            except json.JSONDecodeError:
+                return {}
         return result if isinstance(result, dict) else {}
 
     def write_persona_config(self, config: dict[str, Any]) -> bool:
