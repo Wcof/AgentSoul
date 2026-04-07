@@ -4,10 +4,10 @@ Entry Capability Detector for Master Agent
 Detect the current running environment (Claude Code / OpenAI Codex / Gemini)
 and output the available injection methods for Master Agent continuity.
 """
+from __future__ import annotations
 
 import os
 import sys
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 
@@ -16,7 +16,7 @@ class EntryCapability:
     """Result of entry capability detection."""
     environment: str
     description: str
-    available_injection_methods: List[str]
+    available_injection_methods: list[str]
     has_mcp: bool
     has_local_files: bool
     notes: str
@@ -31,7 +31,7 @@ def detect_environment() -> EntryCapability:
     """
     env = "unknown"
     description = ""
-    available: List[str] = []
+    available: list[str] = []
     has_mcp = False
     has_local_files = False
     notes = ""
@@ -80,7 +80,7 @@ def detect_environment() -> EntryCapability:
             # Try to access current directory
             _ = os.listdir(".")
             has_local_files = True
-        except:
+        except Exception:
             has_local_files = False
 
         # Check if MCP module is available
@@ -103,7 +103,7 @@ def detect_environment() -> EntryCapability:
     )
 
 
-def check_agentsoul_installed() -> Tuple[bool, Optional[str]]:
+def check_agentsoul_installed() -> tuple[bool, str | None]:
     """
     Check if AgentSoul is properly installed in the current workspace.
 
@@ -124,7 +124,7 @@ def check_agentsoul_installed() -> Tuple[bool, Optional[str]]:
     return False, None
 
 
-def get_injection_template(env: str) -> Optional[str]:
+def get_injection_template(env: str) -> str | None:
     """
     Get the injection template for the detected environment.
 
@@ -246,9 +246,8 @@ def print_report() -> None:
     print("=" * 60)
 
 
-def main():
+def main() -> None:
     """Main entry point for CLI."""
-    import sys
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
         print("""AgentSoul Entry Capability Detector
 

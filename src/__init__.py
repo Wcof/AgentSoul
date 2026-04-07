@@ -32,10 +32,10 @@ from src.adapters import (
 from src.config_loader import ConfigLoader
 from src.entry_detect import (
     EntryCapability,
-    detect_environment,
     check_agentsoul_installed,
-    get_injection_template,
+    detect_environment,
     generate_report,
+    get_injection_template,
     print_report,
 )
 from src.health_check import (

@@ -81,3 +81,30 @@ class TestEntryDetection:
         """Test that the module can be imported."""
         import src.entry_detect
         assert src.entry_detect is not None
+
+    def test_main_help_flag(self):
+        """Test main function with --help flag exits with 0."""
+        import src.entry_detect
+        import sys
+        original_argv = sys.argv
+        try:
+            sys.argv = ["entry_detect.py", "--help"]
+            with pytest.raises(SystemExit) as excinfo:
+                src.entry_detect.main()
+            assert excinfo.value.code == 0
+        finally:
+            sys.argv = original_argv
+
+    def test_main_no_args(self):
+        """Test main function without arguments runs print_report."""
+        import src.entry_detect
+        import sys
+        original_argv = sys.argv
+        try:
+            sys.argv = ["entry_detect.py"]
+            # Just check it doesn't crash - output goes to stdout
+            src.entry_detect.main()
+            # If we get here, it succeeded
+            assert True
+        finally:
+            sys.argv = original_argv
