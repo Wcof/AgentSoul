@@ -40,3 +40,10 @@ jobs:
     - name: Lint with ruff
       run: |
         python -m ruff check src/ --output-format=github
+
+    - name: Type check with mypy
+      run: |
+        python -m mypy src/
+
+    - name: Run pre-commit hooks
+      uses: pre-commit/action@v3.0.0
