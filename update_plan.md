@@ -3,12 +3,10 @@
 ## 当前阶段评估
 
 - 当前健康度 **100**，处于极佳稳定状态
-- 迭代 58，连续 55 轮迭代健康度保持 100
+- 迭代 59，连续 56 轮迭代健康度保持 100
 - 所有 182 个测试 100% 通过，MCP 编译成功
-- ruff 检查清理完成，仅剩余一个配置警告不影响功能
+- ruff 检查完全通过，已解决顶层 linter 设置废弃警告
 - mypy 严格类型检查持续全绿通过 → 代码质量持续保持高水准
-- 完成第十一阶段后继续补充单元测试，大幅提升 `src/storage/local.py` 覆盖率：44% → 69% (+25)
-- 总体覆盖率从 62% → 65% (+3)，总测试数从 138 → 182 (+44)
 - **所有规划的核心功能现已全部完成**！包括：
   - 基础人格/情绪工具 ✓
   - 分层记忆系统 ✓
@@ -37,7 +35,8 @@
   - Web UI 键盘导航功能 ✓ 完成
   - Web UI 快速标签筛选 ✓ 完成
   - 补充单元测试覆盖边缘情况 ✓ 完成
-  - 补充单元测试覆盖存储层 ✓ 本次完成
+  - 补充单元测试覆盖存储层 ✓ 完成
+  - 修复 ruff 配置废弃警告 ✓ 本次完成
   - README 健康度徽章 ✓
   - 完整文档更新 ✓
   - README 添加 GitHub 徽章 ✓
@@ -49,14 +48,13 @@
 ## 必做项
 
 - 无遗留卡死项
-- 更新 pyproject.toml ruff 配置，将顶层 linter 设置移动到 `lint` 区段解决废弃警告
 - 可进一步为低覆盖率模块补充单元测试继续提升覆盖率：`src/health_check.py` (48%), `src/storage/mcp_client.py` (35%), `src/memory_enhanced/priority.py` (26%)
 - 保持项目健康度 100
 
 ## 下次战略选择
 
 ### A 偏稳定
-- 更新 ruff 配置解决废弃警告
+- 等待 GitHub CI 验证配置正确
 - 如果 CI 报告任何错误，修复相应问题
 - 持续监控依赖更新，及时补丁
 - 保持健康度 100
@@ -64,15 +62,15 @@
 
 ### B 偏破局
 - 探索增值功能方向，例如：
-  - 继续补充单元测试覆盖 `src/health_check.py`、`src/storage/mcp_client.py` 等低覆盖率模块进一步提升覆盖率
-  - 更新 pyproject.toml ruff 配置解决顶层 linter 设置废弃警告
+  - 继续补充单元测试覆盖 `src/health_check.py`、`src/storage/mcp_client.py`、`src/memory_enhanced/priority.py` 等低覆盖率模块进一步提升覆盖率
   - 探索新的可能的扩展功能
+  - 检查并清理任何新发现的代码质量问题
 
 ## 功能候选池
 
-1. **更新 pyproject.toml** 解决 ruff 配置废弃警告
-2. **继续补充单元测试提升覆盖率**（针对低覆盖率模块如 `health_check`、`storage/mcp_client`、`memory_enhanced/priority` 等）
-3. **检查并清理任何新发现的代码质量问题**
+1. **继续补充单元测试提升覆盖率**（针对低覆盖率模块如 `health_check`、`storage/mcp_client`、`memory_enhanced/priority` 等）
+2. **检查并清理任何新发现的代码质量问题**
+3. **探索新的可能的扩展功能**
 
 ## 本次踩坑警告
 
@@ -89,17 +87,17 @@
 - 使用 `subprocess.Popen` 时，类型参数要匹配 `text=True/False`，`text=True` → `Popen[str]`，`text=False` → `Popen[bytes]`
 - Python 3.9+ 支持内置泛型语法 `list[T]`/`dict[K,V]`，不再需要从 `typing` 导入 `List`/`Dict`
 - 创建测试文件时注意目录位置，不要误创建到 `mcp_server/tests` 子目录
+- ruff 新版本已废弃顶层 `select`/`ignore` 配置，必须移动到 `[tool.ruff.lint]` 区段
 
 ## 阶段结论
 
 本次迭代：
-- 健康度保持 100 连续 55 轮
+- 健康度保持 100 连续 56 轮
 - 所有 182 个单元测试全部通过
 - MCP 服务器编译成功
-- 新增 44 个单元测试覆盖低覆盖率存储模块 `src/storage/local.py`，覆盖率从 44% → 69%，提升 25 个百分点
-- 总体覆盖率从 62% → 65%，提升 3 个百分点
-- 总测试数从 138 → 182
-- 增量式改进完全向后兼容，所有测试 100% 通过
+- 修复了 pyproject.toml 中 ruff 配置问题，将 `select`/`ignore` 从顶层移动到 `lint` 区段，解决了废弃警告
+- 现在 ruff 检查完全通过无警告
+- 总体覆盖率保持 65%，总测试数 182
+- 增量式配置修复完全向后兼容，所有测试 100% 通过
 - 无 TODO/FIXME/HACK 遗留
 - 项目持续保持完全稳定可发布状态
-- 下次迭代建议解决 ruff 配置废弃警告
