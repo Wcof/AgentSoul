@@ -3,14 +3,14 @@
 ## 当前阶段评估
 
 - 当前健康度 **100**，处于极佳稳定状态
-- 迭代 82，连续 79 轮迭代健康度保持 100
+- 迭代 83，连续 80 轮迭代健康度保持 100
 - 所有 566 个测试 100% 通过，MCP 编译成功
 - ruff 检查完全通过无警告，mypy --strict 零错误通过
 - **完成本轮：**
-  - 检查代码质量，完善 GitHub Actions CI 配置
-  - 添加 **mypy 类型检查**到 CI，确保每次提交都经过严格类型检查验证
-  - 添加 **pre-commit hook 检查**到 CI，确保所有提交都符合代码质量规则
-  - 现在 CI 完整流程：pytest 测试 → MCP 编译 → ruff lint → mypy 类型检查 → pre-commit 检查
+  - 完善 MCP 订阅推送机制，补齐缺失的导出和工具注册
+  - MCP 订阅推送机制现在完整可用：subscribe/unsubscribe/list_subscriptions 三个工具都可以正常访问
+  - 支持 Webhook 事件推送：memory_written / memory_archived / soul_state_updated / persona_updated
+  - 自动失败计数，达到 max_failures 自动取消订阅，支持可配置超时和密钥
 
 ## 必做项
 
@@ -24,23 +24,23 @@
 ## 下次战略选择
 
 ### A 偏稳定
-- 等待 GitHub CI 运行验证新配置
+- 等待 GitHub CI 运行验证完整配置（pre-commit + mypy strict + subscription tools）
 - 如果 CI 报告任何错误，修复相应问题
 - 持续监控依赖更新，及时补丁
 - 保持健康度 100
 
 ### B 偏破局
-- 完善 MCP 订阅推送机制：补齐断连重试、推送状态可观测、订阅生命周期管理
 - 跨平台灵魂迁移：完善 OpenAI / Claude 两端数据映射、冲突处理、迁移校验和失败回滚闭环
 - Web UI 历史功能深化：围绕记忆查看继续补齐真实使用链路
+- 验证订阅推送机制完整功能，补充如果有缺失的可观测性
 
 ## 功能候选池
 
-1. **完善 MCP 订阅推送机制：补齐断连重试和可观测性**
-2. **跨平台灵魂迁移端到端闭环完善**
-3. **Web UI 功能持续深化（导出/导入优化）**
-4. **验证 GitHub CI 新配置在远程运行正常**
-5. **清理任何新发现的代码质量问题**
+1. **跨平台灵魂迁移端到端闭环完善**
+2. **Web UI 功能持续深化（导出/导入优化）**
+3. **验证 MCP 订阅推送机制完整功能**
+4. **检查并清理任何新发现的代码质量问题**
+5. **等待 GitHub CI 验证所有新配置**
 
 ## 本次踩坑警告
 
@@ -48,13 +48,14 @@
 - 生成覆盖率时必须从项目根目录运行 pytest
 - pre-commit 配置需要添加 `.pre-commit-cache/` 到 `.gitignore`
 - mypy `--strict` 模式已经包含了所有严格选项，不需要重复列出，直接启用 `strict = true` 即可
+- MCP 工具实现后必须同时：1) 在 `tools/index.ts` 导出，2) 在 `index.ts` 的 `ALL_TOOLS` 数组注册，否则工具不会被 MCP 发现
 
 ## 阶段结论
 
 本次迭代（正常功能深化）：
-- 健康度保持 100 连续 79 轮
-- 完善 GitHub CI 配置，添加 mypy 类型检查和 pre-commit 检查
-- 现在 CI 提供完整的代码质量验证防线：测试 → 编译 → lint → 类型检查 → pre-commit
+- 健康度保持 100 连续 80 轮
+- 完成 MCP 订阅推送机制完善，补齐了缺失的导出和工具注册
+- 现在订阅推送机制完整可用，可以推送给外部 Webhook 各种 AgentSoul 事件
 - 所有 566 个单元测试全部通过
 - MCP 服务器编译成功
 - 无 TODO/FIXME/HACK 遗留

@@ -11,3 +11,4 @@ export * from './kv-cache.js';
 export * from './soul-board.js';
 export * from './memory_enhanced.js';
 export * from './adaptive.js';
+export * from './subscription.js';

@@ -350,6 +350,10 @@ const ALL_TOOLS: ToolMetadata[] = [
   { name: 'get_persona_version', fallbackDescription: 'Get current persona version information including version number, timestamp and checksum.', schema: GetPersonaVersionSchema },
   { name: 'list_soul_versions', fallbackDescription: 'List all available soul state version snapshots for rollback.', schema: ListSoulVersionsSchema },
   { name: 'rollback_soul', fallbackDescription: 'Rollback soul state (PAD emotion) to a specific previous version.', schema: RollbackSoulSchema },
+  // Subscription Push tools
+  { name: 'subscribe', fallbackDescription: 'Create an event subscription, register a Webhook URL to receive AgentSoul events.', schema: SubscribeSchema },
+  { name: 'unsubscribe', fallbackDescription: 'Cancel an existing event subscription by subscription ID.', schema: UnsubscribeSchema },
+  { name: 'list_subscriptions', fallbackDescription: 'List all currently active event subscriptions with their status information.', schema: ListSubscriptionsSchema },
 ];
 
 /**
