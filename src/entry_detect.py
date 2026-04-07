@@ -246,5 +246,26 @@ def print_report() -> None:
     print("=" * 60)
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for CLI."""
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print("""AgentSoul Entry Capability Detector
+
+Detect the current running environment and output available injection methods.
+
+Usage:
+  python -m src.entry_detect
+  python src/entry_detect.py
+  python -m src.entry_detect --help
+
+Exit codes:
+  0: Success
+  1: Error
+""")
+        sys.exit(0)
     print_report()
+
+
+if __name__ == "__main__":
+    main()

@@ -131,6 +131,25 @@ python3 install.py --mcp --no-run
 
 安装完成后，MCP 服务会自动注册到 Claude Code。重启 Claude Code 即可使用。
 
+### 5️⃣ 自动检测运行环境
+
+AgentSoul 可以自动检测当前运行环境（Claude Code / OpenAI Codex / Gemini）并输出对应的注入模板：
+
+```bash
+# 自动检测并显示报告
+python3 src/entry_detect.py
+
+# 查看帮助
+python3 src/entry_detect.py --help
+```
+
+这在你不确定当前环境支持哪些能力时特别有用，探测器会告诉你：
+- 当前是什么环境（Claude Code / OpenAI Codex / Gemini / 通用本地）
+- 是否支持 MCP
+- 是否有本地文件访问权限
+- AgentSoul 是否已安装
+- 对应的注入模板
+
 #### MCP 工具一览
 
 **🤖 人格情感类**：
