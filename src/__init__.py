@@ -30,6 +30,14 @@ from src.adapters import (
     OpenAIInjectionAdapter,
 )
 from src.config_loader import ConfigLoader
+from src.entry_detect import (
+    EntryCapability,
+    detect_environment,
+    check_agentsoul_installed,
+    get_injection_template,
+    generate_report,
+    print_report,
+)
 from src.health_check import (
     HealthChecker,
     HealthIssue,
@@ -120,4 +128,11 @@ __all__ = [
     "MigrationResult",
     "export_archive",
     "import_archive",
+    # Entry capability detection
+    "EntryCapability",
+    "detect_environment",
+    "check_agentsoul_installed",
+    "get_injection_template",
+    "generate_report",
+    "print_report",
 ]
