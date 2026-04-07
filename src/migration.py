@@ -390,6 +390,7 @@ def import_archive(
     archive_path: Path,
     target_storage: tuple[BasePersonaStorage, BaseSoulStateStorage, BaseMemoryStorage],
     skip_existing: bool = True,
+    dry_run: bool = False,
 ) -> MigrationResult:
     """从 zip 归档导入灵魂数据
 
@@ -419,10 +420,15 @@ def import_archive(
             with open(persona_file, encoding="utf-8") as f:
                 persona_config = json.load(f)
             if hasattr(target_p, 'write_persona_config'):
-                if target_p.write_persona_config(persona_config):
+                if dry_run:
+                    # Dry run: just count it
                     total_migrated += 1
+                    log("[DRY RUN] Would import persona configuration", level="INFO")
                 else:
-                    errors.append("Failed to write persona config")
+                    if target_p.write_persona_config(persona_config):
+                        total_migrated += 1
+                    else:
+                        errors.append("Failed to write persona config")
             else:
                 errors.append("Target doesn't support writing persona")
 
@@ -432,10 +438,14 @@ def import_archive(
             with open(soul_file, encoding="utf-8") as f:
                 soul_state = json.load(f)
             if hasattr(target_s, 'write_soul_state'):
-                if target_s.write_soul_state(soul_state):
+                if dry_run:
                     total_migrated += 1
+                    log("[DRY RUN] Would import soul state", level="INFO")
                 else:
-                    errors.append("Failed to write soul state")
+                    if target_s.write_soul_state(soul_state):
+                        total_migrated += 1
+                    else:
+                        errors.append("Failed to write soul state")
             else:
                 errors.append("Target doesn't support writing soul state")
 
@@ -456,10 +466,14 @@ def import_archive(
                         continue
                     if skip_existing and read_method(identifier) is not None:
                         continue
-                    if write_method(identifier, content):
+                    if dry_run:
                         total_migrated += 1
+                        log(f"[DRY RUN] Would import {type_name} memory: {identifier} ({len(content)} chars)", level="INFO")
                     else:
-                        errors.append(f"Failed to write {type_name} {identifier}")
+                        if write_method(identifier, content):
+                            total_migrated += 1
+                        else:
+                            errors.append(f"Failed to write {type_name} {identifier}")
 
         # 主题记忆
         topic_dir = memory_dir / "topic"
@@ -472,10 +486,14 @@ def import_archive(
                     continue
                 if skip_existing and target_m.read_topic_memory(topic) is not None:
                     continue
-                if target_m.write_topic_memory(topic, content):
+                if dry_run:
                     total_migrated += 1
+                    log(f"[DRY RUN] Would import topic memory: {topic} ({len(content)} chars)", level="INFO")
                 else:
-                    errors.append(f"Failed to write topic {topic}")
+                    if target_m.write_topic_memory(topic, content):
+                        total_migrated += 1
+                    else:
+                        errors.append(f"Failed to write topic {topic}")
 
             # 归档主题
             archive_dir = topic_dir / "archive"
@@ -489,18 +507,25 @@ def import_archive(
                     # 先写入再归档
                     if skip_existing and target_m.read_topic_memory(topic) is not None:
                         # 即使跳过也要确保归档状态正确
-                        if hasattr(target_m, 'archive_topic'):
+                        if not dry_run and hasattr(target_m, 'archive_topic'):
                             target_m.archive_topic(topic)
                         continue
-                    if target_m.write_topic_memory(topic, content):
+                    if dry_run:
                         total_migrated += 1
-                        if hasattr(target_m, 'archive_topic'):
-                            target_m.archive_topic(topic)
+                        log(f"[DRY RUN] Would import archived topic memory: {topic} ({len(content)} chars)", level="INFO")
                     else:
-                        errors.append(f"Failed to write archived topic {topic}")
+                        if target_m.write_topic_memory(topic, content):
+                            total_migrated += 1
+                            if hasattr(target_m, 'archive_topic'):
+                                target_m.archive_topic(topic)
+                        else:
+                            errors.append(f"Failed to write archived topic {topic}")
 
     success_overall = len(errors) == 0
-    message = f"Import completed: {total_migrated} items imported"
+    if dry_run:
+        message = f"[DRY RUN] Would import {total_migrated} items (no changes were made)"
+    else:
+        message = f"Import completed: {total_migrated} items imported"
     if errors:
         message += f" with {len(errors)} errors"
 
@@ -537,6 +562,8 @@ def main() -> None:
     import_parser.add_argument("archive", help="输入 zip 文件路径")
     import_parser.add_argument("--no-skip-existing", action="store_false", dest="skip_existing",
                             default=True, help="不跳过已存在文件（覆盖）")
+    import_parser.add_argument("--dry-run", action="store_true", default=False,
+                            help="预演模式，只预览会迁移哪些文件，不实际写入")
 
     # migrate-local-to-mcp command
     subparsers.add_parser("migrate-local-to-mcp", help="从本地存储迁移到 MCP 服务")
@@ -575,7 +602,7 @@ def main() -> None:
             LocalMemoryStorage(project_root),
         )
         archive_path = Path(args.archive)
-        result = import_archive(archive_path, target_storage, args.skip_existing)
+        result = import_archive(archive_path, target_storage, args.skip_existing, args.dry_run)
         log(result.message, level="INFO" if result.success else "ERROR")
         if not result.success:
             for err in result.errors:
