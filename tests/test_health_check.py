@@ -245,6 +245,96 @@ class TestHealthCheck(BaseTest):
         info_issues = sum(1 for i in issues if i.level == "info")
         self.assertGreater(info_issues, 5)  # Multiple optional dirs missing
 
+    def test_parse_date_from_filename(self):
+        """测试日期解析各种格式"""
+        from datetime import datetime
+        checker = HealthChecker(self.project_root)
+
+        # YYYY-MM-DD
+        parsed = checker._parse_date_from_filename(Path("2026-04-07.md"))
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.year, 2026)
+        self.assertEqual(parsed.month, 4)
+        self.assertEqual(parsed.day, 7)
+
+        # YYYY-MM
+        parsed = checker._parse_date_from_filename(Path("2026-04.md"))
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.year, 2026)
+        self.assertEqual(parsed.month, 4)
+
+        # YYYY
+        parsed = checker._parse_date_from_filename(Path("2026.md"))
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.year, 2026)
+
+        # Invalid
+        parsed = checker._parse_date_from_filename(Path("invalid.md"))
+        self.assertIsNone(parsed)
+
+    def test_date_conversions(self):
+        """测试日期转换方法"""
+        from datetime import datetime
+        checker = HealthChecker(self.project_root)
+
+        date = datetime(2026, 4, 7)
+        week = checker._date_to_year_week(date)
+        # 2026-04-07 is ISO week 15 of 2026
+        self.assertEqual(week, "2026-15")
+
+        month = checker._date_to_year_month(date)
+        self.assertEqual(month, "2026-04")
+
+        year = checker._date_to_year(date)
+        self.assertEqual(year, "2026")
+
+    def test_check_archival_consistency(self):
+        """测试归档一致性检查"""
+        from datetime import datetime, timedelta
+        checker = HealthChecker(self.project_root)
+        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir.mkdir(parents=True)
+
+        # Recent day - should not warn
+        recent = (datetime.now()).strftime("%Y-%m-%d")
+        (day_dir / f"{recent}.md").write_text("content")
+        issues = checker.check_archival_consistency()
+        self.assertEqual(len(issues), 0)
+
+    def test_check_archival_consistency_old_day(self):
+        """测试超期日记忆应该被归档但未归档会产生警告"""
+        from datetime import datetime, timedelta
+        checker = HealthChecker(self.project_root)
+        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir.mkdir(parents=True)
+
+        # 8 days old - should warn
+        old_date = (datetime.now() - timedelta(days=8)).strftime("%Y-%m-%d")
+        (day_dir / f"{old_date}.md").write_text("content")
+        issues = checker.check_archival_consistency()
+        warnings = [i for i in issues if "should be archived to weekly" in i.message]
+        self.assertEqual(len(warnings), 1)
+
+    def test_check_memory_files_empty_file(self):
+        """测试空文件产生info提示"""
+        checker = HealthChecker(self.project_root)
+        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir.mkdir(parents=True)
+        (day_dir / "2026-04-07.md").write_text("   \n   ")
+
+        issues = checker.check_memory_files(sample_limit=10)
+        info_issues = [i for i in issues if i.level == "info" and "Empty memory file" in i.message]
+        self.assertEqual(len(info_issues), 1)
+
+    def test_check_permissions_config_not_writable(self):
+        """测试配置目录不可写产生错误"""
+        checker = HealthChecker(self.project_root)
+        os.chmod(self.project_root / "config", 0o444)
+        issues = checker.check_permissions()
+        error_issues = [i for i in issues if i.level == "error" and "not writable" in i.message]
+        self.assertEqual(len(error_issues), 1)
+        os.chmod(self.project_root / "config", 0o755)
+
 
 if __name__ == "__main__":
     unittest.main()
