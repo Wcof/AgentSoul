@@ -1,10 +1,16 @@
 """
-Unit tests for src/storage/local.py
+AgentSoul · 本地存储单元测试
 =============================
 
-Tests for LocalPersonaStorage, LocalSoulStateStorage, LocalMemoryStorage, LocalSkillStorage
+测试 src/storage/local.py 所有存储实现
 """
+from __future__ import annotations
+
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 import tempfile
 import shutil
@@ -496,5 +502,220 @@ class TestLocalSkillStorage(unittest.TestCase):
         self.assertEqual(rules, sorted(rules))
 
 
+class TestLocalPersonaStorageExtra(unittest.TestCase):
+    """Additional tests for LocalPersonaStorage edge cases"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.project_root = Path(self.temp_dir.name)
+        (self.project_root / "config").mkdir()
+        self.storage = LocalPersonaStorage(project_root=self.project_root)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_get_version_io_error_returns_default(self):
+        """When config file exists but can't be read for version calculation, returns default version"""
+        # Create file with no permissions
+        test_config = {"ai": {"name": "Test"}}
+        with open(self.storage.config_path, "w", encoding="utf-8") as f:
+            yaml.dump(test_config, f)
+
+        # Remove read permission
+        self.storage.config_path.chmod(0o000)
+        version = self.storage.get_version()
+        # Restore permission for cleanup
+        self.storage.config_path.chmod(0o644)
+
+        self.assertEqual(version.version, "0.0.0")
+        self.assertIsNone(version.checksum)
+
+
+class TestLocalSoulStateStorageExtra(unittest.TestCase):
+    """Additional tests for LocalSoulStateStorage edge cases"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.project_root = Path(self.temp_dir.name)
+        self.storage = LocalSoulStateStorage(project_root=self.project_root)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_read_json_corrupted_returns_default(self):
+        """When state file exists but JSON is corrupted, return default state"""
+        self.storage.state_path.parent.mkdir(parents=True)
+        with open(self.storage.state_path, "w", encoding="utf-8") as f:
+            f.write("this is not valid json {{{")
+
+        result = self.storage.read_soul_state()
+        self.assertEqual(result["pleasure"], 0.3)
+
+    def test_save_version_snapshot_no_error_on_permission_error(self):
+        """_save_version_snapshot doesn't throw exception on IO error, just logs it"""
+        # Create directory read-only
+        self.storage.history_dir.parent.mkdir(parents=True)
+        self.storage.history_dir.mkdir()
+        self.storage.history_dir.chmod(0o555)
+
+        state = {"version": "1.0.0", "pleasure": 0.5}
+        # Should not throw
+        self.storage._save_version_snapshot(state)
+
+        # Restore permission for cleanup
+        self.storage.history_dir.chmod(0o755)
+
+    def test_rollback_fails_on_read_error(self):
+        """Rollback fails when snapshot can't be read"""
+        self.storage.history_dir.mkdir(parents=True)
+        snap_path = self.storage.history_dir / "20260101_120000_v1.0.0.json"
+        with open(snap_path, "w", encoding="utf-8") as f:
+            f.write("not valid json")
+
+        result = self.storage.rollback("v1.0.0")
+        self.assertFalse(result)
+
+
+class TestLocalMemoryStorageExtra(unittest.TestCase):
+    """Additional tests for LocalMemoryStorage edge cases"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.project_root = Path(self.temp_dir.name)
+        self.storage = LocalMemoryStorage(project_root=self.project_root)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_read_daily_io_error_returns_none(self):
+        """When daily file exists but can't be read, returns None"""
+        date = "2026-04-07"
+        path = self.storage._get_path("day", date)
+        path.parent.mkdir(parents=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("content")
+
+        path.chmod(0o000)
+        result = self.storage.read_daily_memory(date)
+        path.chmod(0o644)
+        self.assertIsNone(result)
+
+    def test_aggregate_weekly_to_monthly(self):
+        """_aggregate_weekly_to_monthly aggregates multiple weeks into month"""
+        week_dir = self.storage.base_dir / "week"
+        week_dir.mkdir(parents=True)
+        self.storage.write_weekly_memory("2026-04", "Week 1 content")
+        self.storage.write_weekly_memory("2026-04-02", "Week 2 content")
+
+        aggregated = self.storage._aggregate_weekly_to_monthly("2026-04")
+        self.assertIsNotNone(aggregated)
+        self.assertIn("Week 1 content", aggregated)
+        self.assertIn("Week 2 content", aggregated)
+
+    def test_aggregate_weekly_to_monthly_returns_none_when_no_dir(self):
+        """Returns None when week directory doesn't exist"""
+        aggregated = self.storage._aggregate_weekly_to_monthly("2026-04")
+        self.assertIsNone(aggregated)
+
+    def test_aggregate_monthly_to_yearly(self):
+        """_aggregate_monthly_to_yearly aggregates multiple months into year"""
+        month_dir = self.storage.base_dir / "month"
+        month_dir.mkdir(parents=True)
+        self.storage.write_monthly_memory("2026-01", "January content")
+        self.storage.write_monthly_memory("2026-02", "February content")
+
+        aggregated = self.storage._aggregate_monthly_to_yearly("2026")
+        self.assertIsNotNone(aggregated)
+        self.assertIn("January content", aggregated)
+        self.assertIn("February content", aggregated)
+
+    def test_aggregate_monthly_to_yearly_returns_none_when_no_dir(self):
+        """Returns None when month directory doesn't exist"""
+        aggregated = self.storage._aggregate_monthly_to_yearly("2026")
+        self.assertIsNone(aggregated)
+
+    def test_aggregate_daily_to_weekly_no_content_returns_none(self):
+        """Returns None when all daily files are empty"""
+        day_dir = self.storage.base_dir / "day"
+        day_dir.mkdir(parents=True)
+        (day_dir / "2026-01-01.md").write_text("")
+
+        aggregated = self.storage._aggregate_daily_to_weekly("2026-01")
+        self.assertIsNone(aggregated)
+
+    def test_read_topic_active_io_error_returns_none(self):
+        """When active topic file exists but can't be read, returns None after trying"""
+        topic = "test"
+        sanitized = self.storage._sanitize_topic(topic)
+        path = self.storage.base_dir / "topic" / f"{sanitized}.md"
+        path.parent.mkdir(parents=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("content")
+
+        path.chmod(0o000)
+        result = self.storage.read_topic_memory(topic)
+        path.chmod(0o644)
+        self.assertIsNone(result)
+
+    def test_atomic_write_append_fails_when_cant_read_existing(self):
+        """append mode fails when existing file can't be read"""
+        path = self.storage.base_dir / "test" / "file.md"
+        path.parent.mkdir(parents=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("existing")
+        path.chmod(0o000)
+
+        success = self.storage._atomic_write(path, "new content", append=True)
+        path.chmod(0o644)
+        self.assertFalse(success)
+
+    def test_list_topics_skips_unreadable_files_and_errors(self):
+        """list_topics skips unreadable files and continues"""
+        active_dir = self.storage.base_dir / "topic"
+        active_dir.mkdir(parents=True)
+        # Create a readable file
+        (active_dir / "good.md").write_text("content")
+        # Create a file with no permissions to trigger exception during reading
+        (active_dir / "bad.md").write_text("content")
+        (active_dir / "bad.md").chmod(0o000)
+
+        topics = self.storage.list_topics("active")
+        # Should still get the good one, skip the bad one
+        names = [t["name"] for t in topics]
+        self.assertIn("good", names)
+
+        # Cleanup
+        (active_dir / "bad.md").chmod(0o644)
+
+    def test_archive_topic_fails_on_rename_error(self):
+        """archive_topic returns False when rename fails"""
+        topic = "test"
+        active_path = self.storage.base_dir / "topic" / f"{topic}.md"
+        active_path.parent.mkdir(parents=True)
+        active_path.write_text("content")
+
+        # Make archive directory read-only so rename fails
+        archive_dir = self.storage.base_dir / "topic" / "archive"
+        archive_dir.mkdir(parents=True)
+        archive_dir.chmod(0o555)
+
+        success = self.storage.archive_topic(topic)
+        archive_dir.chmod(0o755)
+        self.assertFalse(success)
+
+    def test_aggregate_weekly_to_monthly_handles_invalid_year_month(self):
+        """Handles invalid year-month format gracefully - even with invalid week names, still aggregates what matches"""
+        week_dir = self.storage.base_dir / "week"
+        week_dir.mkdir(parents=True)
+        # Create a week file with invalid name that can't be split
+        (week_dir / "invalid.md").write_text("content")
+
+        aggregated = self.storage._aggregate_weekly_to_monthly("invalid")
+        # Even though the name can't be parsed, it still aggregates it when prefix matches
+        self.assertIsNotNone(aggregated)
+        self.assertIn("content", aggregated)
+
+
 if __name__ == "__main__":
-    unittest.main()
+    import pytest
+    pytest.main([__file__, "-v"])
