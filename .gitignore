@@ -65,3 +65,6 @@ config.json
 
 # Claude
 .claude/
+
+# pre-commit
+.pre-commit-cache/
