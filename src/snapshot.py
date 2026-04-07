@@ -320,8 +320,8 @@ class SnapshotManager:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(temp_dir)
 
-            # 找到快照文件
-            json_files = list(temp_dir.glob("*.json"))
+            # 找到快照文件 - 递归查找任何子目录中的 json
+            json_files = list(temp_dir.rglob("*.json"))
             if not json_files:
                 log("No snapshot index found in zip", level="ERROR")
                 return None
@@ -334,8 +334,8 @@ class SnapshotManager:
                 data = json.load(f)
             snapshot = SoulSnapshot(**data)
 
-            # 复制所有文件到快照目录
-            for file in temp_dir.iterdir():
+            # 复制所有文件到快照目录（包括子目录中的文件）
+            for file in temp_dir.rglob("*"):
                 if file.is_file():
                     shutil.copy2(file, self.snapshot_dir)
 
