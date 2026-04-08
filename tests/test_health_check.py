@@ -638,6 +638,7 @@ class TestHealthCheck(BaseTest):
         from io import StringIO
         import sys
         original_stdout = sys.stdout
+        original_argv = sys.argv.copy()
         original_exit = sys.exit
         captured_output = StringIO()
         exit_called = False
@@ -651,6 +652,7 @@ class TestHealthCheck(BaseTest):
 
         sys.stdout = captured_output
         sys.exit = mock_exit
+        sys.argv = ["health_check.py"]  # No arguments
         try:
             from src.health_check import main
             main()
@@ -660,6 +662,7 @@ class TestHealthCheck(BaseTest):
             pass
         finally:
             sys.stdout = original_stdout
+            sys.argv = original_argv
             sys.exit = original_exit
 
         output = captured_output.getvalue()

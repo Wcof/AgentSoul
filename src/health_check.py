@@ -537,12 +537,103 @@ class HealthChecker:
 
         print("=" * 60 + "\n")
 
+    def to_dict(self, report: HealthReport) -> dict[str, Any]:
+        """将报告转换为字典格式，方便 JSON 序列化"""
+        def issue_to_dict(issue: HealthIssue) -> dict[str, Any]:
+            return {
+                "level": issue.level,
+                "category": issue.category,
+                "message": issue.message,
+                "location": issue.location,
+                "fix_suggestion": issue.fix_suggestion,
+            }
+
+        return {
+            "timestamp": report.timestamp,
+            "total_checks": report.total_checks,
+            "errors": report.errors,
+            "warnings": report.warnings,
+            "issues": [issue_to_dict(i) for i in report.issues],
+            "is_healthy": report.is_healthy,
+            "soul_version": report.soul_version,
+        }
+
+    def save_report_json(self, report: HealthReport, output_path: Path) -> None:
+        """保存报告到 JSON 文件，适合程序化读取"""
+        data = self.to_dict(report)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        from common import log
+        log(f"JSON 健康报告已保存到 {output_path}", level="INFO")
+
 
 def main() -> None:
     """CLI 入口"""
-    checker = HealthChecker()
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="AgentSoul 灵魂一致性健康检测器 - 检查目录结构、配置文件、灵魂状态、记忆文件和权限"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        help="输出报告文件路径 (默认: stdout 打印文本)",
+        default=None
+    )
+    parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="输出 JSON 格式而不是文本，适合程序化读取 (默认: 文本格式)",
+        default=False
+    )
+    parser.add_argument(
+        "--project-root", "-r",
+        help="项目根目录路径 (默认: 当前目录)",
+        default=None
+    )
+    args = parser.parse_args()
+
+    project_root = Path(args.project_root) if args.project_root else None
+    checker = HealthChecker(project_root)
     report = checker.run_check()
-    checker.print_report(report)
+
+    if args.output and args.json:
+        # Output JSON to file
+        output_path = Path(args.output)
+        checker.save_report_json(report, output_path)
+        # Still print summary to stdout
+        print("\n" + "=" * 60)
+        print("AgentSoul 健康检测报告")
+        print("=" * 60)
+        print(f"Timestamp: {report.timestamp}")
+        print(f"Soul Version: {report.soul_version or 'Unknown'}")
+        print(f"Total Checks: {report.total_checks}")
+        print(f"Errors: {report.errors} | Warnings: {report.warnings}")
+        print(f"Overall Status: {'✓ HEALTHY' if report.is_healthy else '✗ UNHEALTHY'}")
+        print()
+        print(f"✓ JSON report saved to: {output_path}")
+        print("=" * 60 + "\n")
+    elif args.output:
+        # Output text to file
+        import sys
+        original_stdout = sys.stdout
+        try:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                sys.stdout = f
+                checker.print_report(report)
+        finally:
+            sys.stdout = original_stdout
+        from common import log
+        log(f"文本健康报告已保存到 {output_path}", level="INFO")
+    elif args.json:
+        # Output JSON to stdout
+        data = checker.to_dict(report)
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        # Print text report to stdout
+        checker.print_report(report)
+
     exit(0 if report.is_healthy else 1)
 
 

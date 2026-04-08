@@ -696,6 +696,98 @@
             color: #ff7676;
         }
 
+        /* 健康检查报告样式 */
+        .health-check-issue {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        body[data-theme="dark"] .health-check-issue {
+            border-bottom-color: #444;
+        }
+
+        .health-check-issue:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .health-check-issue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .health-check-level {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        .level-error {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .level-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .level-info {
+            background: #3498db;
+            color: white;
+        }
+
+        .health-check-category {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        body[data-theme="dark"] .health-check-category {
+            color: #e0e0e0;
+        }
+
+        .health-check-message {
+            font-size: 0.9rem;
+            margin: 5px 0;
+            color: #555;
+        }
+
+        body[data-theme="dark"] .health-check-message {
+            color: #bbb;
+        }
+
+        .health-check-fix {
+            font-size: 0.8rem;
+            color: #27ae60;
+            margin-top: 3px;
+        }
+
+        body[data-theme="dark"] .health-check-fix {
+            color: #2ecc71;
+        }
+
+        .health-check-location {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 3px;
+            font-family: monospace;
+        }
+
+        .status-healthy {
+            background: #27ae60;
+            color: white;
+        }
+
+        .status-unhealthy {
+            background: #e74c3c;
+            color: white;
+        }
+
         .footer {
             text-align: center;
             padding: 20px;
@@ -837,6 +929,12 @@
             <p class="help-text">生成方式: python src/companionship_checker.py --json --output report.json</p>
         </div>
 
+        <div class="file-input-section">
+            <label for="healthCheckFile">导入健康检查报告 (JSON)</label>
+            <input type="file" id="healthCheckFile" accept=".json,text/plain">
+            <p class="help-text">生成方式: python src/health_check.py --json --output health.json</p>
+        </div>
+
         <div class="export-section">
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="exportCurrentMemoryBtn" disabled style="padding: 8px 16px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer;">导出当前记忆</button>
@@ -937,6 +1035,26 @@
                 <p class="help-text" style="margin-top: 15px;">
                     五项核心指标：记忆连续性、人格一致性、技能沉淀、状态恢复、用户可感知陪伴<br>
                     得分 >= 70 通过，整体 >= 90 极佳，>= 75 良好，>= 60 可使用
+                </p>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>健康检查报告</h2>
+                <div id="healthCheckReport" style="display: none;">
+                    <div class="overall-status" style="text-align: center; margin-bottom: 20px;">
+                        <div style="display: inline-flex; align-items: center; gap: 10px; padding: 10px 20px; border-radius: 8px; font-size: 1.2rem; font-weight: bold;" id="healthCheckOverallBadge">
+                        </div>
+                        <div style="margin-top: 10px;" id="healthCheckStats"></div>
+                    </div>
+                    <div id="healthCheckIssues"></div>
+                </div>
+                <div id="healthCheckEmpty" style="text-align: center; color: #999; padding: 40px 20px;">
+                    请导入健康检查 JSON 报告查看
+                </div>
+                <p class="help-text" style="margin-top: 15px;">
+                    健康检查包括：目录结构完整性、配置文件格式合法性、灵魂状态版本兼容性、记忆文件完整性、权限检查
                 </p>
             </div>
         </div>
@@ -1975,6 +2093,88 @@
                     const text = event.target.result;
                     const data = JSON.parse(text);
                     renderCompanionshipReport(data);
+                } catch (err) {
+                    alert('解析 JSON 失败: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // ========== 健康检查报告可视化 ==========
+        function renderHealthCheckReport(data) {
+            const emptyEl = document.getElementById('healthCheckEmpty');
+            const reportEl = document.getElementById('healthCheckReport');
+            const issuesEl = document.getElementById('healthCheckIssues');
+
+            emptyEl.style.display = 'none';
+            reportEl.style.display = 'block';
+
+            // 整体状态
+            const badgeEl = document.getElementById('healthCheckOverallBadge');
+            if (data.is_healthy) {
+                badgeEl.className = 'status-healthy';
+                badgeEl.textContent = '✓ 健康';
+            } else {
+                badgeEl.className = 'status-unhealthy';
+                badgeEl.textContent = '✗ 不健康';
+            }
+
+            // 统计信息
+            document.getElementById('healthCheckStats').innerHTML = `
+                <div>灵魂版本: ${data.soul_version || 'Unknown'}</div>
+                <div>总检查项: ${data.total_checks} | 错误: ${data.errors} | 警告: ${data.warnings}</div>
+            `;
+
+            // 清空原有内容
+            issuesEl.innerHTML = '';
+
+            // 渲染所有问题
+            if (!data.issues || data.issues.length === 0) {
+                const noIssues = document.createElement('div');
+                noIssues.style.textAlign = 'center';
+                noIssues.style.color = '#27ae60';
+                noIssues.style.padding = '20px';
+                noIssues.textContent = '✓ 没有发现问题，一切正常！';
+                issuesEl.appendChild(noIssues);
+                return;
+            }
+
+            data.issues.forEach(issue => {
+                const issueDiv = document.createElement('div');
+                issueDiv.className = 'health-check-issue';
+
+                let html = `
+                    <div class="health-check-issue-header">
+                        <span class="health-check-category">${issue.category}</span>
+                        <span class="health-check-level level-${issue.level}">${issue.level}</span>
+                    </div>
+                    <div class="health-check-message">${issue.message}</div>
+                `;
+
+                if (issue.location) {
+                    html += `<div class="health-check-location">${issue.location}</div>`;
+                }
+
+                if (issue.fix_suggestion) {
+                    html += `<div class="health-check-fix">💡 修复建议: ${issue.fix_suggestion}</div>`;
+                }
+
+                issueDiv.innerHTML = html;
+                issuesEl.appendChild(issueDiv);
+            });
+        }
+
+        // 处理健康检查报告文件上传
+        document.getElementById('healthCheckFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const text = event.target.result;
+                    const data = JSON.parse(text);
+                    renderHealthCheckReport(data);
                 } catch (err) {
                     alert('解析 JSON 失败: ' + err.message);
                 }
