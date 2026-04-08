@@ -21,7 +21,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from common import get_project_root, log
+# Add project root to path for proper imports
+project_root_cli = Path(__file__).parent.parent
+import sys
+sys.path.insert(0, str(project_root_cli))
+
+from common import get_project_root, log  # noqa: E402
 from src.abstract import (
     BaseMemoryStorage,
     BasePersonaStorage,
@@ -576,7 +581,38 @@ class CompanionshipChecker:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(formatted)
-        log(f"报告已保存到 {output_path}", level="INFO")
+        log(f"Markdown 报告已保存到 {output_path}", level="INFO")
+
+    def to_dict(self, report: OverallReport) -> dict[str, Any]:
+        """将报告转换为字典格式，方便 JSON 序列化"""
+        def result_to_dict(result: CheckResult) -> dict[str, Any]:
+            return {
+                "name": result.name,
+                "description": result.description,
+                "score": result.score,
+                "passed": result.passed,
+                "issues": result.issues,
+                "recommendations": result.recommendations,
+            }
+
+        return {
+            "memory_continuity": result_to_dict(report.memory_continuity),
+            "personality_consistency": result_to_dict(report.personality_consistency),
+            "skill_precipitation": result_to_dict(report.skill_precipitation),
+            "state_recovery": result_to_dict(report.state_recovery),
+            "user_perceived_companionship": result_to_dict(report.user_perceived_companionship),
+            "overall_score": report.overall_score,
+            "assessment": report.assessment,
+            "timestamp": report.timestamp,
+        }
+
+    def save_report_json(self, report: OverallReport, output_path: Path) -> None:
+        """保存报告到 JSON 文件，适合程序化读取"""
+        data = self.to_dict(report)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        log(f"JSON 报告已保存到 {output_path}", level="INFO")
 
 
 def main():
@@ -589,6 +625,12 @@ def main():
         "--output", "-o",
         help="输出报告文件路径 (默认: .companionship_report.md)",
         default=".companionship_report.md"
+    )
+    parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="输出 JSON 格式而不是 markdown，适合程序化读取 (默认: markdown)",
+        default=False
     )
     parser.add_argument(
         "--project-root", "-r",
@@ -604,7 +646,10 @@ def main():
     checker.print_report(report)
 
     output_path = Path(args.output)
-    checker.save_report(report, output_path)
+    if args.json:
+        checker.save_report_json(report, output_path)
+    else:
+        checker.save_report(report, output_path)
 
 
 if __name__ == "__main__":

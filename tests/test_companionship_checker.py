@@ -276,6 +276,79 @@ class TestCompanionshipChecker(BaseTest):
         content = output_path.read_text(encoding="utf-8")
         self.assertIn("Master Agent 陪伴连续性检查报告", content)
 
+    def test_to_dict_conversion(self):
+        """测试转换报告为字典格式"""
+        checker = CompanionshipChecker(self.project_root)
+        persona_config = {
+            "ai": {"name": "Test"},
+            "master": {"name": "User"}
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        report = checker.run_full_check()
+        data = checker.to_dict(report)
+        self.assertIsInstance(data, dict)
+        self.assertIn("overall_score", data)
+        self.assertIn("memory_continuity", data)
+        self.assertIn("score", data["memory_continuity"])
+        self.assertIn("passed", data["memory_continuity"])
+
+    def test_save_report_json_writes_file(self):
+        """测试保存JSON报告到文件"""
+        checker = CompanionshipChecker(self.project_root)
+        persona_config = {
+            "ai": {"name": "Test"},
+            "master": {"name": "User"}
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        report = checker.run_full_check()
+        output_path = self.project_root / "report.json"
+        checker.save_report_json(report, output_path)
+        self.assertTrue(output_path.exists())
+        content = output_path.read_text(encoding="utf-8")
+        data = json.loads(content)
+        self.assertIn("overall_score", data)
+        self.assertIn("memory_continuity", data)
+
+    def test_main_function_json_output(self):
+        """测试main函数JSON输出选项"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_exit = sys.exit
+        captured_output = StringIO()
+        exit_called = False
+
+        def mock_exit(code):
+            nonlocal exit_called
+            exit_called = True
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        try:
+            from src.companionship_checker import main
+            # Set sys.argv with --json option
+            sys.argv = ["companionship_checker.py", "--json", "--output", str(self.project_root / "output.json")]
+            main()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = original_stdout
+            sys.exit = original_exit
+
+        output = captured_output.getvalue()
+        self.assertIn("Master Agent 陪伴连续性检查报告", output)
+        # Check output JSON file was created
+        output_file = self.project_root / "output.json"
+        self.assertTrue(output_file.exists())
+        content = output_file.read_text(encoding="utf-8")
+        data = json.loads(content)
+        self.assertIn("overall_score", data)
+
     def test_main_function(self):
         """测试main函数入口"""
         from io import StringIO
