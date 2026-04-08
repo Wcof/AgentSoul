@@ -2,6 +2,7 @@
 Tests for Entry Capability Detector
 ==================================
 """
+import os
 import pytest
 from src.entry_detect import (
     detect_environment,
@@ -110,3 +111,110 @@ class TestEntryDetection:
             assert True
         finally:
             sys.argv = original_argv
+
+
+class TestEnvironmentDetectionBranches:
+    """Tests for specific environment detection branches."""
+
+    def test_detect_git_dir_env(self, monkeypatch):
+        """Test detection when GIT_DIR is set (Claude Code)."""
+        monkeypatch.setenv("GIT_DIR", ".git")
+        from src.entry_detect import detect_environment
+        cap = detect_environment()
+        assert cap.environment == "claude_code"
+        assert cap.has_mcp is True
+        assert cap.has_local_files is True
+        assert "mcp" in cap.available_injection_methods
+
+    def test_detect_mcp_server_env(self, monkeypatch):
+        """Test detection when MCP_SERVER_NAME is set."""
+        monkeypatch.setenv("MCP_SERVER_NAME", "agentsoul")
+        from src.entry_detect import detect_environment
+        cap = detect_environment()
+        assert cap.environment == "mcp_server"
+        assert cap.has_mcp is True
+        assert cap.has_local_files is True
+
+    def test_detect_openai_api_key_env(self, monkeypatch):
+        """Test detection when OPENAI_API_KEY is set but not CODER."""
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        # Clear CODER
+        if "CODER" in os.environ:
+            monkeypatch.delenv("CODER")
+        from src.entry_detect import detect_environment
+        cap = detect_environment()
+        assert cap.environment == "openai_codex"
+        assert cap.has_mcp is False
+        assert cap.has_local_files is True
+
+    def test_detect_gemini_credentials_env(self, monkeypatch):
+        """Test detection when GOOGLE_APPLICATION_CREDENTIALS is set."""
+        monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/path/to/creds.json")
+        from src.entry_detect import detect_environment
+        cap = detect_environment()
+        assert cap.environment == "gemini_code_assist"
+        assert cap.has_mcp is False
+        assert cap.has_local_files is True
+
+    def test_detect_gemini_api_key_env(self, monkeypatch):
+        """Test detection when GEMINI_API_KEY is set."""
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        from src.entry_detect import detect_environment
+        cap = detect_environment()
+        assert cap.environment == "gemini_code_assist"
+        assert cap.has_mcp is False
+        assert cap.has_local_files is True
+
+    def test_detect_generic_local_dir_list_exception(self, monkeypatch):
+        """Test generic detection when os.listdir fails (no permission)."""
+        # Clear all specific env vars to fall back to generic
+        for env_var in ["GIT_DIR", "MCP_SERVER_NAME", "OPENAI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "GEMINI_API_KEY"]:
+            if env_var in os.environ:
+                monkeypatch.delenv(env_var)
+
+        # Monkeypatch os.listdir to raise exception
+        original_listdir = os.listdir
+        def mock_listdir(_):
+            raise PermissionError("Permission denied")
+
+        monkeypatch.setattr(os, "listdir", mock_listdir)
+
+        from src.entry_detect import detect_environment
+        cap = detect_environment()
+        assert cap.environment == "generic_local"
+        assert cap.has_local_files is False
+        assert "local-files" in cap.available_injection_methods
+        assert "markdown-injection" not in cap.available_injection_methods
+
+    def test_check_agentsoul_not_installed(self, tmp_path, monkeypatch):
+        """Test check_agentsoul_installed when not installed."""
+        # Change to temp directory with no config
+        import os
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            from src.entry_detect import check_agentsoul_installed
+            installed, config_path = check_agentsoul_installed()
+            assert installed is False
+            assert config_path is None
+        finally:
+            os.chdir(original_cwd)
+
+    def test_generic_local_no_local_files(self, monkeypatch):
+        """Test generic local when has_local_files is false - available methods should not include markdown-injection."""
+        # Clear all specific env vars
+        for env_var in ["GIT_DIR", "MCP_SERVER_NAME", "OPENAI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS", "GEMINI_API_KEY"]:
+            if env_var in os.environ:
+                monkeypatch.delenv(env_var)
+
+        # Make os.listdir fail
+        original_listdir = os.listdir
+        def mock_listdir(_):
+            raise PermissionError("Permission denied")
+        monkeypatch.setattr(os, "listdir", mock_listdir)
+
+        from src.entry_detect import detect_environment
+        cap = detect_environment()
+        assert cap.has_local_files is False
+        assert cap.available_injection_methods == ["local-files"]
+        assert "markdown-injection" not in cap.available_injection_methods
