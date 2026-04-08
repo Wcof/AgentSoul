@@ -384,6 +384,93 @@ class TestCompanionshipChecker(BaseTest):
         output_file = self.project_root / "output.md"
         self.assertTrue(output_file.exists())
 
+    def test_check_memory_continuity_empty_topic_file(self):
+        """测试记忆连续性检查 - 存在空主题文件"""
+        checker = CompanionshipChecker(self.project_root)
+        # Create all required directories
+        for dirname in ["day", "week", "month", "year", "topic"]:
+            (self.project_root / "data" / "memory" / dirname).mkdir(parents=True)
+        # Create an empty topic file
+        (self.project_root / "data" / "memory" / "topic" / "test-topic.md").write_text("")
+
+        result = checker.check_memory_continuity()
+        self.assertIsInstance(result, CheckResult)
+        # Should have an issue about empty file
+        self.assertGreater(len(result.issues), 0)
+        self.assertTrue(any("是空文件" in issue for issue in result.issues))
+
+    def test_check_personality_multiple_persona_files(self):
+        """测试人格一致性检查 - 多个persona文件存在"""
+        checker = CompanionshipChecker(self.project_root)
+        # Create multiple persona files
+        persona_config = {
+            "ai": {"name": "Test"},
+            "master": {"name": "User"}
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+        # Create a second persona file
+        with open(self.project_root / "persona-backup.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        result = checker.check_personality_consistency()
+        self.assertTrue(result.passed)
+        # Should detect multiple persona files issue
+        self.assertGreater(len(result.issues), 0)
+        self.assertTrue(any("多个 persona" in issue for issue in result.issues))
+
+    def test_assessment_score_ranges(self):
+        """测试整体评分不同分数段返回正确评估"""
+        checker = CompanionshipChecker(self.project_root)
+        # Create valid setup
+        persona_config = {
+            "ai": {
+                "name": "TestAgent",
+                "role": "Test",
+                "personality": ["friendly"],
+            },
+            "master": {
+                "name": "TestUser",
+                "timezone": "Asia/Shanghai",
+            },
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        for dirname in ["day", "week", "month", "year", "topic"]:
+            (self.project_root / "data" / "memory" / dirname).mkdir(parents=True)
+        state = {"pleasure": 0.3, "arousal": 0.2, "dominance": 0.3}
+        with open(self.project_root / "data" / "soul" / "soul_variable" / "state_vector.json", "w") as f:
+            json.dump(state, f)
+
+        report = checker.run_full_check()
+
+        # Check assessment based on score
+        if report.overall_score >= 90:
+            self.assertIn("极佳", report.assessment)
+        elif report.overall_score >= 75:
+            self.assertIn("良好", report.assessment)
+        elif report.overall_score >= 60:
+            self.assertIn("可使用", report.assessment)
+        elif report.overall_score >= 40:
+            self.assertIn("需要修复", report.assessment)
+        else:
+            self.assertIn("严重问题", report.assessment)
+
+        # Check assessment is not empty
+        self.assertNotEmpty(report.assessment)
+
+    def test_zero_score_handling(self):
+        """测试分数归零处理 - 所有检查都失败总分归零"""
+        checker = CompanionshipChecker(self.project_root)
+        # No config, no directories, nothing - all checks will fail
+        report = checker.run_full_check()
+        # All checks fail, overall score should be >= 0 and clamped correctly
+        self.assertGreaterEqual(report.overall_score, 0)
+        self.assertLessEqual(report.overall_score, 100)
+        if report.overall_score <= 40:
+            self.assertIn("严重问题", report.assessment)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -668,6 +668,226 @@ class TestHealthCheck(BaseTest):
         output = captured_output.getvalue()
         self.assertIn("AgentSoul 健康检测报告", output)
 
+    def test_check_config_files_persona_missing(self):
+        """测试配置文件检查 - persona.yaml不存在返回错误"""
+        checker = HealthChecker(self.project_root)
+        # Don't create persona.yaml
+        issues = checker.check_config_files()
+        errors = [i for i in issues if i.level == "error" and "persona.yaml not found" in i.message]
+        self.assertEqual(len(errors), 1)
+
+    def test_to_dict_conversion(self):
+        """测试to_dict转换"""
+        checker = HealthChecker(self.project_root)
+        issues = [
+            HealthIssue(
+                level="error",
+                category="config",
+                message="Test error",
+                location="/test/path",
+                fix_suggestion="Fix it",
+            )
+        ]
+        report = HealthReport(
+            timestamp="2024-01-01T00:00:00",
+            total_checks=5,
+            errors=1,
+            warnings=0,
+            issues=issues,
+            is_healthy=False,
+            soul_version="1.0.0",
+        )
+        data = checker.to_dict(report)
+        self.assertIsInstance(data, dict)
+        self.assertEqual(data["timestamp"], "2024-01-01T00:00:00")
+        self.assertEqual(data["errors"], 1)
+        self.assertEqual(len(data["issues"]), 1)
+        self.assertEqual(data["issues"][0]["message"], "Test error")
+        self.assertEqual(data["soul_version"], "1.0.0")
+
+    def test_save_report_json(self):
+        """测试保存JSON报告"""
+        checker = HealthChecker(self.project_root)
+        # Create minimal setup
+        persona_config = {
+            "ai": {"name": "Test"},
+            "master": {"name": "User"}
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        report = checker.run_check(include_memory_samples=False)
+        output_path = self.project_root / "health_report.json"
+        checker.save_report_json(report, output_path)
+        self.assertTrue(output_path.exists())
+        import json
+        with open(output_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertIn("timestamp", data)
+        self.assertIn("issues", data)
+        self.assertIn("is_healthy", data)
+
+    def test_main_function_output_text(self):
+        """测试main函数 --output 输出文本到文件"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_argv = sys.argv.copy()
+        original_exit = sys.exit
+        captured_output = StringIO()
+        exit_called = False
+
+        def mock_exit(code):
+            nonlocal exit_called
+            exit_called = True
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        sys.argv = ["health_check.py", "--output", str(self.project_root / "report.md")]
+        try:
+            from src.health_check import main
+            main()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = original_stdout
+            sys.argv = original_argv
+            sys.exit = original_exit
+
+        output_file = self.project_root / "report.md"
+        self.assertTrue(output_file.exists())
+        content = output_file.read_text(encoding="utf-8")
+        self.assertIn("AgentSoul 健康检测报告", content)
+
+    def test_main_function_output_json_stdout(self):
+        """测试main函数 --json 输出JSON到stdout"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_argv = sys.argv.copy()
+        original_exit = sys.exit
+        captured_output = StringIO()
+        exit_called = False
+
+        def mock_exit(code):
+            nonlocal exit_called
+            exit_called = True
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        # Create persona config first so we get a healthy report
+        persona_config = {
+            "ai": {"name": "Test"},
+            "master": {"name": "User"}
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+
+        sys.argv = ["health_check.py", "--json"]
+        try:
+            from src.health_check import main
+            main()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = original_stdout
+            sys.argv = original_argv
+            sys.exit = original_exit
+
+        output = captured_output.getvalue()
+        # Should be valid JSON
+        import json
+        data = json.loads(output)
+        self.assertIn("is_healthy", data)
+        self.assertIn("issues", data)
+
+    def test_main_function_output_json_to_file(self):
+        """测试main函数 --json --output 输出JSON到文件"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_argv = sys.argv.copy()
+        original_exit = sys.exit
+        captured_output = StringIO()
+        exit_called = False
+
+        def mock_exit(code):
+            nonlocal exit_called
+            exit_called = True
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        # Create persona config first
+        persona_config = {
+            "ai": {"name": "Test"},
+            "master": {"name": "User"}
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        sys.argv = ["health_check.py", "--json", "--output", str(self.project_root / "report.json")]
+        try:
+            from src.health_check import main
+            main()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = original_stdout
+            sys.argv = original_argv
+            sys.exit = original_exit
+
+        output_file = self.project_root / "report.json"
+        self.assertTrue(output_file.exists())
+        output = captured_output.getvalue()
+        self.assertIn("JSON report saved to", output)
+        import json
+        with open(output_file, encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertIn("is_healthy", data)
+
+    def test_main_function_with_project_root(self):
+        """测试main函数 --project-root 参数"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_argv = sys.argv.copy()
+        original_exit = sys.exit
+        captured_output = StringIO()
+        exit_called = False
+
+        def mock_exit(code):
+            nonlocal exit_called
+            exit_called = True
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        # Create persona config in our temp dir
+        persona_config = {
+            "ai": {"name": "Test"},
+            "master": {"name": "User"}
+        }
+        with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(persona_config, f)
+
+        sys.argv = ["health_check.py", "--project-root", str(self.project_root)]
+        try:
+            from src.health_check import main
+            main()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = original_stdout
+            sys.argv = original_argv
+            sys.exit = original_exit
+
+        output = captured_output.getvalue()
+        self.assertIn("AgentSoul 健康检测报告", output)
+
 
 if __name__ == "__main__":
     unittest.main()
