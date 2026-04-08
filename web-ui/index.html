@@ -588,6 +588,114 @@
             background: #777;
         }
 
+        .companionship-item {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        body[data-theme="dark"] .companionship-item {
+            border-bottom-color: #444;
+        }
+
+        .companionship-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .companionship-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .companionship-item-name {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        body[data-theme="dark"] .companionship-item-name {
+            color: #e0e0e0;
+        }
+
+        .companionship-item-score {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 2px 12px;
+            border-radius: 12px;
+        }
+
+        .score-pass {
+            background: #27ae60;
+            color: white;
+        }
+
+        .score-fail {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .companionship-item-desc {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+
+        .companionship-score-bar-container {
+            height: 10px;
+            background: #ecf0f1;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        body[data-theme="dark"] .companionship-score-bar-container {
+            background: #444;
+        }
+
+        .companionship-score-bar {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.3s;
+        }
+
+        .score-color-0 { background: #e74c3c; }
+        .score-color-60 { background: #f39c12; }
+        .score-color-75 { background: #3498db; }
+        .score-color-90 { background: #27ae60; }
+
+        .companionship-issues, .companionship-recommendations {
+            margin-top: 8px;
+        }
+
+        .companionship-issues h4, .companionship-recommendations h4 {
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            color: #2c3e50;
+        }
+
+        body[data-theme="dark"] .companionship-issues h4,
+        body[data-theme="dark"] .companionship-recommendations h4 {
+            color: #e0e0e0;
+        }
+
+        .companionship-issues ul, .companionship-recommendations ul {
+            margin: 0;
+            padding-left: 20px;
+            font-size: 0.8rem;
+            color: #7f8c8d;
+        }
+
+        .companionship-issues li {
+            color: #e74c3c;
+        }
+
+        body[data-theme="dark"] .companionship-issues li {
+            color: #ff7676;
+        }
+
         .footer {
             text-align: center;
             padding: 20px;
@@ -723,6 +831,12 @@
             <p class="help-text">文件位置: AgentSoul/data/memory/daily/，支持多选</p>
         </div>
 
+        <div class="file-input-section">
+            <label for="companionshipFile">导入陪伴连续性检查报告 (JSON)</label>
+            <input type="file" id="companionshipFile" accept=".json,text/plain">
+            <p class="help-text">生成方式: python src/companionship_checker.py --json --output report.json</p>
+        </div>
+
         <div class="export-section">
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="exportCurrentMemoryBtn" disabled style="padding: 8px 16px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer;">导出当前记忆</button>
@@ -803,6 +917,26 @@
                     愉悦度: 负值表示负面情绪，正值表示正面情绪<br>
                     唤醒度: 负值表示平静，正值表示兴奋<br>
                     支配度: 负值表示顺从，正值表示支配
+                </p>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>陪伴连续性检查报告</h2>
+                <div id="companionshipReport" style="display: none;">
+                    <div class="overall-score" style="text-align: center; margin-bottom: 20px;">
+                        <div style="font-size: 3rem; font-weight: bold; color: #2980b9;" id="companionshipOverallScore">-</div>
+                        <div class="assessment" style="color: #7f8c8d; margin-top: 5px;" id="companionshipAssessment">-</div>
+                    </div>
+                    <div id="companionshipItems"></div>
+                </div>
+                <div id="companionshipEmpty" style="text-align: center; color: #999; padding: 40px 20px;">
+                    请导入陪伴连续性检查 JSON 报告查看
+                </div>
+                <p class="help-text" style="margin-top: 15px;">
+                    五项核心指标：记忆连续性、人格一致性、技能沉淀、状态恢复、用户可感知陪伴<br>
+                    得分 >= 70 通过，整体 >= 90 极佳，>= 75 良好，>= 60 可使用
                 </p>
             </div>
         </div>
@@ -1751,6 +1885,102 @@
 
         // 更新搜索统计 - 确保在初始加载后也正确显示
         updateSearchStats();
+
+        // ========== 陪伴连续性检查报告可视化 ==========
+        function getScoreColorClass(score) {
+            if (score >= 90) return 'score-color-90';
+            if (score >= 75) return 'score-color-75';
+            if (score >= 60) return 'score-color-60';
+            return 'score-color-0';
+        }
+
+        function renderCompanionshipReport(data) {
+            const emptyEl = document.getElementById('companionshipEmpty');
+            const reportEl = document.getElementById('companionshipReport');
+            const itemsEl = document.getElementById('companionshipItems');
+
+            emptyEl.style.display = 'none';
+            reportEl.style.display = 'block';
+
+            // 整体得分
+            document.getElementById('companionshipOverallScore').textContent = data.overall_score + '/100';
+            document.getElementById('companionshipAssessment').textContent = data.assessment;
+
+            // 清空原有内容
+            itemsEl.innerHTML = '';
+
+            // 渲染五个检查项
+            const items = [
+                {key: 'memory_continuity', name: '记忆连续性'},
+                {key: 'personality_consistency', name: '人格一致性'},
+                {key: 'skill_precipitation', name: '技能沉淀'},
+                {key: 'state_recovery', name: '状态恢复'},
+                {key: 'user_perceived_companionship', name: '用户可感知陪伴'}
+            ];
+
+            items.forEach(({key, name}) => {
+                const item = data[key];
+                const colorClass = getScoreColorClass(item.score);
+                const scoreClass = item.passed ? 'score-pass' : 'score-fail';
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'companionship-item';
+
+                let html = `
+                    <div class="companionship-item-header">
+                        <span class="companionship-item-name">${item.name}</span>
+                        <span class="companionship-item-score ${scoreClass}">${item.score}/100</span>
+                    </div>
+                    <div class="companionship-item-desc">${item.description}</div>
+                    <div class="companionship-score-bar-container">
+                        <div class="companionship-score-bar ${colorClass}" style="width: ${item.score}%;"></div>
+                    </div>
+                `;
+
+                if (item.issues && item.issues.length > 0) {
+                    html += `
+                        <div class="companionship-issues">
+                            <h4>发现问题</h4>
+                            <ul>
+                                ${item.issues.map(issue => `<li>${issue}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                if (item.recommendations && item.recommendations.length > 0) {
+                    html += `
+                        <div class="companionship-recommendations">
+                            <h4>改进建议</h4>
+                            <ul>
+                                ${item.recommendations.forEach(rec => `<li>${rec}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                itemDiv.innerHTML = html;
+                itemsEl.appendChild(itemDiv);
+            });
+        }
+
+        // 处理陪伴报告文件上传
+        document.getElementById('companionshipFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const text = event.target.result;
+                    const data = JSON.parse(text);
+                    renderCompanionshipReport(data);
+                } catch (err) {
+                    alert('解析 JSON 失败: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        });
     </script>
 </body>
 </html>
