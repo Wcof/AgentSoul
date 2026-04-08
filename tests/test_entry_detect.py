@@ -33,7 +33,9 @@ class TestEntryDetection:
         installed, config_path = check_agentsoul_installed()
         # In this repo, it should be installed
         assert installed is True
-        assert config_path == "config/persona.yaml"
+        assert config_path is not None
+        # Should end with config/persona.yaml regardless of working directory
+        assert config_path.endswith("config/persona.yaml")
 
     def test_get_injection_template_claude_code(self):
         """Test getting injection template for claude_code."""

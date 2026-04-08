@@ -43,6 +43,11 @@ from src.health_check import (
     HealthIssue,
     HealthReport,
 )
+from src.companionship_checker import (
+    CompanionshipChecker,
+    CheckResult,
+    OverallReport,
+)
 from src.migration import (
     CrossPlatformMigrator,
     LocalToMcpMigrator,
@@ -96,6 +101,10 @@ __all__ = [
     "HealthChecker",
     "HealthReport",
     "HealthIssue",
+    # Companionship continuity checker
+    "CompanionshipChecker",
+    "CheckResult",
+    "OverallReport",
     # Local storage implementation
     "LocalPersonaStorage",
     "LocalSoulStateStorage",
