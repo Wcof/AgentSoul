@@ -642,7 +642,7 @@ def main() -> None:
     parser.add_argument(
         "--summary-json",
         action="store_true",
-        help="输出机器可读的一行摘要 JSON，适合 CI/脚本消费",
+        help="输出机器可读的一行统一格式摘要 JSON，适合 CI/脚本消费 (使用标准 HealthSummary schema)",
         default=False,
     )
     args = parser.parse_args()
