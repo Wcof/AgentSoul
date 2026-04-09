@@ -1,7 +1,7 @@
-迭代次数：105
+迭代次数：106
 健康度：100 → 100（→）
 分支：main
-模式：熵注入（105 是 3 的倍数触发）
+模式：正常（功能深化，按计划进行）
 
 🔍 诊断发现：
 - 启动协议与预检协议已完整执行。
@@ -16,27 +16,28 @@
 - 无
 
 ✅ 稳定性改动：
-- 定义统一健康摘要 schema `src/common/health_gate.py`，包含 `HealthSummary` 和 `UnifiedCheckResult` 数据类。风险🟢
-- 更新 `companionship_checker` 使用统一 schema 输出 `--summary-json`，保持向后兼容。风险🟢
+- `health_check.py` 新增 `--summary-json` 统一摘要输出，使用标准 `HealthSummary` schema。风险🟢
+- `health_check.py` 新增 `--min-score` 分数门控，低于分数退出码 2，支持 CI 自动化闸门。风险🟢
+- 修复了 `sys` 重复导入导致的 UnboundLocalError。风险🟢
 
 🚀 进化改动：
-- 完成跨检查器统一摘要 schema 标准化，为所有 CLI 检查器提供一致机器可读输出格式。风险🟢
-- 自动化链路现在可以统一解析任何检查器的摘要输出，提升跨入口一致性。风险🟢
+- 完成统一健康摘要 schema 推广到 `health_check`，现在 `companionship_checker` 和 `health_check` 都输出一致格式。风险🟢
+- 两个 CLI 检查器现在都支持 `--summary-json` 和 `--min-score`，自动化脚本可以统一解析输出。风险🟢
 
 🧪 测试：通过 638 / 失败 0 / 通过率 100%
 
 🧭 圆内任务模板（本轮）
 - Master Agent 能力：技能沉淀 / 状态延续
 - 工具入口：通用底座（CLI 自动化）
-- 闭环结果：定义统一摘要 schema 供 companionship_checker、health_check、entry_detect 等所有检查器使用，输出一致机器可读格式
-- 陪伴增益：自动化工具链可以统一解析任何检查器的输出，提升跨入口自动化质量闸门可靠性
-- 最小验证：定义 base dataclass、更新 companionship_checker 使用统一 schema、全量回归通过
+- 闭环结果：`health_check` 添加 `--summary-json` 统一输出和 `--min-score` 门控支持，和 `companionship_checker` 格式一致
+- 陪伴增益：自动化质量闸门现在可以统一处理两个检查器，减少适配工作，提升跨入口一致性
+- 最小验证：添加 CLI 参数、修复导入问题、全量回归通过
 
 ⚠️ 遗留问题：
 - Python 版本仍为 3.9.6，项目要求 >= 3.10。
-- 需要将统一 schema 应用到 health_check 和 entry_detect（后续迭代可做）。
+- 统一 schema 尚未推广到 `entry_detect.py`（检测工具输出结构不同，后续迭代评估）。
 
 💡 本次最大收获：
-定义统一摘要 schema 是低风险高收益的结构改进，它让不同检查器的输出可以被同一个自动化脚本消费，为 Master Agent 跨入口连续性检查打下更好基础。
+统一摘要 schema 推广顺利，低风险高收益，现在两个主要检查器都能输出一致机器可读格式，为 CI 自动化提供更好支持。
 
 🔮 近 5 次健康度趋势：[100, 100, 100, 100, 100]

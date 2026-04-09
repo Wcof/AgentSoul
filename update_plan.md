@@ -3,47 +3,46 @@
 ## 当前阶段评估与最薄弱环节
 
 - 当前健康度保持 **100**，全量测试 **638/638** 通过。
-- 本轮熵注入探索完成：定义了跨检查器统一健康摘要 schema，companionship_checker 已迁移到新标准，输出格式向后兼容。
-- 最薄弱环节：统一 schema 已定义但尚未推广到 health_check 和 entry_detect；可以在下次迭代继续深化，让所有 CLI 检查器都能输出统一格式。
+- 本轮完成功能深化：统一健康摘要 schema 已推广到 `companionship_checker` 和 `health_check`，两个主要 CLI 检查器都支持 `--summary-json` 统一输出和 `--min-score` 门控。
+- 最薄弱环节：统一 schema 尚未评估 `entry_detect.py` 是否适合；Python 版本仍为 3.9.6 低于项目要求 >=3.10。
 
 ## 圆内任务模板（本轮落地记录）
 
 - Master Agent 能力：技能沉淀 / 状态延续
 - 工具入口：通用底座（CLI 自动化）
-- 闭环结果：定义统一摘要 schema 供 companionship_checker、health_check、entry_detect 使用，所有检查器输出一致机器可读格式
-- 陪伴增益：自动化工具链可以统一解析任何检查器的输出，提升跨入口自动化质量闸门可靠性
-- 最小验证：定义 base dataclass、更新 companionship_checker 使用统一 schema、全量回归通过
+- 闭环结果：`health_check` 添加 `--summary-json` 统一摘要输出和 `--min-score` 门控支持，输出格式与 `companionship_checker` 完全一致
+- 陪伴增益：自动化质量闸门现在可以用相同代码解析两个检查器的输出，提升跨入口一致性和可自动化性
+- 最小验证：添加 CLI 参数、修复导入问题、全量回归通过
 
 ## 必做项（本次遗留 + 卡死项追踪）
 
-- 继续将统一健康摘要 schema 应用到 `health_check.py`，添加 `--summary-json` 支持。
-- 将统一健康摘要 schema 应用到 `entry_detect.py`（可选，如果适合）。
+- 评估 `entry_detect.py` 是否适合添加 `--summary-json` 统一输出（入口检测输出结构不同，需要判断价值）。
 - 评估 Python 3.9.6 与项目要求 `>=3.10` 的差异风险，给出迁移窗口建议。
+- 如果 entry_detect 适合，推广统一 schema 到 `entry_detect.py`。
 
 ## 二选一战略方向（下次按健康度择一）
 
 ### A 偏稳定
 
-- 完成统一 schema 推广：为 `health_check` 添加 `--summary-json` 输出统一格式。
-- 补充 CLI 参数异常路径测试保证输出语义一致性。
+- 评估 `entry_detect.py` 是否适合统一摘要输出，如果适合则实现 `--summary-json` 支持。
+- 检查 Python 版本依赖差异，确认哪些语法特性使用了 3.10+，给出升级建议。
 
 ### B 偏破局
 
-- 为 `health_check` 添加 `--min-score` 门控支持，复用统一 schema 和门控逻辑，让健康检查也能在 CI 中作为质量闸门。
+- 为统一健康摘要 schema 生成 JSON Schema 定义文件，便于外部工具验证消费。
+- 研究是否可以为统一摘要添加更多元数据（检查器版本、配置路径等）。
 
 ## 功能候选 3 项（2 深化 + 1 探索）
 
-1. 历史功能深化：为 `health_check.py` 增补 `--summary-json` 统一摘要输出。
-2. 历史功能深化：研究 `health_check.py` 是否适合添加 `--min-score` 门控，如果适合则实现。
-3. 新功能探索（自动升级探索候选）：为统一健康摘要添加 JSON schema 验证文件，便于外部工具消费。
+1. 历史功能深化：评估并推广统一摘要 schema 到 `entry_detect.py`（如果适合）。
+2. 历史功能深化：分析 Python 版本依赖差异，确认是否需要立即升级。
+3. 新功能探索（自动升级探索候选）：为统一健康摘要生成 JSON Schema 定义文件。
 
 ## 本次踩坑与陷阱警告
 
-- Python 模块导入路径需要正确对应项目结构，`src.common` 才能被正确找到。
-- 新增公共模块需要添加 `__init__.py` 才能被包导入。
-- 导出公共符号需要更新顶层 `src/__init__.py` 的 `__all__` 列表。
+- 如果在函数内部代码块中重复 import 一个顶层已导入的模块，Python 会将该名称标记为局部变量，导致函数末尾引用它时抛出 UnboundLocalError。需要删除内部重复导入。
+- 运行测试前确认当前工作目录在项目根目录，否则会找不到 tests 目录。
 
 ## 本次是否熵注入
 
-- 本次迭代 105 是 3 的倍数，已触发熵注入。
-- 结论：统一摘要 schema 探索成功，价值明确，可以继续功能深化推广到其他检查器。
+- 本次迭代 106 不是 3 的倍数，未触发熵注入。

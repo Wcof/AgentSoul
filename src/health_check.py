@@ -24,6 +24,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from common import get_project_root  # noqa: E402
+from src.common.health_gate import HealthSummary, UnifiedCheckResult  # noqa: E402
 from src.config_loader import ConfigLoader  # noqa: E402
 
 
@@ -590,6 +591,18 @@ def main() -> None:
         help="项目根目录路径 (默认: 当前目录)",
         default=None
     )
+    parser.add_argument(
+        "--min-score",
+        type=int,
+        help="最低通过分数门槛 (0-100)。若有 errors 且 error 数量 > 0，则不通过；整体健康度检查通过即合格，分数由 (100 - errors * 10 - warnings * 2) 计算，若得分低于该值，进程以状态码2退出",
+        default=None,
+    )
+    parser.add_argument(
+        "--summary-json",
+        action="store_true",
+        help="输出机器可读的一行统一格式摘要 JSON，适合 CI/脚本消费 (使用标准 HealthSummary schema)",
+        default=False,
+    )
     args = parser.parse_args()
 
     project_root = Path(args.project_root) if args.project_root else None
@@ -614,7 +627,6 @@ def main() -> None:
         print("=" * 60 + "\n")
     elif args.output:
         # Output text to file
-        import sys
         original_stdout = sys.stdout
         try:
             output_path = Path(args.output)
@@ -634,7 +646,104 @@ def main() -> None:
         # Print text report to stdout
         checker.print_report(report)
 
-    exit(0 if report.is_healthy else 1)
+    # Calculate overall score based on errors and warnings
+    # Each error reduces score by 10, each warning reduces by 2
+    overall_score = max(0, 100 - (report.errors * 10) - (report.warnings * 2))
+
+    # Assessment based on score
+    if overall_score >= 90:
+        assessment = "极佳：没有错误，少数警告不影响使用，健康状况良好。"
+    elif overall_score >= 75:
+        assessment = "良好：少量问题，核心功能可用。"
+    elif overall_score >= 60:
+        assessment = "可使用：存在一些问题，但核心检测完成，建议修复警告。"
+    elif overall_score >= 40:
+        assessment = "需要修复：多个错误，建议重新安装或按报告修复配置。"
+    else:
+        assessment = "严重问题：核心结构不完整，建议重新运行安装脚本。"
+
+    # Calculate gate passing
+    gate_passed: bool | None = None
+    exit_code = 0 if report.is_healthy else 1
+
+    if args.min_score is not None:
+        if args.min_score < 0 or args.min_score > 100:
+            parser.error("--min-score must be between 0 and 100")
+        gate_passed = overall_score >= args.min_score
+        if not gate_passed:
+            exit_code = 2
+
+    if args.summary_json:
+        # Convert HealthIssue to check results using unified schema
+        # Group issues by category as individual checks
+        from collections import defaultdict
+        issues_by_category = defaultdict(list)
+        for issue in report.issues:
+            issues_by_category[issue.category].append(issue)
+
+        check_results = []
+        category_descriptions = {
+            "directory": "目录结构完整性",
+            "config": "配置文件合法性",
+            "memory": "记忆文件完整性",
+            "soul_state": "灵魂状态兼容性",
+            "permission": "关键路径权限",
+        }
+
+        for category, issues in issues_by_category.items():
+            # A category passes if it has no errors (warnings allowed)
+            errors_in_cat = sum(1 for i in issues if i.level == "error")
+            score = max(0, 100 - errors_in_cat * 20)
+            desc = category_descriptions.get(category, category)
+            check_result = UnifiedCheckResult(
+                name=category,
+                description=desc,
+                score=score,
+                passed=errors_in_cat == 0,
+                issues=[i.message for i in issues],
+                recommendations=[i.fix_suggestion for i in issues if i.fix_suggestion],
+            )
+            check_results.append(check_result)
+
+        # Add overall check
+        overall_check = UnifiedCheckResult(
+            name="整体健康",
+            description="所有检测项目汇总，errors 数量决定是否通过",
+            score=overall_score,
+            passed=report.is_healthy,
+            issues=[],
+            recommendations=[],
+        )
+        check_results.insert(0, overall_check)
+
+        summary = HealthSummary(
+            checker_name="health_check",
+            overall_score=overall_score,
+            assessment=assessment,
+            timestamp=report.timestamp,
+            min_score=args.min_score,
+            gate_passed=gate_passed,
+            exit_code=exit_code,
+            output_file=args.output,
+            output_format="json" if args.json else "text",
+            check_results=check_results,
+        )
+        print(summary.to_json())
+
+    elif args.min_score is not None:
+        if gate_passed:
+            print(
+                f"\n✅ 门控通过：整体得分 {overall_score} >= 最低要求 {args.min_score}"
+            )
+        else:
+            print(
+                f"\n❌ 门控未通过：整体得分 {overall_score} < 最低要求 {args.min_score}"
+            )
+
+    if exit_code != 0:
+        sys.exit(exit_code)
+    else:
+        exit(0 if report.is_healthy else 1)
 
 
 if __name__ == "__main__":
