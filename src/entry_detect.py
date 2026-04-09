@@ -6,9 +6,19 @@ and output the available injection methods for Master Agent continuity.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime
+
+# Add project root to path for proper imports
+project_root = __file__
+if project_root:
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(project_root)))
+    sys.path.insert(0, str(project_root))
+
+from src.common.health_gate import HealthSummary, UnifiedCheckResult
 
 
 @dataclass
@@ -248,6 +258,69 @@ def print_report() -> None:
 
 def main() -> None:
     """Main entry point for CLI."""
+    import argparse
+    parser = argparse.ArgumentParser(
+        description="AgentSoul Entry Capability Detector - Detect current running environment and available injection methods"
+    )
+    parser.add_argument(
+        "--summary-json",
+        action="store_true",
+        help="输出机器可读的一行统一格式摘要 JSON，适合 CI/脚本消费 (使用标准 HealthSummary schema)",
+        default=False,
+    )
+    args = parser.parse_args()
+
+    if args.summary_json:
+        report = generate_report()
+        cap = report["detected"]
+
+        # Create unified check results
+        check_results = [
+            UnifiedCheckResult(
+                name="环境检测",
+                description="检测当前运行环境类型",
+                score=100 if report["agentsoul_installed"] else 80,
+                passed=True,
+                issues=[] if report["agentsoul_installed"] else ["AgentSoul not detected in current workspace"],
+                recommendations=[] if report["agentsoul_installed"] else ["Install AgentSoul to enable full capabilities"],
+            )
+        ]
+
+        # Add environment info as a check
+        check_results.append(
+            UnifiedCheckResult(
+                name=f"环境: {cap.environment}",
+                description=cap.description,
+                score=100,
+                passed=True,
+                issues=[],
+                recommendations=[f"Available injection methods: {', '.join(cap.available_injection_methods)}"],
+            )
+        )
+
+        # Calculate overall score
+        # 100 if AgentSoul installed and detected environment, 80 if AgentSoul not found but environment detected
+        overall_score = 100 if report["agentsoul_installed"] else 80
+        assessment = (
+            "极佳：AgentSoul 已检测到环境，可以正常注入。" if report["agentsoul_installed"]
+            else "可使用：环境已识别，但未检测到 AgentSoul 安装。"
+        )
+
+        summary = HealthSummary(
+            checker_name="entry_detect",
+            overall_score=overall_score,
+            assessment=assessment,
+            timestamp=datetime.now().isoformat(),
+            min_score=None,
+            gate_passed=None,
+            exit_code=0,
+            output_file=None,
+            output_format=None,
+            check_results=check_results,
+        )
+        print(summary.to_json())
+        sys.exit(0)
+
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
         print("""AgentSoul Entry Capability Detector
 
@@ -257,6 +330,7 @@ Usage:
   python -m src.entry_detect
   python src/entry_detect.py
   python -m src.entry_detect --help
+  python src/entry_detect.py --summary-json
 
 Exit codes:
   0: Success
