@@ -979,6 +979,10 @@
                         <div class="stat-label">平均健康度</div>
                     </div>
                     <div class="stat-box">
+                        <div class="stat-value" id="recentTwentyAvg">-</div>
+                        <div class="stat-label">最近 20 次均值</div>
+                    </div>
+                    <div class="stat-box">
                         <div class="stat-value" id="currentHealth">-</div>
                         <div class="stat-label">当前健康度</div>
                     </div>
@@ -1123,11 +1127,17 @@
                 }
             }
 
+            // 计算最近 20 次均值
+            let recentTwenty = data.slice(-20);
+            const recentSum = recentTwenty.reduce((acc, d) => acc + d.health, 0);
+            const recentAvg = (recentSum / recentTwenty.length).toFixed(1);
+
             return {
                 totalIterations: total,
                 averageHealth: avg,
                 currentHealth: current,
-                perfectStreak: streak
+                perfectStreak: streak,
+                recentTwentyAvg: recentAvg
             };
         }
 
@@ -1189,7 +1199,7 @@
             path.setAttribute('d', pathData);
             path.setAttribute('fill', 'none');
             path.setAttribute('stroke', '#2980b9');
-            path.setAttribute('stroke-width', '2');
+            path.setAttribute('stroke-width', '3');
             g.appendChild(path);
 
             // 绘制数据点
@@ -1200,8 +1210,10 @@
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('cx', x);
                 circle.setAttribute('cy', y);
-                circle.setAttribute('r', d.health === 100 ? 5 : 4);
+                circle.setAttribute('r', d.health === 100 ? 6 : 4);
                 circle.setAttribute('fill', d.health === 100 ? '#27ae60' : '#e74c3c');
+                circle.setAttribute('stroke', 'white');
+                circle.setAttribute('stroke-width', '1');
                 g.appendChild(circle);
 
                 // 每 5 个迭代显示刻度
@@ -1225,6 +1237,7 @@
             if (!stats) return;
             document.getElementById('totalIterations').textContent = stats.totalIterations;
             document.getElementById('avgHealth').textContent = stats.averageHealth;
+            document.getElementById('recentTwentyAvg').textContent = stats.recentTwentyAvg;
             document.getElementById('currentHealth').textContent = stats.currentHealth;
             document.getElementById('perfectStreak').textContent = stats.perfectStreak;
         }
