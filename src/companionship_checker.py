@@ -27,6 +27,7 @@ import sys
 sys.path.insert(0, str(project_root_cli))
 
 from common import get_project_root, log  # noqa: E402
+from src.common.health_gate import HealthSummary, UnifiedCheckResult  # noqa: E402
 from src.abstract import (
     BaseMemoryStorage,
     BasePersonaStorage,
@@ -42,15 +43,8 @@ from src.storage.local import (
 )
 
 
-@dataclass
-class CheckResult:
-    """单项检查结果"""
-    name: str
-    description: str
-    score: int  # 0-100
-    passed: bool
-    issues: list[str]
-    recommendations: list[str]
+# For backward compatibility, alias to the unified type
+CheckResult = UnifiedCheckResult
 
 
 @dataclass
@@ -675,17 +669,27 @@ def main():
             exit_code = 2
 
     if args.summary_json:
-        summary = {
-            "overall_score": report.overall_score,
-            "assessment": report.assessment,
-            "timestamp": report.timestamp,
-            "min_score": args.min_score,
-            "gate_passed": gate_passed,
-            "exit_code": exit_code,
-            "output_file": str(output_path),
-            "output_format": "json" if args.json else "markdown",
-        }
-        print(json.dumps(summary, ensure_ascii=False))
+        # Use unified HealthSummary schema for consistent machine consumption
+        results = [
+            report.memory_continuity,
+            report.personality_consistency,
+            report.skill_precipitation,
+            report.state_recovery,
+            report.user_perceived_companionship,
+        ]
+        summary = HealthSummary(
+            checker_name="companionship_checker",
+            overall_score=report.overall_score,
+            assessment=report.assessment,
+            timestamp=report.timestamp,
+            min_score=args.min_score,
+            gate_passed=gate_passed,
+            exit_code=exit_code,
+            output_file=str(output_path),
+            output_format="json" if args.json else "markdown",
+            check_results=results,
+        )
+        print(summary.to_json())
     elif args.min_score is not None:
         if gate_passed:
             print(

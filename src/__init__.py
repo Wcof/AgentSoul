@@ -12,6 +12,12 @@ from common import (
     load_config,
     log,
 )
+from src.common import (
+    TTLCacheBase,
+    CachedValue,
+    HealthSummary,
+    UnifiedCheckResult,
+)
 from src.abstract import (
     BaseMemoryStorage,
     BasePersonaStorage,
@@ -88,6 +94,11 @@ __all__ = [
     "ConfigLoader",
     "PathResolver",
     "resolve_path",
+    # Common utilities
+    "TTLCacheBase",
+    "CachedValue",
+    "HealthSummary",
+    "UnifiedCheckResult",
     # Unified abstraction for dual-link compatibility
     "BasePersonaStorage",
     "BaseSoulStateStorage",
