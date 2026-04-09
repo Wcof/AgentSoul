@@ -271,7 +271,102 @@ def main() -> None:
         help="根据检测到的环境生成可直接使用的注入步骤模板，输出到标准输出",
         default=False,
     )
+    parser.add_argument(
+        "--precheck",
+        action="store_true",
+        help="注入预演：在实际注入前检查目标工作区，检查文件冲突和配置状态，输出预演报告",
+        default=False,
+    )
     args = parser.parse_args()
+
+    if args.precheck:
+        report = generate_report()
+        cap = report["detected"]
+        assert isinstance(cap, EntryCapability), "cap must be EntryCapability"
+
+        # Precheck: check if target files already exist
+        existing_files = []
+        candidate_files = [
+            "config/persona.yaml",
+            "config/behavior.yaml",
+            "CLAUDE.md",
+            ".cursorrules",
+            ".windsurfrules",
+        ]
+        for f in candidate_files:
+            if os.path.exists(f):
+                existing_files.append(f)
+
+        # Create unified check results
+        check_results = [
+            UnifiedCheckResult(
+                name="环境检测",
+                description="检测当前运行环境类型",
+                score=100 if report["agentsoul_installed"] else 80,
+                passed=True,
+                issues=[] if report["agentsoul_installed"] else ["AgentSoul not detected in current workspace"],
+                recommendations=[] if report["agentsoul_installed"] else ["Install AgentSoul to enable full capabilities"],
+            )
+        ]
+
+        check_results.append(
+            UnifiedCheckResult(
+                name=f"环境: {cap.environment}",
+                description=cap.description,
+                score=100,
+                passed=True,
+                issues=[],
+                recommendations=[f"Available injection methods: {', '.join(cap.available_injection_methods)}"],
+            )
+        )
+
+        if existing_files:
+            check_results.append(
+                UnifiedCheckResult(
+                    name="预演检查",
+                    description="检测到现有配置文件",
+                    score=85,
+                    passed=True,
+                    issues=[],
+                    recommendations=[f"Existing configuration files: {', '.join(existing_files)} - these may be overwritten during injection"],
+                )
+            )
+        else:
+            check_results.append(
+                UnifiedCheckResult(
+                    name="预演检查",
+                    description="未检测到现有配置文件",
+                    score=100,
+                    passed=True,
+                    issues=[],
+                    recommendations=["No existing configuration conflicts, ready for injection"],
+                )
+            )
+
+        # Calculate overall score
+        overall_score = 100 if len(existing_files) == 0 and report["agentsoul_installed"] else (85 if existing_files else 80)
+        if report["agentsoul_installed"]:
+            if len(existing_files) == 0:
+                assessment = "极佳：预演完成，无冲突，准备就绪可以注入。"
+            else:
+                assessment = f"良好：预演完成，检测到 {len(existing_files)} 个现有配置文件，注入可能覆盖，请确认后继续。"
+        else:
+            assessment = "可使用：环境已识别，但未检测到 AgentSoul 安装，需要先安装 AgentSoul。"
+
+        summary = HealthSummary(
+            checker_name="entry_detect-precheck",
+            overall_score=overall_score,
+            assessment=assessment,
+            timestamp=datetime.now().isoformat(),
+            min_score=None,
+            gate_passed=None,
+            exit_code=0,
+            output_file=None,
+            output_format=None,
+            check_results=check_results,
+        )
+        print(summary.to_json())
+        sys.exit(0)
 
     if args.summary_json:
         report = generate_report()
@@ -348,6 +443,7 @@ Usage:
   python -m src.entry_detect --help
   python src/entry_detect.py --summary-json
   python src/entry_detect.py --generate-template
+  python src/entry_detect.py --precheck
 
 Exit codes:
   0: Success
