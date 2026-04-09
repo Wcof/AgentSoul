@@ -991,6 +991,10 @@
                         <div class="stat-label">满分连续次数</div>
                     </div>
                 </div>
+                <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                    <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 5px;">趋势分析</div>
+                    <div id="trendAssessment" style="font-size: 1rem; color: #2c3e50; font-weight: bold;">-</div>
+                </div>
             </div>
 
             <div class="card">
@@ -1132,12 +1136,54 @@
             const recentSum = recentTwenty.reduce((acc, d) => acc + d.health, 0);
             const recentAvg = (recentSum / recentTwenty.length).toFixed(1);
 
+            // 计算趋势：比较最近 10 次和之前 10 次
+            let trend = 'stable';
+            if (data.length >= 20) {
+                const recent10 = data.slice(-10);
+                const prev10 = data.slice(-20, -10);
+                const avgRecent10 = recent10.reduce((acc, d) => acc + d.health, 0) / 10;
+                const avgPrev10 = prev10.reduce((acc, d) => acc + d.health, 0) / 10;
+                if (avgRecent10 > avgPrev10 + 2) {
+                    trend = 'rising';
+                } else if (avgRecent10 < avgPrev10 - 2) {
+                    trend = 'falling';
+                } else {
+                    trend = 'stable';
+                }
+            }
+
+            // 生成趋势评估描述
+            let trendDescription = '';
+            if (streak === data.length) {
+                trendDescription = '🎉 自记录以来 <strong>持续满分</strong>，项目非常健康';
+            } else if (streak >= 10) {
+                trendDescription = '✅ 已连续 <strong>' + streak + ' 次满分</strong>，项目非常健康';
+            } else if (parseFloat(recentAvg) >= 95) {
+                trendDescription = '👍 最近 20 次平均 <strong>' + recentAvg + ' 分</strong>，健康状况优秀';
+            } else if (parseFloat(recentAvg) >= 80) {
+                trendDescription = '✓ 最近 20 次平均 <strong>' + recentAvg + ' 分</strong>，健康状况良好';
+            } else if (parseFloat(recentAvg) >= 60) {
+                trendDescription = '⚠️ 最近 20 次平均 <strong>' + recentAvg + ' 分</strong>，健康状况一般，需要关注';
+            } else {
+                trendDescription = '🚨 最近 20 次平均 <strong>' + recentAvg + ' 分</strong>，健康状况不佳，需要修复';
+            }
+
+            // 加上趋势方向
+            if (trend === 'rising') {
+                trendDescription += ' → 趋势 <span style="color: #27ae60;">↑ 上升</span>';
+            } else if (trend === 'falling') {
+                trendDescription += ' → 趋势 <span style="color: #e74c3c;">↓ 下降</span>';
+            } else {
+                trendDescription += ' → 趋势 ↔ 稳定';
+            }
+
             return {
                 totalIterations: total,
                 averageHealth: avg,
                 currentHealth: current,
                 perfectStreak: streak,
-                recentTwentyAvg: recentAvg
+                recentTwentyAvg: recentAvg,
+                trendDescription: trendDescription
             };
         }
 
@@ -1240,6 +1286,7 @@
             document.getElementById('recentTwentyAvg').textContent = stats.recentTwentyAvg;
             document.getElementById('currentHealth').textContent = stats.currentHealth;
             document.getElementById('perfectStreak').textContent = stats.perfectStreak;
+            document.getElementById('trendAssessment').innerHTML = stats.trendDescription;
         }
 
         // 处理健康度文件上传
