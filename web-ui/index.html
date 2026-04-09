@@ -2031,51 +2031,72 @@
             // 清空原有内容
             itemsEl.innerHTML = '';
 
-            // 渲染五个检查项
-            const items = [
-                {key: 'memory_continuity', name: '记忆连续性'},
-                {key: 'personality_consistency', name: '人格一致性'},
-                {key: 'skill_precipitation', name: '技能沉淀'},
-                {key: 'state_recovery', name: '状态恢复'},
-                {key: 'user_perceived_companionship', name: '用户可感知陪伴'}
-            ];
+            // 获取检查结果数组（标准统一 JSON Schema 格式）
+            let checkResults = [];
+            if (data.check_results && data.check_results.length > 0) {
+                // 新标准格式：结果在 check_results 数组
+                checkResults = data.check_results;
+            } else {
+                // 向后兼容旧格式：五个检查项直接在顶层
+                const oldItems = [
+                    {key: 'memory_continuity', name: '记忆连续性'},
+                    {key: 'personality_consistency', name: '人格一致性'},
+                    {key: 'skill_precipitation', name: '技能沉淀'},
+                    {key: 'state_recovery', name: '状态恢复'},
+                    {key: 'user_perceived_companionship', name: '用户可感知陪伴'}
+                ];
+                oldItems.forEach(({key, name}) => {
+                    if (data[key]) {
+                        const item = data[key];
+                        item.name = name;
+                        checkResults.push(item);
+                    }
+                });
+            }
 
-            items.forEach(({key, name}) => {
-                const item = data[key];
-                const colorClass = getScoreColorClass(item.score);
-                const scoreClass = item.passed ? 'score-pass' : 'score-fail';
+            // 按得分降序排列（未通过在前）
+            const sortedResults = [...checkResults].sort((a, b) => {
+                if (a.passed !== b.passed) {
+                    return a.passed ? 1 : -1;
+                }
+                return b.score - a.score;
+            });
+
+            sortedResults.forEach(check => {
+                const colorClass = getScoreColorClass(check.score);
+                const scoreClass = check.passed ? 'score-pass' : 'score-fail';
 
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'companionship-item';
 
                 let html = `
                     <div class="companionship-item-header">
-                        <span class="companionship-item-name">${item.name}</span>
-                        <span class="companionship-item-score ${scoreClass}">${item.score}/100</span>
+                        <span class="companionship-item-name">${check.name}</span>
+                        <span class="companionship-item-score ${scoreClass}">${check.score}/100</span>
                     </div>
-                    <div class="companionship-item-desc">${item.description}</div>
+                    <div class="companionship-item-desc">${check.description}</div>
                     <div class="companionship-score-bar-container">
-                        <div class="companionship-score-bar ${colorClass}" style="width: ${item.score}%;"></div>
+                        <div class="companionship-score-bar ${colorClass}" style="width: ${check.score}%;"></div>
                     </div>
                 `;
 
-                if (item.issues && item.issues.length > 0) {
+                if (check.issues && check.issues.length > 0) {
                     html += `
                         <div class="companionship-issues">
                             <h4>发现问题</h4>
                             <ul>
-                                ${item.issues.map(issue => `<li>${issue}</li>`).join('')}
+                                ${check.issues.map(issue => `<li>${issue}</li>`).join('')}
                             </ul>
                         </div>
                     `;
                 }
 
-                if (item.recommendations && item.recommendations.length > 0) {
+                if (check.recommendations && check.recommendations.length > 0) {
                     html += `
                         <div class="companionship-recommendations">
                             <h4>改进建议</h4>
                             <ul>
-                                ${item.recommendations.forEach(rec => `<li>${rec}</li>`).join('')}
+                                ${check.recommendations.forEach(rec => `<li>${rec}</li>`).join('')}
                             </ul>
                         </div>
                     `;
@@ -2084,6 +2105,17 @@
                 itemDiv.innerHTML = html;
                 itemsEl.appendChild(itemDiv);
             });
+
+            // 如果所有检查都通过，显示提示
+            const failed = sortedResults.filter(r => !r.passed).length;
+            if (failed === 0) {
+                const allPassed = document.createElement('div');
+                allPassed.style.textAlign = 'center';
+                allPassed.style.color = '#27ae60';
+                allPassed.style.padding = '20px 20px 10px';
+                allPassed.textContent = '✓ 所有检查都通过了！';
+                itemsEl.insertBefore(allPassed, itemsEl.firstChild);
+            }
         }
 
         // 处理陪伴报告文件上传
