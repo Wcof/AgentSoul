@@ -12,12 +12,6 @@ from common import (
     load_config,
     log,
 )
-from src.common import (
-    TTLCacheBase,
-    CachedValue,
-    HealthSummary,
-    UnifiedCheckResult,
-)
 from src.abstract import (
     BaseMemoryStorage,
     BasePersonaStorage,
@@ -35,6 +29,17 @@ from src.adapters import (
     InjectionConfig,
     OpenAIInjectionAdapter,
 )
+from src.common import (
+    CachedValue,
+    HealthSummary,
+    TTLCacheBase,
+    UnifiedCheckResult,
+)
+from src.companionship_checker import (
+    CheckResult,
+    CompanionshipChecker,
+    OverallReport,
+)
 from src.config_loader import ConfigLoader
 from src.entry_detect import (
     EntryCapability,
@@ -48,11 +53,6 @@ from src.health_check import (
     HealthChecker,
     HealthIssue,
     HealthReport,
-)
-from src.companionship_checker import (
-    CompanionshipChecker,
-    CheckResult,
-    OverallReport,
 )
 from src.migration import (
     CrossPlatformMigrator,

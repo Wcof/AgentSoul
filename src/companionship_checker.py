@@ -16,19 +16,19 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-import sys
 
 # Calculate project root manually before importing common (chicken-and-egg)
 project_root_cli = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root_cli))
 
 from common import get_project_root, log  # noqa: E402
-from src.abstract import (
+from src.abstract import (  # noqa: E402
     UnifiedSoulStorage,
 )
 from src.common.health_gate import (  # noqa: E402
@@ -36,7 +36,7 @@ from src.common.health_gate import (  # noqa: E402
     UnifiedCheckResult,
     calculate_gate_result,
 )
-from src.storage.local import (
+from src.storage.local import (  # noqa: E402
     LocalMemoryStorage,
     LocalPersonaStorage,
     LocalSkillStorage,
@@ -121,7 +121,7 @@ class CompanionshipChecker:
 
         # Try reading all memory types to check IO
         today = datetime.now().strftime("%Y-%m-%d")
-        checks = [
+        checks: list[tuple[str, Callable[[], object]]] = [
             ("daily", lambda: memory_storage.read_daily_memory(today)),
             ("weekly", lambda: memory_storage.read_weekly_memory(today[:7] + "-" + str(datetime.now().isocalendar()[1]).zfill(2))),
             ("monthly", lambda: memory_storage.read_monthly_memory(today[:7])),
@@ -611,7 +611,7 @@ class CompanionshipChecker:
         log(f"JSON 报告已保存到 {output_path}", level="INFO")
 
 
-def main():
+def main() -> None:
     """CLI 入口"""
     import argparse
     parser = argparse.ArgumentParser(

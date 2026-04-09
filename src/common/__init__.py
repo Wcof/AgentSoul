@@ -4,7 +4,9 @@ AgentSoul · Common Utilities
 ============================
 Common utility modules shared across the codebase.
 """
-from .cache import TTLCacheBase, CachedValue
+from __future__ import annotations
+
+from .cache import CachedValue, TTLCacheBase
 from .health_gate import HealthSummary, UnifiedCheckResult
 
 __all__ = [

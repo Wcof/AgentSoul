@@ -15,7 +15,6 @@ from datetime import datetime
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(project_root))
 
-from common import get_project_root  # noqa: E402
 from src.common.health_gate import HealthSummary, UnifiedCheckResult  # noqa: E402
 
 
@@ -271,6 +270,7 @@ def main() -> None:
     if args.summary_json:
         report = generate_report()
         cap = report["detected"]
+        assert isinstance(cap, EntryCapability), "cap must be EntryCapability"
 
         # Create unified check results
         check_results = [
