@@ -2113,59 +2113,104 @@
             emptyEl.style.display = 'none';
             reportEl.style.display = 'block';
 
-            // 整体状态
+            // 整体状态 - 根据 overall_score 判断
             const badgeEl = document.getElementById('healthCheckOverallBadge');
-            if (data.is_healthy) {
+            const isHealthy = data.overall_score >= 80;
+            if (isHealthy) {
                 badgeEl.className = 'status-healthy';
-                badgeEl.textContent = '✓ 健康';
+                badgeEl.textContent = `✓ 健康 ${data.overall_score}/100`;
             } else {
                 badgeEl.className = 'status-unhealthy';
-                badgeEl.textContent = '✗ 不健康';
+                badgeEl.textContent = `✗ 不健康 ${data.overall_score}/100`;
             }
 
             // 统计信息
+            const totalChecks = data.check_results ? data.check_results.length : 0;
+            let errors = 0;
+            let warnings = 0;
+            data.check_results.forEach(cr => {
+                if (!cr.passed) {
+                    errors++;
+                }
+            });
+
             document.getElementById('healthCheckStats').innerHTML = `
-                <div>灵魂版本: ${data.soul_version || 'Unknown'}</div>
-                <div>总检查项: ${data.total_checks} | 错误: ${data.errors} | 警告: ${data.warnings}</div>
+                <div>检查器: ${data.checker_name} | 总分: ${data.overall_score}/100 | ${data.assessment}</div>
+                <div>总检查项: ${totalChecks} | 未通过: ${errors}</div>
+                <div>时间戳: ${data.timestamp}</div>
             `;
 
             // 清空原有内容
             issuesEl.innerHTML = '';
 
-            // 渲染所有问题
-            if (!data.issues || data.issues.length === 0) {
+            // 渲染所有检查结果
+            if (!data.check_results || data.check_results.length === 0) {
                 const noIssues = document.createElement('div');
                 noIssues.style.textAlign = 'center';
                 noIssues.style.color = '#27ae60';
                 noIssues.style.padding = '20px';
-                noIssues.textContent = '✓ 没有发现问题，一切正常！';
+                noIssues.textContent = '✓ 没有检查结果数据';
                 issuesEl.appendChild(noIssues);
                 return;
             }
 
-            data.issues.forEach(issue => {
+            // 检查结果按得分降序排列（未通过的在前）
+            const sortedResults = [...data.check_results].sort((a, b) => {
+                if (a.passed !== b.passed) {
+                    return a.passed ? 1 : -1;
+                }
+                return b.score - a.score;
+            });
+
+            sortedResults.forEach(check => {
                 const issueDiv = document.createElement('div');
                 issueDiv.className = 'health-check-issue';
 
-                let html = `
-                    <div class="health-check-issue-header">
-                        <span class="health-check-category">${issue.category}</span>
-                        <span class="health-check-level level-${issue.level}">${issue.level}</span>
-                    </div>
-                    <div class="health-check-message">${issue.message}</div>
-                `;
-
-                if (issue.location) {
-                    html += `<div class="health-check-location">${issue.location}</div>`;
+                // 确定级别：未通过 = error，分数 < 70 = warning，否则 = info
+                let level = 'info';
+                if (!check.passed) {
+                    level = 'error';
+                } else if (check.score < 70) {
+                    level = 'warning';
                 }
 
-                if (issue.fix_suggestion) {
-                    html += `<div class="health-check-fix">💡 修复建议: ${issue.fix_suggestion}</div>`;
+                let html = `
+                    <div class="health-check-issue-header">
+                        <span class="health-check-category">${check.name}</span>
+                        <span class="health-check-level level-${level}">${check.score}/100</span>
+                    </div>
+                    <div class="health-check-message">${check.description}</div>
+                `;
+
+                if (check.issues && check.issues.length > 0) {
+                    html += `<div class="health-check-location">`;
+                    check.issues.forEach(issue => {
+                        html += `${issue}<br>`;
+                    });
+                    html += `</div>`;
+                }
+
+                if (check.recommendations && check.recommendations.length > 0) {
+                    html += `<div class="health-check-fix">💡 改进建议: `;
+                    check.recommendations.forEach(rec => {
+                        html += `${rec}<br>`;
+                    });
+                    html += `</div>`;
                 }
 
                 issueDiv.innerHTML = html;
                 issuesEl.appendChild(issueDiv);
             });
+
+            // 如果所有检查都通过，显示提示
+            if (errors === 0) {
+                const allPassed = document.createElement('div');
+                allPassed.style.textAlign = 'center';
+                allPassed.style.color = '#27ae60';
+                allPassed.style.padding = '20px 20px 10px';
+                allPassed.textContent = '✓ 所有检查都通过了！';
+                issuesEl.insertBefore(allPassed, issuesEl.firstChild);
+            }
         }
 
         // 处理健康检查报告文件上传
