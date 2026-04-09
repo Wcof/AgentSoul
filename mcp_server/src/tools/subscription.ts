@@ -96,6 +96,7 @@ export async function handleSubscribe(
     events,
     createdAt: new Date().toISOString(),
     lastCalled: null,
+    lastSuccess: null,
     failureCount: 0,
     maxFailures,
     secret,
@@ -179,7 +180,9 @@ export async function handleListSubscriptions(): Promise<ToolResponse> {
               events: s.events,
               created_at: s.createdAt,
               last_called: s.lastCalled,
+              last_success: s.lastSuccess,
               failure_count: s.failureCount,
+              max_failures: s.maxFailures,
             };
           }),
         }, null, 2),
@@ -208,59 +211,85 @@ export async function triggerEvent(event: SubscriptionEvent, payload: unknown): 
     return;
   }
 
-  // Get config for timeout
+  // Get config for timeout and retries
   const timeoutMs = getConfigTimeout();
+  const maxRetries = getConfigRetries();
 
   // Trigger all matching webhooks in parallel
   const promises = matching.map(async (sub) => {
-    try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (sub.secret) {
-        headers['X-Webhook-Secret'] = sub.secret;
+    let attempt = 0;
+    let success = false;
+
+    // Retry loop with exponential backoff
+    while (attempt < maxRetries && !success) {
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (sub.secret) {
+          headers['X-Webhook-Secret'] = sub.secret;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        const response = await fetch(sub.url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            event,
+            subscription_id: sub.id,
+            timestamp: new Date().toISOString(),
+            payload,
+            attempt: attempt + 1,
+            max_retries: maxRetries,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        // Update last called and reset failure count on success
+        if (response.ok) {
+          sub.lastCalled = new Date().toISOString();
+          sub.lastSuccess = new Date().toISOString();
+          sub.failureCount = 0;
+          success = true;
+        } else {
+          attempt++;
+          if (attempt < maxRetries) {
+            // Exponential backoff: 1s -> 2s -> 4s...
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[AgentSoul Subscription] Webhook ${sub.id} failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            sub.failureCount++;
+            console.error(`[AgentSoul Subscription] Webhook failed for ${sub.id}: ${response.status} ${response.statusText}`);
+          }
+        }
+      } catch (error) {
+        attempt++;
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.warn(`[AgentSoul Subscription] Webhook ${sub.id} error (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`, error);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          sub.failureCount++;
+          console.error(`[AgentSoul Subscription] Webhook error for ${sub.id} after ${maxRetries} attempts:`, error);
+        }
       }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      const response = await fetch(sub.url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          event,
-          subscription_id: sub.id,
-          timestamp: new Date().toISOString(),
-          payload,
-        }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      // Update last called and reset failure count on success
-      if (response.ok) {
-        sub.lastCalled = new Date().toISOString();
-        sub.failureCount = 0;
-      } else {
-        sub.failureCount++;
-        console.error(`[AgentSoul Subscription] Webhook failed for ${sub.id}: ${response.status} ${response.statusText}`);
-      }
-    } catch (error) {
-      sub.failureCount++;
-      console.error(`[AgentSoul Subscription] Webhook error for ${sub.id}:`, error);
     }
 
     // Auto-unsubscribe if max failures reached
     if (sub.failureCount >= sub.maxFailures) {
-      console.error(`[AgentSoul Subscription] Auto-unsubscribing ${sub.id} after ${sub.failureCount} failures`);
+      console.error(`[AgentSoul Subscription] Auto-unsubscribing ${sub.id} after ${sub.failureCount} consecutive failures`);
       const current = readSubscriptions();
       const filtered = current.filter(s => s.id !== sub.id);
       writeSubscriptions(filtered);
     }
   });
 
-  // Update subscriptions in storage with failure counts and lastCalled
+  // Update subscriptions in storage with failure counts, lastCalled and lastSuccess
   await Promise.allSettled(promises);
   writeSubscriptions(subscriptions);
 }
@@ -269,6 +298,11 @@ export async function triggerEvent(event: SubscriptionEvent, payload: unknown): 
  * 缓存的配置超时
  */
 let cachedTimeout: number | null = null;
+
+/**
+ * 缓存的配置重试次数
+ */
+let cachedRetries: number | null = null;
 
 /**
  * 获取配置的超时
@@ -295,5 +329,33 @@ function getConfigTimeout(): number {
   } catch {
     cachedTimeout = defaultTimeout;
     return defaultTimeout;
+  }
+}
+
+/**
+ * 获取配置的重试次数
+ */
+function getConfigRetries(): number {
+  const defaultRetries = 3;
+  if (cachedRetries !== null) {
+    return cachedRetries;
+  }
+  try {
+    const configPath = PROJECT_ROOT + '/config/agentsoul.json';
+    const checkedPath = safePath(configPath, PROJECT_ROOT);
+    if (!checkedPath) {
+      cachedRetries = defaultRetries;
+      return defaultRetries;
+    }
+    const config = readJson<AgentSoulConfig>(checkedPath);
+    if (config && config.subscription && config.subscription.enabled) {
+      cachedRetries = config.subscription.maxRetries ?? defaultRetries;
+      return cachedRetries;
+    }
+    cachedRetries = defaultRetries;
+    return defaultRetries;
+  } catch {
+    cachedRetries = defaultRetries;
+    return defaultRetries;
   }
 }

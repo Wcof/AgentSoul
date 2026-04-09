@@ -454,6 +454,8 @@ export interface Subscription {
   createdAt: string;
   /** 最后调用时间 */
   lastCalled: string | null;
+  /** 最后一次成功推送时间 */
+  lastSuccess: string | null;
   /** 调用失败次数 */
   failureCount: number;
   /** 最大失败次数后自动取消 */
@@ -476,5 +478,7 @@ export interface AgentSoulConfig {
     enabled: boolean;
     /** 请求超时毫秒 */
     timeoutMs: number;
+    /** 最大重试次数（0-不重试） */
+    maxRetries: number;
   };
 }
