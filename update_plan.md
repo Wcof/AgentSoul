@@ -3,47 +3,47 @@
 ## 当前阶段评估与最薄弱环节
 
 - 当前健康度保持 **100**，全量测试 **638/638** 通过。
-- 本轮完成功能深化：统一健康摘要 schema 已推广到 `companionship_checker` + `health_check` + `entry_detect`，三个主要 CLI 检查工具都支持 `--summary-json` 统一输出和（前两个支持）`--min-score` 门控。
-- 评估完成 Python 3.9.6 兼容性：虽然代码使用了 PEP 604 `X | Y` 语法，但由于所有文件都启用了 `from __future__ import annotations`，运行时不会解析类型注解，因此 Python 3.9.6 完全兼容，可以正常运行。没有兼容性问题不需要立即升级。
-- 最薄弱环节：统一健康摘要 schema 已经完成主要 CLI 工具推广，可以考虑为其添加 JSON Schema 定义文件方便外部工具验证。
+- 本轮完成新功能探索：添加了两个 GitHub Action 示例 (`companionship-check.yml` + `health-check.yml`)，展示如何在 CI 中使用 `--summary-json` 和 `--min-score` 做质量闸门。
+- 统一健康摘要体系已经完整闭环：schema 定义 + 三个检查器实现 + JSON Schema + CI 示例，所有计划功能都已完成。
+- 最薄弱环节：所有计划功能都已完成，没有明显薄弱环节。
 
 ## 圆内任务模板（本轮落地记录）
 
-- Master Agent 能力：技能沉淀 / 状态延续
-- 工具入口：通用底座（CLI 自动化）
-- 闭环结果：`entry_detect` 添加 `--summary-json` 统一摘要输出，评估确认 Python 3.9.6 兼容性没问题
-- 陪伴增益：自动化脚本现在可以统一解析三个检查工具的输出，进一步提升跨入口一致性和可自动化性
-- 最小验证：添加 CLI 参数、修复导入路径、全量回归通过
+- Master Agent 能力：技能沉淀 / 跨工具入口延续
+- 工具入口：GitHub CI / 自动化
+- 闭环结果：添加两个 GitHub Action 示例，展示如何在 CI 中使用统一健康摘要做质量闸门
+- 陪伴增益：用户可以开箱即用在 GitHub CI 中自动检查 Master Agent 健康状况，保证合并前连续性达标
+- 最小验证：创建 YAML 文件，语法正确，全量回归通过
 
 ## 必做项（本次遗留 + 卡死项追踪）
 
-- 无（统一 schema 已经推广到三个主要 CLI 检查工具）
-- Python 版本已经评估，不需要立即升级，用户可以按需升级。
+- 统一健康摘要体系已经完整闭环，所有计划功能都已完成。
+- Python 版本已经评估，不需要立即升级。
 
 ## 二选一战略方向（下次按健康度择一）
 
 ### A 偏稳定
 
-- 为统一健康摘要 schema 生成 JSON Schema 定义文件，便于外部工具验证消费。
-- 检查是否还有其他 CLI 工具适合添加 `--summary-json` 支持。
+- 检查项目中是否还有其他 TODO/FIXME 注释需要清理。
+- 验证所有 CLI 工具的 --help 输出是否完整说明新增选项。
 
 ### B 偏破局
 
-- 研究是否可以为项目添加 GitHub Action 自动健康检查门控，使用统一摘要输出做 CI 质量闸门。
-- 探索如何让 Web UI 可以直接消费 `--summary-json` 输出展示健康检查结果。
+- 探索如何让 Web UI 可以直接读取 `--summary-json` 输出并展示健康检查结果。
+- 研究是否可以添加一个简单的 shell 脚本包装，方便本地运行检查并输出结果。
 
 ## 功能候选 3 项（2 深化 + 1 探索）
 
-1. 历史功能深化：为统一健康摘要生成 JSON Schema 定义文件。
-2. 历史功能深化：检查是否还有其他 CLI 工具适合添加统一摘要输出支持。
-3. 新功能探索（自动升级探索候选）：添加 GitHub Action 示例，展示如何使用 `--summary-json` 和 `--min-score` 做 CI 质量闸门。
+1. 历史功能深化：验证所有 CLI 工具 --help 输出完整，更新说明文档。
+2. 历史功能深化：清理项目中所有 TODO/FIXME 注释。
+3. 新功能探索（自动升级探索候选）：让 Web UI 支持直接导入 `--summary-json` 输出并可视化展示健康检查结果。
 
 ## 本次踩坑与陷阱警告
 
-- 直接运行 `python src/module.py` 时需要正确添加项目根目录到 `sys.path`，否则会找不到 `src.common` 模块。
-- 如果在文件头部已经添加了 `sys.path` 调整，需要确保 `__file__` 能正确定位项目根目录。
-- PEP 604 `X | Y` 语法在启用 `from __future__ import annotations` 后，可以在 Python 3.9 正常运行，不会报错，不需要强制升级 Python。
+- GitHub Action YAML 语法需要正确缩进，否则 GitHub 无法解析。
+- 新项目添加 GitHub Actions 需要确保 GitHub Actions 功能已启用。
+- 使用 `continue-on-error: false` 让闸门在不通过时正确阻断 PR 合并。
 
 ## 本次是否熵注入
 
-- 本次迭代 107 不是 3 的倍数，未触发熵注入。
+- 本次迭代 109 不是 3 的倍数，未触发熵注入。

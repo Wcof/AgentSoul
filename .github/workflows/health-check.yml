@@ -1,0 +1,44 @@
+# AgentSoul Health Check
+#
+# This GitHub Action runs the health checker on your AgentSoul repository
+# and fails the build if there are too many errors or the score is below threshold.
+#
+# Use this to ensure that your AgentSoul installation stays healthy
+# and catches configuration issues early.
+
+name: AgentSoul Health Check
+
+# Run on pull requests and pushes to main
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run health check with score gate
+      run: |
+        python src/health_check.py --summary-json --min-score 80
+      continue-on-error: false
+
+    - name: Save summary for debugging
+      if: always()
+      run: |
+        python src/health_check.py --summary-json --min-score 80 > health-summary.json
+        cat health-summary.json
+      continue-on-error: true
