@@ -637,7 +637,16 @@ def main():
         help="项目根目录路径 (默认: 当前目录)",
         default=None
     )
+    parser.add_argument(
+        "--min-score",
+        type=int,
+        help="最低通过分数门槛 (0-100)。若整体得分低于该值，进程以状态码2退出",
+        default=None,
+    )
     args = parser.parse_args()
+
+    if args.min_score is not None and (args.min_score < 0 or args.min_score > 100):
+        parser.error("--min-score must be between 0 and 100")
 
     project_root = Path(args.project_root) if args.project_root else None
     checker = CompanionshipChecker(project_root)
@@ -650,6 +659,16 @@ def main():
         checker.save_report_json(report, output_path)
     else:
         checker.save_report(report, output_path)
+
+    if args.min_score is not None:
+        if report.overall_score < args.min_score:
+            print(
+                f"\n❌ 门控未通过：整体得分 {report.overall_score} < 最低要求 {args.min_score}"
+            )
+            sys.exit(2)
+        print(
+            f"\n✅ 门控通过：整体得分 {report.overall_score} >= 最低要求 {args.min_score}"
+        )
 
 
 if __name__ == "__main__":

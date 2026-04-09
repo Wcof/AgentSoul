@@ -384,6 +384,85 @@ class TestCompanionshipChecker(BaseTest):
         output_file = self.project_root / "output.md"
         self.assertTrue(output_file.exists())
 
+    def test_main_function_min_score_below_threshold_exits_nonzero(self):
+        """测试 --min-score 门控失败时返回非零退出码"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_exit = sys.exit
+        original_argv = sys.argv[:]
+        captured_output = StringIO()
+        exit_called = False
+        exit_code = None
+
+        def mock_exit(code):
+            nonlocal exit_called, exit_code
+            exit_called = True
+            exit_code = code
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        try:
+            from src.companionship_checker import main
+            # setUp 环境分数不会达到 100，确保触发失败门控
+            sys.argv = [
+                "companionship_checker.py",
+                "--output",
+                str(self.project_root / "output-threshold.md"),
+                "--min-score",
+                "100",
+            ]
+            main()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = original_stdout
+            sys.exit = original_exit
+            sys.argv = original_argv
+
+        output = captured_output.getvalue()
+        self.assertTrue(exit_called)
+        self.assertEqual(exit_code, 2)
+        self.assertIn("门控未通过", output)
+
+    def test_main_function_min_score_passes(self):
+        """测试 --min-score 门控通过时不退出"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_exit = sys.exit
+        original_argv = sys.argv[:]
+        captured_output = StringIO()
+        exit_called = False
+
+        def mock_exit(code):
+            nonlocal exit_called
+            exit_called = True
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        try:
+            from src.companionship_checker import main
+            sys.argv = [
+                "companionship_checker.py",
+                "--output",
+                str(self.project_root / "output-threshold-pass.md"),
+                "--min-score",
+                "0",
+            ]
+            main()
+        finally:
+            sys.stdout = original_stdout
+            sys.exit = original_exit
+            sys.argv = original_argv
+
+        output = captured_output.getvalue()
+        self.assertFalse(exit_called)
+        self.assertIn("门控通过", output)
+        self.assertTrue((self.project_root / "output-threshold-pass.md").exists())
+
     def test_check_memory_continuity_empty_topic_file(self):
         """测试记忆连续性检查 - 存在空主题文件"""
         checker = CompanionshipChecker(self.project_root)
