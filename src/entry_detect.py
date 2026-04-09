@@ -277,7 +277,121 @@ def main() -> None:
         help="注入预演：在实际注入前检查目标工作区，检查文件冲突和配置状态，输出预演报告",
         default=False,
     )
+    parser.add_argument(
+        "--write-starter",
+        action="store_true",
+        help="生成启动模板：根据检测到的环境写入完整 starter-prompt.md 文件到当前目录",
+        default=False,
+    )
     args = parser.parse_args()
+
+    if args.summary_json:
+        report = generate_report()
+        cap = report["detected"]
+        assert isinstance(cap, EntryCapability), "cap must be EntryCapability"
+
+        # Create unified check results
+        check_results = [
+            UnifiedCheckResult(
+                name="环境检测",
+                description="检测当前运行环境类型",
+                score=100 if report["agentsoul_installed"] else 80,
+                passed=True,
+                issues=[] if report["agentsoul_installed"] else ["AgentSoul not detected in current workspace"],
+                recommendations=[] if report["agentsoul_installed"] else ["Install AgentSoul to enable full capabilities"],
+            )
+        ]
+
+        # Add environment info as a check
+        check_results.append(
+            UnifiedCheckResult(
+                name=f"环境: {cap.environment}",
+                description=cap.description,
+                score=100,
+                passed=True,
+                issues=[],
+                recommendations=[f"Available injection methods: {', '.join(cap.available_injection_methods)}"],
+            )
+        )
+
+        # Calculate overall score
+        # 100 if AgentSoul installed and detected environment, 80 if AgentSoul not found but environment detected
+        overall_score = 100 if report["agentsoul_installed"] else 80
+        assessment = (
+            "极佳：AgentSoul 已检测到环境，可以正常注入。" if report["agentsoul_installed"]
+            else "可使用：环境已识别，但未检测到 AgentSoul 安装。"
+        )
+
+        summary = HealthSummary(
+            checker_name="entry_detect",
+            overall_score=overall_score,
+            assessment=assessment,
+            timestamp=datetime.now().isoformat(),
+            min_score=None,
+            gate_passed=None,
+            exit_code=0,
+            output_file=None,
+            output_format=None,
+            check_results=check_results,
+        )
+        print(summary.to_json())
+        sys.exit(0)
+
+    if args.generate_template:
+        report = generate_report()
+        cap = report["detected"]
+        assert isinstance(cap, EntryCapability), "cap must be EntryCapability"
+        template = report["injection_template"]
+
+        if template:
+            print(template)
+        else:
+            print(f"No injection template available for environment: {cap.environment}")
+        sys.exit(0)
+
+    if args.write_starter:
+        report = generate_report()
+        cap = report["detected"]
+        assert isinstance(cap, EntryCapability), "cap must be EntryCapability"
+        template = report["injection_template"]
+
+        if not template:
+            print(f"No injection template available for environment: {cap.environment}")
+            sys.exit(1)
+
+        # Write to starter-prompt.md
+        output_path = "starter-prompt.md"
+        content = f"""# AgentSoul Starter Prompt
+
+检测到环境: **{cap.environment}**
+描述: {cap.description}
+
+可用注入方法: {', '.join(cap.available_injection_methods)}
+
+AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
+
+---
+
+## 注入模板
+
+{template}
+
+---
+
+> 该文件由 `entry_detect.py --write-starter` 自动生成
+> 生成时间: {datetime.now().isoformat()}
+"""
+
+        try:
+            with open(output_path, 'w', encoding='utf-8') as output_file:
+                output_file.write(content)
+            print(f"✓ 启动模板已写入: {output_path}")
+            print(f"  环境: {cap.environment}")
+            print(f"  AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}")
+        except Exception as e:
+            print(f"✗ 写入文件失败: {e}")
+            sys.exit(1)
+        sys.exit(0)
 
     if args.precheck:
         report = generate_report()
@@ -444,6 +558,7 @@ Usage:
   python src/entry_detect.py --summary-json
   python src/entry_detect.py --generate-template
   python src/entry_detect.py --precheck
+  python src/entry_detect.py --write-starter
 
 Exit codes:
   0: Success
