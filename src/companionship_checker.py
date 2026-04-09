@@ -643,6 +643,12 @@ def main():
         help="最低通过分数门槛 (0-100)。若整体得分低于该值，进程以状态码2退出",
         default=None,
     )
+    parser.add_argument(
+        "--summary-json",
+        action="store_true",
+        help="输出机器可读的一行摘要 JSON，适合 CI/脚本消费",
+        default=False,
+    )
     args = parser.parse_args()
 
     if args.min_score is not None and (args.min_score < 0 or args.min_score > 100):
@@ -652,7 +658,8 @@ def main():
     checker = CompanionshipChecker(project_root)
     report = checker.run_full_check()
 
-    checker.print_report(report)
+    if not args.summary_json:
+        checker.print_report(report)
 
     output_path = Path(args.output)
     if args.json:
@@ -660,15 +667,37 @@ def main():
     else:
         checker.save_report(report, output_path)
 
+    gate_passed: bool | None = None
+    exit_code = 0
     if args.min_score is not None:
-        if report.overall_score < args.min_score:
+        gate_passed = report.overall_score >= args.min_score
+        if not gate_passed:
+            exit_code = 2
+
+    if args.summary_json:
+        summary = {
+            "overall_score": report.overall_score,
+            "assessment": report.assessment,
+            "timestamp": report.timestamp,
+            "min_score": args.min_score,
+            "gate_passed": gate_passed,
+            "exit_code": exit_code,
+            "output_file": str(output_path),
+            "output_format": "json" if args.json else "markdown",
+        }
+        print(json.dumps(summary, ensure_ascii=False))
+    elif args.min_score is not None:
+        if gate_passed:
+            print(
+                f"\n✅ 门控通过：整体得分 {report.overall_score} >= 最低要求 {args.min_score}"
+            )
+        else:
             print(
                 f"\n❌ 门控未通过：整体得分 {report.overall_score} < 最低要求 {args.min_score}"
             )
-            sys.exit(2)
-        print(
-            f"\n✅ 门控通过：整体得分 {report.overall_score} >= 最低要求 {args.min_score}"
-        )
+
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

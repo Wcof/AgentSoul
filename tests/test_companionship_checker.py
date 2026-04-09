@@ -463,6 +463,94 @@ class TestCompanionshipChecker(BaseTest):
         self.assertIn("门控通过", output)
         self.assertTrue((self.project_root / "output-threshold-pass.md").exists())
 
+    def test_main_function_summary_json_gate_pass(self):
+        """测试 --summary-json 在门控通过时输出机器可读摘要"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_exit = sys.exit
+        original_argv = sys.argv[:]
+        captured_output = StringIO()
+        exit_called = False
+
+        def mock_exit(code):
+            nonlocal exit_called
+            exit_called = True
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        try:
+            from src.companionship_checker import main
+            sys.argv = [
+                "companionship_checker.py",
+                "--summary-json",
+                "--min-score",
+                "0",
+                "--output",
+                str(self.project_root / "summary-pass.md"),
+            ]
+            main()
+        finally:
+            sys.stdout = original_stdout
+            sys.exit = original_exit
+            sys.argv = original_argv
+
+        self.assertFalse(exit_called)
+        output_lines = [line for line in captured_output.getvalue().splitlines() if line.strip()]
+        summary = json.loads(output_lines[-1])
+        self.assertEqual(summary["min_score"], 0)
+        self.assertTrue(summary["gate_passed"])
+        self.assertEqual(summary["exit_code"], 0)
+        self.assertIn("overall_score", summary)
+        self.assertTrue((self.project_root / "summary-pass.md").exists())
+
+    def test_main_function_summary_json_gate_fail(self):
+        """测试 --summary-json 在门控失败时输出摘要并以2退出"""
+        from io import StringIO
+        import sys
+        original_stdout = sys.stdout
+        original_exit = sys.exit
+        original_argv = sys.argv[:]
+        captured_output = StringIO()
+        exit_called = False
+        exit_code = None
+
+        def mock_exit(code):
+            nonlocal exit_called, exit_code
+            exit_called = True
+            exit_code = code
+            raise SystemExit(code)
+
+        sys.stdout = captured_output
+        sys.exit = mock_exit
+        try:
+            from src.companionship_checker import main
+            sys.argv = [
+                "companionship_checker.py",
+                "--summary-json",
+                "--min-score",
+                "100",
+                "--output",
+                str(self.project_root / "summary-fail.md"),
+            ]
+            main()
+        except SystemExit:
+            pass
+        finally:
+            sys.stdout = original_stdout
+            sys.exit = original_exit
+            sys.argv = original_argv
+
+        self.assertTrue(exit_called)
+        self.assertEqual(exit_code, 2)
+        output_lines = [line for line in captured_output.getvalue().splitlines() if line.strip()]
+        summary = json.loads(output_lines[-1])
+        self.assertEqual(summary["min_score"], 100)
+        self.assertFalse(summary["gate_passed"])
+        self.assertEqual(summary["exit_code"], 2)
+        self.assertIn("overall_score", summary)
+
     def test_check_memory_continuity_empty_topic_file(self):
         """测试记忆连续性检查 - 存在空主题文件"""
         checker = CompanionshipChecker(self.project_root)
