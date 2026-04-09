@@ -43,7 +43,8 @@
 | **Soul Board** | 项目看板，记录决策、文件所有权声明，防止多代理冲突 |
 | **Ledger 账本** | 不可变工作会话账本，完整记录工作历程 |
 | **事件订阅** | Webhook 事件推送，支持记忆写入、状态变化通知 |
-| **健康检查** | 自动检测安装完整性，提供修复建议和问题诊断 |
+| **健康检查** | 自动检测安装完整性，提供修复建议和问题诊断，支持 JSON 输出和 CI 门控 |
+| **陪伴连续性检查** | 检测五项核心陪伴连续性指标，评估长期陪伴质量，支持分数门控 |
 | **健康度可视化** | 健康度历史趋势 SVG 图表 + 纯静态 Web UI |
 | **安全协议** | 三级安全等级控制（PUBLIC/PROTECTED/SEALED），保护敏感信息 |
 | **MCP 服务** | 遵循 Model Context Protocol 标准，支持所有兼容客户端 |
@@ -149,6 +150,33 @@ python3 src/entry_detect.py --help
 - 是否有本地文件访问权限
 - AgentSoul 是否已安装
 - 对应的注入模板
+
+### 6️⃣ 健康检查与 CI 集成
+
+AgentSoul 提供三个命令行检查工具，都支持统一的 `--summary-json` 机器可读输出和 `--min-score` 分数门控，可以直接集成到 CI/CD 流水线：
+
+```bash
+# 完整健康检查 - 验证安装完整性和配置正确性
+python3 src/health_check.py
+
+# 陪伴连续性检查 - 评估五项核心陪伴指标
+python3 src/companionship_checker.py
+
+# 环境检测 - 自动识别当前运行环境
+python3 src/entry_detect.py
+
+# 带分数门控（CI 场景）- 总分低于 70 时退出码非零，阻断 CI
+python3 src/health_check.py --min-score 70
+
+# 输出机器可读 JSON 摘要（供其他工具消费）
+python3 src/health_check.py --summary-json
+```
+
+所有三个工具都遵循统一的 [HealthSummary JSON Schema](schemas/health-summary.json) 输出格式，便于自动化工具解析。
+
+GitHub Actions 示例参考：
+- [`.github/workflows/health-check.yml`](.github/workflows/health-check.yml) - 健康检查 CI 闸门示例
+- [`.github/workflows/companionship-check.yml`](.github/workflows/companionship-check.yml) - 陪伴连续性检查 CI 闸门示例
 
 #### MCP 工具一览
 
@@ -459,10 +487,19 @@ rm -rf data/
 python3 -m pytest tests/ -v
 
 # 运行单个测试文件
-python3 -m pytest tests/test_agent_soul.py -v
+python3 -m pytest tests/test_health_check.py -v
 
 # 运行隐私扫描（检查敏感信息）
 python3 scripts/scan_privacy.py
+
+# Type 检查
+mypy src/
+
+# Lint 检查
+ruff check src/
+
+# 格式化代码
+black src/
 
 # 从旧 xiaonuan 项目迁移
 python3 scripts/migrate_from_xiaonuan.py /path/to/old/config

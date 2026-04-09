@@ -47,7 +47,7 @@ python3 install.py --openclaw --scope global
 python3 -m pytest tests/ -v
 
 # Run a single test file
-python3 -m pytest tests/test_agent_soul.py -v
+python3 -m pytest tests/test_health_check.py -v
 
 # Run privacy scan (check for sensitive information)
 python3 scripts/scan_privacy.py
@@ -65,21 +65,48 @@ ruff check src/
 black src/
 ```
 
+### Health Check CLI (for CI/automation)
+```bash
+# Full health check with text output
+python3 src/health_check.py
+
+# Full health check with machine-readable JSON output (uses standard HealthSummary schema)
+python3 src/health_check.py --summary-json
+
+# Health check with score gate - exits with non-zero if score < 70 (for CI)
+python3 src/health_check.py --min-score 70
+
+# Companionship continuity check (measures 5 core metrics)
+python3 src/companionship_checker.py
+
+# Entry detection - detects current running environment
+python3 src/entry_detect.py
+```
+
 ## Code Architecture
 
 ### Directory Structure
 ```
 AgentSoul/
+├── common/                     # Root common Python utilities (project root, not src/common)
+│   └── __init__.py            # Provides `get_project_root()`, `log`, `load_config`
 ├── config/                    # Configuration files
 │   ├── persona.yaml           # Main persona configuration (AI + user)
 │   └── behavior.yaml          # Behavior toggles and priorities
+├── schemas/                   # JSON Schema definitions for interoperability
+│   └── health-summary.json    # Unified HealthSummary schema for all CLI checkers
 ├── src/                       # Python core framework
 │   ├── config_loader.py       # Type-safe configuration loader
 │   ├── path_compat.py         # Path compatibility utilities
 │   ├── *.md                   # System rule files (SKILL, soul_base, memory_base, etc.)
 │   ├── adaptive_learning/     # Adaptive learning module
+│   ├── common/                # Common modules within src
+│   │   └── health_gate.py     # Shared health gate types and utilities (used by all 3 checkers)
 │   ├── config_manager/        # Configuration management (CLI, templates, validation)
 │   └── memory_enhanced/       # Enhanced memory (priority, tags, search)
+├── .github/workflows/         # GitHub Actions CI examples
+│   ├── health-check.yml       # Example: health check CI gate
+│   └── companionship-check.yml # Example: companionship check CI gate
 ├── mcp_server/                # MCP server implementation (TypeScript)
 │   ├── src/
 │   │   ├── index.ts           # MCP service entry
@@ -221,6 +248,23 @@ The framework enforces a strict 3-level security model:
 - **Level 3 (SEALED)**: Strictly forbidden to output in any context (API keys, credentials)
 
 **Priority**: Sealed layer security > Privacy protection > Task completion > User experience
+
+## Important Development Notes
+
+### Circular Import Pattern
+The project has a circular import dependency for `get_project_root()`:
+- `common/` at project root provides `get_project_root()`
+- `src/` modules need to import from `common/`
+- Therefore, **all CLI entry points in `src/` must manually calculate the project root before importing `common`** to avoid circular import errors.
+
+Example pattern:
+```python
+# Calculate project root manually before importing common
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from common import get_project_root, log  # noqa: E402
+```
 
 ## Generated Output Files
 

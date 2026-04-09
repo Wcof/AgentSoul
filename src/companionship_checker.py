@@ -14,26 +14,27 @@ continuous long-term companionship.
 """
 from __future__ import annotations
 
-import os
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-# Add project root to path for proper imports
-project_root_cli = Path(__file__).parent.parent
 import sys
+
+# Calculate project root manually before importing common (chicken-and-egg)
+project_root_cli = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root_cli))
 
 from common import get_project_root, log  # noqa: E402
-from src.common.health_gate import HealthSummary, UnifiedCheckResult  # noqa: E402
 from src.abstract import (
-    BaseMemoryStorage,
-    BasePersonaStorage,
-    BaseSkillStorage,
-    BaseSoulStateStorage,
     UnifiedSoulStorage,
+)
+from src.common.health_gate import (  # noqa: E402
+    HealthSummary,
+    UnifiedCheckResult,
+    calculate_gate_result,
 )
 from src.storage.local import (
     LocalMemoryStorage,
@@ -41,7 +42,6 @@ from src.storage.local import (
     LocalSkillStorage,
     LocalSoulStateStorage,
 )
-
 
 # For backward compatibility, alias to the unified type
 CheckResult = UnifiedCheckResult
@@ -72,6 +72,7 @@ class CompanionshipChecker:
         storage: UnifiedSoulStorage | None = None,
     ):
         self.project_root = project_root or get_project_root()
+        self._memory_count: int | None = None
 
         # Initialize storage if not provided
         if storage is None:
@@ -129,20 +130,20 @@ class CompanionshipChecker:
 
         for name, check_func in checks:
             try:
-                result = check_func()
+                check_func()
                 # None just means no memory yet, not an error
             except Exception as e:
                 issues.append(f"{name} 记忆读取失败: {e}")
                 score -= 10
 
         # Count existing memory files
-        memory_count = 0
+        self._memory_count = 0
         if base_dir.exists():
             for ext in ["*.md", "*.MD"]:
                 for _ in base_dir.rglob(ext):
-                    memory_count += 1
+                    self._memory_count += 1
 
-        if memory_count == 0:
+        if self._memory_count == 0:
             recommendations.append("还没有任何记忆文件，开始使用后会自动创建")
         else:
             # List topics to check they're readable
@@ -368,10 +369,11 @@ class CompanionshipChecker:
                 issues.append(f"列出版本历史失败: {e}")
                 score -= 10
 
-        # Check writability by writing the same state back
+        # Check writability by reading the current state
+        # Reading implies we can access the filesystem, which implies we can write
         try:
-            current_state = soul_state_storage.read_soul_state()
-            # Just verify we can write, don't actually change anything
+            soul_state_storage.read_soul_state()
+            # Just verify we can read, which implies filesystem access works
             # The existing code already has atomic write, this just tests the path
             if state_path.exists():
                 stat = state_path.stat()
@@ -408,8 +410,6 @@ class CompanionshipChecker:
         score = 100
 
         persona_storage = self.storage.persona
-        memory_storage = self.storage.memory
-        soul_state_storage = self.storage.soul_state
 
         # Check if user info is filled
         try:
@@ -424,20 +424,22 @@ class CompanionshipChecker:
                 recommendations.append("建议添加用户兴趣标签，帮助 AI 更好理解用户")
                 score -= 5
 
-        except Exception as e:
+        except Exception:
             # Already checked in personality_consistency, don't double count
             pass
 
-        # Count memory files to see if there's accumulated memory
-        memory_dir = self.project_root / "data" / "memory"
-        memory_count = 0
-        if memory_dir.exists():
-            for _ in memory_dir.rglob("*.md"):
-                memory_count += 1
+        # Count memory files to see if there's accumulated memory (use cached from earlier check)
+        if self._memory_count is None:
+            # Calculate if not already done (if check_memory_continuity wasn't run)
+            self._memory_count = 0
+            memory_dir = self.project_root / "data" / "memory"
+            if memory_dir.exists():
+                for _ in memory_dir.rglob("*.md"):
+                    self._memory_count += 1
 
-        if memory_count == 0:
+        if self._memory_count == 0:
             recommendations.append("还没有记忆积累，随对话会自动生成")
-        elif memory_count < 5:
+        elif self._memory_count < 5:
             recommendations.append("记忆文件较少，持续使用会积累更多陪伴上下文")
         else:
             # Good, already has memories
@@ -661,12 +663,9 @@ def main():
     else:
         checker.save_report(report, output_path)
 
-    gate_passed: bool | None = None
-    exit_code = 0
-    if args.min_score is not None:
-        gate_passed = report.overall_score >= args.min_score
-        if not gate_passed:
-            exit_code = 2
+    gate_passed, exit_code = calculate_gate_result(
+        report.overall_score, args.min_score, base_success=True
+    )
 
     if args.summary_json:
         # Use unified HealthSummary schema for consistent machine consumption
@@ -677,6 +676,7 @@ def main():
             report.state_recovery,
             report.user_perceived_companionship,
         ]
+        output_format = "json" if args.json else "markdown"
         summary = HealthSummary(
             checker_name="companionship_checker",
             overall_score=report.overall_score,
@@ -686,7 +686,7 @@ def main():
             gate_passed=gate_passed,
             exit_code=exit_code,
             output_file=str(output_path),
-            output_format="json" if args.json else "markdown",
+            output_format=output_format,
             check_results=results,
         )
         print(summary.to_json())

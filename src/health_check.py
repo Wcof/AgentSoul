@@ -15,16 +15,23 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-# Add project root to path for proper imports
+# Calculate project root manually before importing common (chicken-and-egg)
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from common import get_project_root  # noqa: E402
-from src.common.health_gate import HealthSummary, UnifiedCheckResult  # noqa: E402
+from common import get_project_root, log  # noqa: E402
+from src.common.health_gate import (  # noqa: E402
+    HealthSummary,
+    UnifiedCheckResult,
+    calculate_gate_result,
+    get_default_assessment,
+)
 from src.config_loader import ConfigLoader  # noqa: E402
 
 
@@ -57,6 +64,7 @@ class HealthChecker:
         self.project_root = project_root or get_project_root()
         self.data_root = self.project_root / "data"
         self.config_root = self.project_root / "config"
+        self._soul_version: str | None = None
 
     def check_directory_structure(self) -> list[HealthIssue]:
         """检查目录结构是否完整"""
@@ -221,7 +229,8 @@ class HealthChecker:
                         ))
 
             # Check version
-            version = state.get("version")
+            self._soul_version = state.get("version")
+            version = self._soul_version
             if version is None:
                 issues.append(HealthIssue(
                     level="info",
@@ -483,16 +492,8 @@ class HealthChecker:
         errors = sum(1 for i in all_issues if i.level == "error")
         warnings = sum(1 for i in all_issues if i.level == "warning")
 
-        # Get soul version if available
-        soul_version = None
-        state_path = self.data_root / "soul" / "soul_variable" / "state_vector.json"
-        if state_path.exists():
-            try:
-                with open(state_path, encoding="utf-8") as f:
-                    state = json.load(f)
-                    soul_version = state.get("version")
-            except Exception:
-                pass
+        # Get soul version from cached result (already parsed in check_soul_state)
+        soul_version = self._soul_version
 
         report = HealthReport(
             timestamp=datetime.now().isoformat(),
@@ -565,7 +566,6 @@ class HealthChecker:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        from common import log
         log(f"JSON 健康报告已保存到 {output_path}", level="INFO")
 
 
@@ -636,7 +636,6 @@ def main() -> None:
                 checker.print_report(report)
         finally:
             sys.stdout = original_stdout
-        from common import log
         log(f"文本健康报告已保存到 {output_path}", level="INFO")
     elif args.json:
         # Output JSON to stdout
@@ -649,34 +648,16 @@ def main() -> None:
     # Calculate overall score based on errors and warnings
     # Each error reduces score by 10, each warning reduces by 2
     overall_score = max(0, 100 - (report.errors * 10) - (report.warnings * 2))
-
-    # Assessment based on score
-    if overall_score >= 90:
-        assessment = "极佳：没有错误，少数警告不影响使用，健康状况良好。"
-    elif overall_score >= 75:
-        assessment = "良好：少量问题，核心功能可用。"
-    elif overall_score >= 60:
-        assessment = "可使用：存在一些问题，但核心检测完成，建议修复警告。"
-    elif overall_score >= 40:
-        assessment = "需要修复：多个错误，建议重新安装或按报告修复配置。"
-    else:
-        assessment = "严重问题：核心结构不完整，建议重新运行安装脚本。"
+    assessment = get_default_assessment(overall_score)
 
     # Calculate gate passing
-    gate_passed: bool | None = None
-    exit_code = 0 if report.is_healthy else 1
-
-    if args.min_score is not None:
-        if args.min_score < 0 or args.min_score > 100:
-            parser.error("--min-score must be between 0 and 100")
-        gate_passed = overall_score >= args.min_score
-        if not gate_passed:
-            exit_code = 2
+    gate_passed, exit_code = calculate_gate_result(
+        overall_score, args.min_score, base_success=report.is_healthy
+    )
 
     if args.summary_json:
         # Convert HealthIssue to check results using unified schema
         # Group issues by category as individual checks
-        from collections import defaultdict
         issues_by_category = defaultdict(list)
         for issue in report.issues:
             issues_by_category[issue.category].append(issue)
@@ -716,6 +697,7 @@ def main() -> None:
         )
         check_results.insert(0, overall_check)
 
+        output_format = "json" if args.json else "text"
         summary = HealthSummary(
             checker_name="health_check",
             overall_score=overall_score,
@@ -725,7 +707,7 @@ def main() -> None:
             gate_passed=gate_passed,
             exit_code=exit_code,
             output_file=args.output,
-            output_format="json" if args.json else "text",
+            output_format=output_format,
             check_results=check_results,
         )
         print(summary.to_json())
@@ -742,8 +724,6 @@ def main() -> None:
 
     if exit_code != 0:
         sys.exit(exit_code)
-    else:
-        exit(0 if report.is_healthy else 1)
 
 
 if __name__ == "__main__":

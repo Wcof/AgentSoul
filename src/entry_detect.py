@@ -6,19 +6,17 @@ and output the available injection methods for Master Agent continuity.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
 
-# Add project root to path for proper imports
-project_root = __file__
-if project_root:
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(project_root)))
-    sys.path.insert(0, str(project_root))
+# Calculate project root manually before importing common (chicken-and-egg)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, str(project_root))
 
-from src.common.health_gate import HealthSummary, UnifiedCheckResult
+from common import get_project_root  # noqa: E402
+from src.common.health_gate import HealthSummary, UnifiedCheckResult  # noqa: E402
 
 
 @dataclass
