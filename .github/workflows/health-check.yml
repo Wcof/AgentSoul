@@ -36,6 +36,20 @@ jobs:
         python src/health_check.py --summary-json --min-score 80
       continue-on-error: false
 
+    - name: Install mypy and ruff for static checking
+      run: |
+        python -m pip install mypy ruff
+
+    - name: Run mypy strict type checking
+      run: |
+        python -m mypy src/ --strict
+      continue-on-error: false
+
+    - name: Run ruff lint check
+      run: |
+        python -m ruff check src/
+      continue-on-error: false
+
     - name: Save summary for debugging
       if: always()
       run: |
