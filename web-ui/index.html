@@ -993,7 +993,11 @@
                 </div>
                 <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
                     <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 5px;">趋势分析</div>
-                    <div id="trendAssessment" style="font-size: 1rem; color: #2c3e50; font-weight: bold;">-</div>
+                    <div id="trendAssessment" style="font-size: 1rem; color: #2c3e50; font-weight: bold; margin-bottom: 10px;">-</div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="exportTextBtn" style="padding: 6px 12px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;" disabled>导出文字</button>
+                        <button id="exportImageBtn" style="padding: 6px 12px; background: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;" disabled>导出图表</button>
+                    </div>
                 </div>
             </div>
 
@@ -1287,6 +1291,13 @@
             document.getElementById('currentHealth').textContent = stats.currentHealth;
             document.getElementById('perfectStreak').textContent = stats.perfectStreak;
             document.getElementById('trendAssessment').innerHTML = stats.trendDescription;
+
+            // Enable export buttons when data is loaded
+            document.getElementById('exportTextBtn').disabled = false;
+            document.getElementById('exportImageBtn').disabled = false;
+
+            // Store current stats for export
+            window.currentHealthStats = stats;
         }
 
         // 处理健康度文件上传
@@ -2471,6 +2482,88 @@
         // 监听 hash 变化（支持浏览器前进后退）
         window.addEventListener('hashchange', function() {
             loadFromUrlHash();
+        });
+
+        // 导出趋势评估文字
+        document.getElementById('exportTextBtn').addEventListener('click', function() {
+            if (!window.currentHealthStats || !window.currentHealthStats.trendDescription) {
+                alert('没有可导出的趋势评估，请先导入健康度历史文件');
+                return;
+            }
+
+            // 生成导出文本
+            const stats = window.currentHealthStats;
+            const exportText = `AgentSoul 健康度趋势评估
+===============================
+总迭代次数: ${stats.totalIterations}
+平均健康度: ${stats.averageHealth}
+最近 20 次平均: ${stats.recentTwentyAvg}
+当前健康度: ${stats.currentHealth}
+满分连续次数: ${stats.perfectStreak}
+
+${stats.trendDescription.replace(/<[^>]+>/g, '')}
+
+生成时间: ${new Date().toLocaleString('zh-CN')}
+`;
+
+            // 创建下载
+            const blob = new Blob([exportText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `agentsoul-health-trend-${new Date().toISOString().slice(0, 10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // 导出健康度图表为 PNG
+        document.getElementById('exportImageBtn').addEventListener('click', function() {
+            const svg = document.getElementById('healthChart');
+            if (!svg || svg.childNodes.length === 0) {
+                alert('没有可导出的图表，请先导入健康度历史文件');
+                return;
+            }
+
+            // Convert SVG to PNG
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Get SVG dimensions
+            const svgWidth = svg.clientWidth || svg.width.baseVal.value || 800;
+            const svgHeight = svg.clientHeight || svg.height.baseVal.value || 300;
+
+            // Set canvas size with 2x scale for better quality
+            canvas.width = svgWidth * 2;
+            canvas.height = svgHeight * 2;
+
+            const img = new Image();
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            img.onload = function() {
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.scale(2, 2);
+                ctx.drawImage(img, 0, 0);
+                URL.revokeObjectURL(url);
+
+                // Convert to PNG and download
+                canvas.toBlob(function(blob) {
+                    const downloadUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = `agentsoul-health-chart-${new Date().toISOString().slice(0, 10)}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(downloadUrl);
+                }, 'image/png');
+            };
+
+            img.src = url;
         });
     </script>
 </body>
