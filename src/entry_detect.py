@@ -265,6 +265,12 @@ def main() -> None:
         help="输出机器可读的一行统一格式摘要 JSON，适合 CI/脚本消费 (使用标准 HealthSummary schema)",
         default=False,
     )
+    parser.add_argument(
+        "--generate-template",
+        action="store_true",
+        help="根据检测到的环境生成可直接使用的注入步骤模板，输出到标准输出",
+        default=False,
+    )
     args = parser.parse_args()
 
     if args.summary_json:
@@ -319,6 +325,18 @@ def main() -> None:
         print(summary.to_json())
         sys.exit(0)
 
+    if args.generate_template:
+        report = generate_report()
+        cap = report["detected"]
+        assert isinstance(cap, EntryCapability), "cap must be EntryCapability"
+        template = report["injection_template"]
+
+        if template:
+            print(template)
+        else:
+            print(f"No injection template available for environment: {cap.environment}")
+        sys.exit(0)
+
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
         print("""AgentSoul Entry Capability Detector
 
@@ -329,6 +347,7 @@ Usage:
   python src/entry_detect.py
   python -m src.entry_detect --help
   python src/entry_detect.py --summary-json
+  python src/entry_detect.py --generate-template
 
 Exit codes:
   0: Success
