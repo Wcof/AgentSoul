@@ -34,6 +34,8 @@ data/learning/
 
 # Generated persona files for editors
 agent-persona.md
+Agent.md
+memToAgentSoul.md
 .cursorrules
 .windsurfrules
 claudes.md
