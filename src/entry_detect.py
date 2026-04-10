@@ -289,6 +289,12 @@ def main() -> None:
         help="解析分享链接：解析 URL 分享链接中的搜索条件，输出检测结果",
         default=None,
     )
+    parser.add_argument(
+        "--cleanup-memory",
+        action="store_true",
+        help="记忆目录清理：扫描记忆目录，检测重复/损坏/空文件，提供清理选项",
+        default=False,
+    )
     args = parser.parse_args()
 
     if args.summary_json:
@@ -586,6 +592,215 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
         )
         sys.exit(0)
 
+    if args.cleanup_memory:
+        # Memory directory cleanup: scan for duplicate/corrupted/empty files
+        import json
+        import hashlib
+        from pathlib import Path
+
+        # Find memory root directory
+        # Common memory locations
+        memory_candidates = [
+            "data/memory",
+            "../data/memory",
+            "./data/memory",
+            os.path.join(project_root, "data/memory"),
+        ]
+
+        memory_root = None
+        for candidate in memory_candidates:
+            if os.path.isdir(candidate):
+                memory_root = Path(candidate)
+                break
+
+        if memory_root is None:
+            print("❌ 错误：未找到记忆目录，请确认 AgentSoul 是否正确安装")
+            print("预期位置: data/memory/")
+            sys.exit(1)
+
+        # Scan all memory files
+        memory_files = []
+        for ext in ["*.md", "*.json"]:
+            memory_files.extend(memory_root.rglob(ext))
+
+        if not memory_files:
+            print("ℹ️  记忆目录为空，没有文件需要清理")
+            sys.exit(0)
+
+        # Analysis results
+        empty_files: list[Path] = []
+        corrupted_files: list[tuple[Path, str]] = []
+        content_hashes: dict[str, list[Path]] = {}
+        duplicate_groups: list[list[Path]] = []
+
+        # Check each file
+        for file_path in memory_files:
+            try:
+                file_size = file_path.stat().st_size
+                if file_size == 0:
+                    empty_files.append(file_path)
+                    continue
+
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+
+                if not content:
+                    empty_files.append(file_path)
+                    continue
+
+                # Calculate content hash for duplicate detection
+                content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+                if content_hash in content_hashes:
+                    content_hashes[content_hash].append(file_path)
+                else:
+                    content_hashes[content_hash] = [file_path]
+
+            except Exception as e:
+                corrupted_files.append((file_path, str(e)))
+                continue
+
+        # Find duplicate groups (more than one file with same content)
+        for content_hash, files in content_hashes.items():
+            if len(files) > 1:
+                duplicate_groups.append(files)
+
+        # Generate human-readable report
+        print("=" * 60)
+        print(" AgentSoul 记忆目录清理扫描结果")
+        print("=" * 60)
+        print()
+        print(f"扫描目录: {memory_root}")
+        print(f"总文件数: {len(memory_files)}")
+        print()
+
+        if empty_files:
+            print(f"⚠️  空文件 ({len(empty_files)}):")
+            for f in empty_files:
+                print(f"  - {f.relative_to(memory_root)}")
+            print()
+
+        if corrupted_files:
+            print(f"⚠️  损坏/无法读取文件 ({len(corrupted_files)}):")
+            for f, err in corrupted_files:
+                print(f"  - {f.relative_to(memory_root)}: {err}")
+            print()
+
+        if duplicate_groups:
+            print(f"⚠️  重复内容文件 ({len(duplicate_groups)} 组):")
+            for i, group in enumerate(duplicate_groups, 1):
+                print(f"  组 {i}:")
+                for f in group:
+                    print(f"    - {f.relative_to(memory_root)}")
+            print()
+
+        total_issues = len(empty_files) + len(corrupted_files) + sum(len(g) - 1 for g in duplicate_groups)
+
+        if total_issues == 0:
+            print("✅ 未发现问题，所有记忆文件正常且无重复")
+        else:
+            print(f"发现 {total_issues} 个问题文件")
+            print()
+            print("💡 建议操作:")
+            print("  - 空文件: 可以安全删除")
+            print("  - 损坏文件: 建议删除，检查写入过程是否异常")
+            print("  - 重复文件: 保留一个即可，删除其余重复项")
+            print()
+            print("使用 --summary-json 可获取机器可读的统一格式结果")
+
+        print("=" * 60)
+
+        # If summary-json was requested along with cleanup-memory, output JSON
+        if args.summary_json:
+            check_results = []
+
+            # Overall statistics
+            total_files = len(memory_files)
+            empty_count = len(empty_files)
+            corrupted_count = len(corrupted_files)
+            duplicate_count = sum(len(g) - 1 for g in duplicate_groups)
+            total_issues = empty_count + corrupted_count + duplicate_count
+
+            check_results.append(
+                UnifiedCheckResult(
+                    name="扫描统计",
+                    description=f"扫描记忆目录 {memory_root}",
+                    score=100,
+                    passed=True,
+                    issues=[],
+                    recommendations=[f"总文件数: {total_files}, 问题文件数: {total_issues}"],
+                )
+            )
+
+            if empty_files:
+                check_results.append(
+                    UnifiedCheckResult(
+                        name="空文件",
+                        description=f"检测到 {len(empty_files)} 个空文件",
+                        score=100 - len(empty_files) * 5,
+                        passed=True,
+                        issues=[f"{f.relative_to(memory_root)}" for f in empty_files],
+                        recommendations=["空文件可以安全删除"],
+                    )
+                )
+
+            if corrupted_files:
+                issues = [f"{f.relative_to(memory_root)} ({err})" for f, err in corrupted_files]
+                check_results.append(
+                    UnifiedCheckResult(
+                        name="损坏文件",
+                        description=f"检测到 {len(corrupted_files)} 个无法读取的文件",
+                        score=100 - len(corrupted_files) * 10,
+                        passed=len(corrupted_files) < 5,
+                        issues=issues,
+                        recommendations=["损坏文件建议删除，检查写入过程"],
+                    )
+                )
+
+            if duplicate_groups:
+                recommendations = []
+                for i, group in enumerate(duplicate_groups, 1):
+                    recommendations.append(f"组 {i}: 保留 {group[0].relative_to(memory_root)}，删除其余 {len(group) - 1} 个")
+                check_results.append(
+                    UnifiedCheckResult(
+                        name="重复文件",
+                        description=f"检测到 {len(duplicate_groups)} 组重复内容",
+                        score=100 - len(duplicate_groups) * 3,
+                        passed=True,
+                        issues=[f"组 {i+1}: {', '.join(str(f.relative_to(memory_root)) for f in g)}" for i, g in enumerate(duplicate_groups)],
+                        recommendations=recommendations,
+                    )
+                )
+
+            # Calculate overall score
+            if total_issues == 0:
+                overall_score = 100
+                assessment = "极佳：所有记忆文件状态良好，无空文件、无损坏、无重复"
+            else:
+                # Each issue reduces score by 2, minimum 50
+                overall_score = max(50, 100 - total_issues * 2)
+                if overall_score >= 90:
+                    assessment = f"良好：发现 {total_issues} 个问题文件，不影响正常使用"
+                elif overall_score >= 70:
+                    assessment = f"一般：发现 {total_issues} 个问题文件，建议清理"
+                else:
+                    assessment = f"需要注意：发现 {total_issues} 个问题文件，记忆库存在较多重复或损坏"
+
+            handle_summary_output(
+                checker_name="entry_detect-cleanup-memory",
+                overall_score=overall_score,
+                assessment=assessment,
+                timestamp=datetime.now().isoformat(),
+                min_score=None,
+                gate_passed=None,
+                exit_code=0,
+                check_results=check_results,
+                output_path=None,
+                output_format=None,
+            )
+
+        sys.exit(0)
+
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
         print("""AgentSoul Entry Capability Detector
 
@@ -600,6 +815,8 @@ Usage:
   python src/entry_detect.py --precheck
   python src/entry_detect.py --write-starter
   python src/entry_detect.py --parse-url-share <url>
+  python src/entry_detect.py --cleanup-memory
+  python src/entry_detect.py --cleanup-memory --summary-json
 
 Exit codes:
   0: Success
