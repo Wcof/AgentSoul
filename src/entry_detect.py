@@ -399,17 +399,42 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
         assert isinstance(cap, EntryCapability), "cap must be EntryCapability"
 
         # Precheck: check if target files already exist
-        existing_files = []
+        # List of files that install.py would create/modify
         candidate_files = [
-            "config/persona.yaml",
-            "config/behavior.yaml",
-            "CLAUDE.md",
-            ".cursorrules",
-            ".windsurfrules",
+            # Core configuration
+            ("config/persona.yaml", "核心人格配置", True),
+            ("config/behavior.yaml", "行为配置", True),
+            # IDE rules files
+            ("CLAUDE.md", "Claude Code 项目规则", False),
+            (".cursorrules", "Cursor 编辑器规则", False),
+            (".windsurfrules", "Windsurf 编辑器规则", False),
+            # Generated persona package
+            ("agent-persona.md", "完整人格包", False),
+            # Install tracking for rollback
+            (".install-tracker.json", "安装追踪记录（用于回滚）", True),
         ]
-        for f in candidate_files:
+
+        conflicts = []
+        existing_agentsoul = []
+        existing_user = []
+
+        for f, desc, is_core in candidate_files:
             if os.path.exists(f):
-                existing_files.append(f)
+                # Check if this was created by AgentSoul installation
+                is_agentsoul_file = False
+                try:
+                    with open(f, 'r', encoding='utf-8') as f_check:
+                        content = f_check.read(2000)  # Check first 2000 chars
+                        if 'AgentSoul' in content or 'agentsoul' in content.lower():
+                            is_agentsoul_file = True
+                except Exception:
+                    pass
+
+                if is_agentsoul_file:
+                    existing_agentsoul.append(f"{f} ({desc})")
+                else:
+                    existing_user.append(f"{f} ({desc})")
+                conflicts.append(f)
 
         # Create unified check results
         check_results = [
@@ -434,37 +459,55 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
             )
         )
 
-        if existing_files:
-            check_results.append(
-                UnifiedCheckResult(
-                    name="预演检查",
-                    description="检测到现有配置文件",
-                    score=85,
-                    passed=True,
-                    issues=[],
-                    recommendations=[f"Existing configuration files: {', '.join(existing_files)} - these may be overwritten during injection"],
-                )
-            )
+        # Add detailed conflict analysis
+        issues = []
+        recs = []
+        score = 100
+        description = ""
+
+        if not conflicts:
+            description = "未检测到现有配置文件"
+            recs.append("No existing configuration conflicts, ready for injection")
         else:
-            check_results.append(
-                UnifiedCheckResult(
-                    name="预演检查",
-                    description="未检测到现有配置文件",
-                    score=100,
-                    passed=True,
-                    issues=[],
-                    recommendations=["No existing configuration conflicts, ready for injection"],
-                )
+            description = f"检测到 {len(conflicts)} 个现有文件会被安装过程触及"
+            if existing_user:
+                issues.append(f"用户原有文件: {', '.join(existing_user)} - 这些文件会被覆盖")
+                # Lower score for user files conflict
+                score -= 5 * len(existing_user)
+            if existing_agentsoul:
+                recs.append(f"AgentSoul 自有文件: {', '.join(existing_agentsoul)} - 这些会被更新/覆盖，属于正常操作")
+
+            if existing_user:
+                recs.append(f"⚠️  请确认是否允许覆盖上述 {len(existing_user)} 个用户原有文件")
+                recs.append("如果不确认，建议先备份这些文件再继续安装")
+
+            # Score can't go below 50
+            score = max(score, 50)
+
+        check_results.append(
+            UnifiedCheckResult(
+                name="预演检查",
+                description=description,
+                score=score,
+                passed=True,
+                issues=issues,
+                recommendations=recs,
             )
+        )
 
         # Calculate overall score
-        overall_score = 100 if len(existing_files) == 0 and report["agentsoul_installed"] else (85 if existing_files else 80)
         if report["agentsoul_installed"]:
-            if len(existing_files) == 0:
+            if not conflicts:
+                overall_score = 100
                 assessment = "极佳：预演完成，无冲突，准备就绪可以注入。"
+            elif not existing_user:
+                overall_score = score
+                assessment = f"良好：预演完成，检测到 {len(existing_agentsoul)} 个 AgentSoul 自有文件，会被正常更新。"
             else:
-                assessment = f"良好：预演完成，检测到 {len(existing_files)} 个现有配置文件，注入可能覆盖，请确认后继续。"
+                overall_score = score
+                assessment = f"可继续：预演完成，检测到 {len(existing_user)} 个用户原有文件会被覆盖，请确认备份后再继续。"
         else:
+            overall_score = 80 if conflicts else 85
             assessment = "可使用：环境已识别，但未检测到 AgentSoul 安装，需要先安装 AgentSoul。"
 
         summary = HealthSummary(
