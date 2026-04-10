@@ -283,6 +283,12 @@ def main() -> None:
         help="生成启动模板：根据检测到的环境写入完整 starter-prompt.md 文件到当前目录",
         default=False,
     )
+    parser.add_argument(
+        "--parse-url-share",
+        type=str,
+        help="解析分享链接：解析 URL 分享链接中的搜索条件，输出检测结果",
+        default=None,
+    )
     args = parser.parse_args()
 
     if args.summary_json:
@@ -335,6 +341,63 @@ def main() -> None:
             output_format=None,
         )
         sys.exit(0)
+
+    if args.parse_url_share is not None:
+        # Parse URL share link and extract search conditions
+        url = args.parse_url_share
+        # Extract hash part from URL
+        hash_part = None
+        if '#' in url:
+            hash_part = url.split('#', 1)[1]
+        else:
+            # If input is just the hash part directly
+            if len(url) > 0 and url[0] != '#':
+                hash_part = url
+            else:
+                hash_part = url[1:]
+
+        if not hash_part:
+            print("❌ 错误：无法从 URL 中提取 hash 部分，请确保输入是完整的分享链接")
+            sys.exit(1)
+
+        try:
+            import json
+            import base64
+            # Base64 decode
+            json_str_bytes = base64.b64decode(hash_part)
+            json_str = json_str_bytes.decode('utf-8')
+            # URL decode
+            from urllib.parse import unquote
+            json_str = unquote(json_str)
+            share_data = json.loads(json_str)
+
+            # Extract search conditions
+            search_query = share_data.get('searchQuery', '')
+            active_tag = share_data.get('activeTag', None)
+
+            print("=" * 60)
+            print(" AgentSoul URL 分享链接解析结果")
+            print("=" * 60)
+            print()
+            print(f"🔍 搜索关键词: {search_query if search_query else '<空>'}")
+            print(f"🏷️ 活跃标签: {active_tag if active_tag is not None else '<无>'}")
+            print()
+            print("📋 搜索条件:")
+            if search_query:
+                print(f"  - 关键词搜索: {search_query}")
+            if active_tag:
+                print(f"  - 标签筛选: {active_tag}")
+            print()
+            print("ℹ️  该分享链接可在 AgentSoul Web UI 中打开，自动加载相同搜索条件")
+            print("    Web UI 位置: web-ui/index.html")
+            print()
+            print("✅ 解析成功")
+            print("=" * 60)
+            sys.exit(0)
+        except Exception as e:
+            print(f"❌ 解析失败: {e}")
+            print("请检查分享链接是否完整正确")
+            sys.exit(1)
 
     if args.generate_template:
         report = generate_report()
@@ -536,6 +599,7 @@ Usage:
   python src/entry_detect.py --generate-template
   python src/entry_detect.py --precheck
   python src/entry_detect.py --write-starter
+  python src/entry_detect.py --parse-url-share <url>
 
 Exit codes:
   0: Success
