@@ -1467,6 +1467,7 @@ def main():
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
   python3 install.py --openclaw --scope global  # OpenClaw 全局安装
   python3 install.py --uninstall            # 卸载 Claude CLI 中的 AgentSoul MCP
+  python3 install.py --rollback            # 列出最近安装尝试并手动回滚
 """
     parser = argparse.ArgumentParser(
         description="AgentSoul 人格插件安装脚本",
@@ -1481,6 +1482,7 @@ def main():
     parser.add_argument("--openclaw", action="store_true", help="安装 OpenClaw 人格插件")
     parser.add_argument("--scope", type=str, choices=["current", "global"], help="OpenClaw 装载范围")
     parser.add_argument("--uninstall", action="store_true", help="卸载 Claude CLI 中的 AgentSoul MCP")
+    parser.add_argument("--rollback", action="store_true", help="列出最近安装尝试并手动回滚")
 
     args = parser.parse_args()
 
@@ -1504,6 +1506,10 @@ def main():
         uninstall_mcp()
         return
 
+    if args.rollback:
+        list_and_perform_rollback()
+        return
+
     choice = show_menu()
 
     if choice == "0":
@@ -1523,6 +1529,175 @@ def main():
         uninstall_mcp()
 
 
+def get_install_tracker_path() -> Path:
+    """Get path to installation tracker file."""
+    return PROJECT_ROOT / ".install-tracker.json"
+
+
+def load_install_history() -> List[Dict[str, Any]]:
+    """Load installation history from tracker file."""
+    tracker_path = get_install_tracker_path()
+    if not tracker_path.exists():
+        return []
+    try:
+        with open(tracker_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # Ensure it's a list
+        if not isinstance(data, list):
+            return []
+        return data
+    except Exception:
+        return []
+
+
+def save_install_record(tracker: InstallationRollback) -> None:
+    """Save installation record to history for potential future rollback."""
+    tracker_path = get_install_tracker_path()
+
+    # Load existing history
+    history = load_install_history()
+
+    # Create new record
+    record: Dict[str, Any] = {
+        "timestamp": datetime.now().isoformat(),
+        "created_files": [str(p) for p in tracker._created_files],
+        "modified_files": [(str(p), original_content.hex()) for p, original_content in tracker._modified_files],
+        "created_dirs": [str(p) for p in tracker._created_dirs],
+    }
+
+    # Add to history
+    history.append(record)
+
+    # Keep only last 10 records to avoid unlimited growth
+    if len(history) > 10:
+        history = history[-10:]
+
+    # Save back
+    try:
+        with open(tracker_path, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        log(f"⚠️  Failed to save installation tracker: {e}", "WARN")
+
+
+def rollback_from_record(record: Dict[str, Any]) -> bool:
+    """Perform rollback from a saved installation record."""
+    success = True
+    tracker = InstallationRollback()
+
+    # Rebuild the tracker from saved record
+    # For created files: just add to the list for deletion
+    for file_path_str in record.get("created_files", []):
+        file_path = Path(file_path_str).resolve()
+        if file_path.exists():
+            tracker._created_files.append(file_path)
+
+    # For modified files: we need to decode the original content and add to list
+    for file_path_str, original_content_hex in record.get("modified_files", []):
+        file_path = Path(file_path_str).resolve()
+        original_content = bytes.fromhex(original_content_hex)
+        tracker._modified_files.append((file_path, original_content))
+
+    # For created directories
+    for dir_path_str in record.get("created_dirs", []):
+        dir_path = Path(dir_path_str).resolve()
+        tracker._created_dirs.append(dir_path)
+
+    # Perform rollback
+    if not tracker.has_changes():
+        log("✓ No changes to rollback in this record", "OK")
+        return True
+
+    log(f"⚠️  Starting rollback from installation record {record['timestamp']}", "WARN")
+    success = tracker.rollback()
+
+    if success:
+        log("✅ Rollback completed successfully", "OK")
+    else:
+        log("⚠️  Some files/directories could not be rolled back completely", "WARN")
+
+    return success
+
+
+def remove_record_from_history(record_index: int) -> None:
+    """Remove a successfully rolled back record from history."""
+    tracker_path = get_install_tracker_path()
+    history = load_install_history()
+    if 0 <= record_index < len(history):
+        del history[record_index]
+        try:
+            with open(tracker_path, 'w', encoding='utf-8') as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            log(f"⚠️  Failed to update installation tracker after rollback: {e}", "WARN")
+
+
+def list_and_perform_rollback() -> None:
+    """List recent installation attempts and let user select one for rollback."""
+    history = load_install_history()
+
+    if not history:
+        log("ℹ️  No installation history found for rollback", "INFO")
+        return
+
+    print("\n╔══════════════════════════════════════════════════════════════════╗")
+    print("║         AgentSoul · 安装历史回滚                                 ║")
+    print("╚══════════════════════════════════════════════════════════════════╝\n")
+    print(f"找到 {len(history)} 条最近安装记录:\n")
+
+    for i, record in enumerate(history):
+        timestamp = record.get('timestamp', 'unknown time')
+        created_count = len(record.get('created_files', []))
+        modified_count = len(record.get('modified_files', []))
+        print(f"  [{i+1}] {timestamp}")
+        print(f"       - 新建文件: {created_count}, 修改文件: {modified_count}\n")
+
+    while True:
+        choice = input(f"请选择要回滚的安装 [1-{len(history)}, 输入 0 取消]: ").strip()
+        if not choice:
+            log("已取消回滚", "INFO")
+            return
+
+        try:
+            idx = int(choice) - 1
+            if idx == -1:
+                log("已取消回滚", "INFO")
+                return
+            if 0 <= idx < len(history):
+                break
+            print(f"❌ 无效选项，请输入 0 到 {len(history)} 之间的数字")
+        except ValueError:
+            print("❌ 请输入有效的数字")
+
+    # Confirm with user
+    record = history[idx]
+    timestamp = record.get('timestamp', 'unknown')
+    created_count = len(record.get('created_files', []))
+    modified_count = len(record.get('modified_files', []))
+
+    print(f"\n⚠️  即将回滚这次安装：{timestamp}")
+    print(f"   - 将删除 {created_count} 个新建文件")
+    print(f"   - 将恢复 {modified_count} 个被修改文件到原始内容")
+    print(f"   - 将删除 {len(record.get('created_dirs', []))} 个新建空目录\n")
+
+    while True:
+        confirm = input("确认执行回滚？[y/N]: ").strip().lower()
+        if confirm in ["y", "yes"]:
+            break
+        elif confirm in ["n", "no", ""]:
+            log("已取消回滚", "INFO")
+            return
+        else:
+            print("❌ 无效选项，请输入 y 或 n")
+
+    # Perform rollback
+    success = rollback_from_record(record)
+
+    if success:
+        # Remove the record from history after successful rollback
+        remove_record_from_history(idx)
+
+
 def ask_session_scope() -> str:
     print("\n请选择装载范围：\n")
     print("1. 当前 Session（仅本次会话，重启后需重新装载）")
@@ -1538,6 +1713,11 @@ def ask_session_scope() -> str:
 if __name__ == "__main__":
     try:
         main()
+        # If we get here, installation completed successfully
+        # Any changes after config initialization are already tracked by the global tracker
+        tracker = get_rollback_tracker()
+        if tracker.has_changes():
+            save_install_record(tracker)
     except KeyboardInterrupt:
         print("\n\n⚠️  Installation interrupted by user")
         print("\n⚠️  安装被用户中断")
