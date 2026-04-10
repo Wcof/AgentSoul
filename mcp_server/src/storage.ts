@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import crypto from 'crypto';
-import { safePath, readFile, writeFile, sanitizeTopicName, safeGet, toList } from './lib/utils.js';
+import { safePath, readFile, writeFile, sanitizeTopicName, safeGet, toList, logWAL } from './lib/utils.js';
 import { PROJECT_ROOT } from './lib/paths.js';
 import { SoulState, PersonaConfig, MemoryConflict } from './types.js';
 
@@ -316,7 +316,13 @@ export class StorageManager {
       },
     });
 
-    return writeFile(configPath, yamlContent);
+    const success = writeFile(configPath, yamlContent);
+    logWAL('writePersonaConfig', 'persona.yaml', configPath, success, {
+      agent_name: config.ai.name,
+      master_name: config.master.name,
+    });
+
+    return success;
   }
 
   /**
@@ -653,6 +659,7 @@ export class StorageManager {
     const checkedPath = safePath(statePath, DATA_ROOT);
     if (!checkedPath) {
       console.error('Path traversal detected in writeSoulState');
+      logWAL('writeSoulState', 'state_vector', statePath, false, { error: 'Path traversal detected' });
       return false;
     }
 
@@ -669,6 +676,13 @@ export class StorageManager {
       // If OpenClaw is detected, sync write to it
       this.syncWriteToOpenClaw('soul/soul_variable/state_vector.json', JSON.stringify(state, null, 2));
     }
+
+    logWAL('writeSoulState', 'state_vector', checkedPath, success, {
+      version: state.version,
+      pleasure: state.pleasure,
+      arousal: state.arousal,
+      dominance: state.dominance,
+    });
 
     return success;
   }
@@ -1083,6 +1097,7 @@ export class StorageManager {
     const checkedPath = safePath(filePath, DATA_ROOT);
     if (!checkedPath) {
       console.error(`Path traversal detected in write${period}Memory`);
+      logWAL(`write${period}Memory`, identifier, filePath, false, { error: 'Path traversal detected' });
       return false;
     }
 
@@ -1097,6 +1112,11 @@ export class StorageManager {
         this.triggerAutomaticArchiving(identifier);
       }
     }
+
+    logWAL(`write${period}Memory`, identifier, checkedPath, success, {
+      period,
+      content_length: content.length,
+    });
 
     return success;
   }
@@ -1236,6 +1256,7 @@ export class StorageManager {
     const checkedPath = safePath(filePath, DATA_ROOT);
     if (!checkedPath) {
       console.error('Path traversal detected in writeTopicMemory');
+      logWAL('writeTopicMemory', topic, filePath, false, { error: 'Path traversal detected' });
       return false;
     }
 
@@ -1245,6 +1266,11 @@ export class StorageManager {
     if (success) {
       this.syncWriteToOpenClaw(`memory/topic/${sanitized}.md`, content);
     }
+
+    logWAL('writeTopicMemory', topic, checkedPath, success, {
+      sanitized_name: sanitized,
+      content_length: content.length,
+    });
 
     return success;
   }
@@ -1303,11 +1329,13 @@ export class StorageManager {
     const checkedArchive = safePath(archivePath, DATA_ROOT);
     if (!checkedActive || !checkedArchive) {
       console.error('Path traversal detected in archiveTopic');
+      logWAL('archiveTopic', topic, activePath, false, { error: 'Path traversal detected' });
       return false;
     }
 
     if (!fs.existsSync(checkedActive)) {
       console.error(`Topic ${topic} not found`);
+      logWAL('archiveTopic', topic, activePath, false, { error: 'Topic not found' });
       return false;
     }
 
@@ -1341,9 +1369,16 @@ export class StorageManager {
         }
       }
 
+      logWAL('archiveTopic', topic, activePath, true, {
+        archived_to: path.relative(PROJECT_ROOT, archivePath),
+      });
+
       return true;
     } catch (e) {
       console.error('Failed to archive topic:', e);
+      logWAL('archiveTopic', topic, activePath, false, {
+        error: (e as Error).message,
+      });
       return false;
     }
   }

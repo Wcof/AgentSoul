@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { EntityMemory } from '../lib/entity-memory.js';
+import { EntityMemory, EntityFact, Entity } from '../lib/entity-memory.js';
 import config from '../lib/config.js';
 import type { ToolResponse } from '../types.js';
 import type { EntityType } from '../types.js';
@@ -54,6 +54,28 @@ const EntityPruneSchema = z.object({
   max_age_days: z.number().optional(),
 });
 
+/** 添加时间事实的输入验证 Schema */
+const EntityFactAddSchema = z.object({
+  /** 实体名称 */
+  name: z.string().min(1),
+  /** 属性/谓词名称 */
+  attribute: z.string().min(1),
+  /** 事实值 */
+  value: z.string().min(1),
+  /** 置信度 0-1，默认为 1.0 */
+  confidence: z.number().min(0).max(1).optional(),
+  /** 事实来源引用（来自哪个记忆/主题） */
+  source_ref: z.string().optional(),
+});
+
+/** 失效事实的输入验证 Schema */
+const EntityFactInvalidateSchema = z.object({
+  /** 实体名称 */
+  name: z.string().min(1),
+  /** 属性/谓词名称，要失效此属性所有当前有效事实 */
+  attribute: z.string().min(1),
+});
+
 /** 实体插入/更新的输入类型 */
 type EntityUpsertInput = z.infer<typeof EntityUpsertSchema>;
 /** 实体获取的输入类型 */
@@ -66,6 +88,10 @@ type EntityListInput = z.infer<typeof EntityListSchema>;
 type EntityDeleteInput = z.infer<typeof EntityDeleteSchema>;
 /** 实体清理的输入类型 */
 type EntityPruneInput = z.infer<typeof EntityPruneSchema>;
+/** 添加时间事实的输入类型 */
+type EntityFactAddInput = z.infer<typeof EntityFactAddSchema>;
+/** 失效事实的输入类型 */
+type EntityFactInvalidateInput = z.infer<typeof EntityFactInvalidateSchema>;
 
 /** 实体记忆实例的单例缓存 */
 let _entityMemory: EntityMemory | null = null;
@@ -88,22 +114,15 @@ function getEntityMemory(): EntityMemory {
  */
 export async function handleEntityUpsert(input: EntityUpsertInput): Promise<ToolResponse> {
   const memory = getEntityMemory();
-  // Convert attributes to string as required by the type
-  const convertedAttributes: Record<string, string> = {};
-  if (input.attributes) {
-    for (const [k, v] of Object.entries(input.attributes)) {
-      convertedAttributes[k] = String(v);
-    }
-  }
 
   const result = memory.upsert({
     type: input.type as EntityType,
     name: input.name,
     description: '',
     aliases: [],
-    attributes: convertedAttributes,
+    attributes: input.attributes || {},
     tags: [],
-  });
+  } as unknown as Omit<Entity, 'created_at' | 'updated_at' | 'accessed_at'>);
   return {
     content: [{
       type: 'text',
@@ -197,6 +216,50 @@ export async function handleEntityPrune(input: EntityPruneInput): Promise<ToolRe
   };
 }
 
+/**
+ * 处理添加时间事实请求
+ * 自动失效该属性当前所有有效事实，添加新事实
+ * @param input - 包含实体名称、属性、值的输入对象
+ * @returns 工具响应，包含操作结果的 JSON 字符串
+ */
+export async function handleEntityFactAdd(input: EntityFactAddInput): Promise<ToolResponse> {
+  const memory = getEntityMemory();
+  const result = memory.addFact(
+    input.name,
+    input.attribute,
+    input.value,
+    input.confidence,
+    input.source_ref || null
+  );
+  return {
+    content: [{
+      type: 'text',
+      text: result
+        ? JSON.stringify({ success: true, entity: result})
+        : JSON.stringify({ success: false, error: 'Entity not found' }),
+    }],
+  };
+}
+
+/**
+ * 处理失效事实请求
+ * 失效实体指定属性所有当前有效事实
+ * @param input - 包含实体名称和属性的输入对象
+ * @returns 工具响应，包含失效数量的 JSON 字符串
+ */
+export async function handleEntityFactInvalidate(input: EntityFactInvalidateInput): Promise<ToolResponse> {
+  const memory = getEntityMemory();
+  const result = memory.invalidateFacts(input.name, input.attribute);
+  return {
+    content: [{
+      type: 'text',
+      text: result !== null
+        ? JSON.stringify({ success: true, invalidated: result })
+        : JSON.stringify({ success: false, error: 'Entity not found' }),
+    }],
+  };
+}
+
 export {
   EntityUpsertSchema,
   EntityGetSchema,
@@ -204,4 +267,6 @@ export {
   EntityListSchema,
   EntityDeleteSchema,
   EntityPruneSchema,
+  EntityFactAddSchema,
+  EntityFactInvalidateSchema,
 };

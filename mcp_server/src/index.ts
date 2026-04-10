@@ -135,7 +135,21 @@ import {
   handleEntityDelete,
   EntityPruneSchema,
   handleEntityPrune,
+  EntityFactAddSchema,
+  handleEntityFactAdd,
+  EntityFactInvalidateSchema,
+  handleEntityFactInvalidate,
 } from './tools/entity-memory.js';
+import {
+  VerbatimAddSchema,
+  handleVerbatimAdd,
+  VerbatimGetSchema,
+  handleVerbatimGet,
+  VerbatimSearchSchema,
+  handleVerbatimSearch,
+  VerbatimDeleteSchema,
+  handleVerbatimDelete,
+} from './tools/verbatim-evidence.js';
 
 import {
   KVCacheSaveSchema,
@@ -307,6 +321,12 @@ const ALL_TOOLS: ToolMetadata[] = [
   { name: 'entity_list', fallbackDescription: 'List all entities, optionally filtered by type.', schema: EntityListSchema },
   { name: 'entity_delete', fallbackDescription: 'Delete an entity by name.', schema: EntityDeleteSchema },
   { name: 'entity_prune', fallbackDescription: 'Prune old entities not mentioned within the specified days.', schema: EntityPruneSchema },
+  { name: 'entity_fact_add', fallbackDescription: 'Add a new temporal fact for an attribute. Automatically invalidates any currently valid fact.', schema: EntityFactAddSchema },
+  { name: 'entity_fact_invalidate', fallbackDescription: 'Invalidate all currently valid facts for a specific attribute on an entity.', schema: EntityFactInvalidateSchema },
+  { name: 'verbatim_add', fallbackDescription: 'Add a verbatim evidence fragment - stores original unchanged text with metadata.', schema: VerbatimAddSchema },
+  { name: 'verbatim_get', fallbackDescription: 'Get a verbatim evidence fragment by ID.', schema: VerbatimGetSchema },
+  { name: 'verbatim_search', fallbackDescription: 'Search verbatim evidence fragments by keyword text with optional filtering.', schema: VerbatimSearchSchema },
+  { name: 'verbatim_delete', fallbackDescription: 'Delete a verbatim evidence fragment.', schema: VerbatimDeleteSchema },
   // KV-Cache tools
   { name: 'kv_cache_save', fallbackDescription: 'Save a session snapshot to the 3-tier KV-Cache. Snapshots are automatically tiered (hot/warm/cold) and compressed.', schema: KVCacheSaveSchema },
   { name: 'kv_cache_load', fallbackDescription: 'Load the most recent session snapshot for a project with automatic token budget trimming.', schema: KVCacheLoadSchema },
@@ -459,6 +479,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleEntityDelete(EntityDeleteSchema.parse(args));
     case 'entity_prune':
       return handleEntityPrune(EntityPruneSchema.parse(args));
+    case 'entity_fact_add':
+      return handleEntityFactAdd(EntityFactAddSchema.parse(args));
+    case 'entity_fact_invalidate':
+      return handleEntityFactInvalidate(EntityFactInvalidateSchema.parse(args));
+    case 'verbatim_add':
+      return handleVerbatimAdd(VerbatimAddSchema.parse(args));
+    case 'verbatim_get':
+      return handleVerbatimGet(VerbatimGetSchema.parse(args));
+    case 'verbatim_search':
+      return handleVerbatimSearch(VerbatimSearchSchema.parse(args));
+    case 'verbatim_delete':
+      return handleVerbatimDelete(VerbatimDeleteSchema.parse(args));
 
     // KV-Cache tools
     case 'kv_cache_save':

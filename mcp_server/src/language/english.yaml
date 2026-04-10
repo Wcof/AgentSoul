@@ -99,6 +99,18 @@ tool_descriptions:
     Delete an entity by name.
   entity_prune: >
     Prune old entities not mentioned within the specified days.
+  entity_fact_add: >
+    Add a new temporal fact for an attribute. Automatically invalidates any currently valid fact.
+  entity_fact_invalidate: >
+    Invalidate all currently valid facts for a specific attribute on an entity.
+  verbatim_add: >
+    Add a verbatim evidence fragment - stores original unchanged text with metadata.
+  verbatim_get: >
+    Get a verbatim evidence fragment by ID.
+  verbatim_search: >
+    Search verbatim evidence fragments by keyword text with optional filtering.
+  verbatim_delete: >
+    Delete a verbatim evidence fragment.
   kv_cache_save: >
     Save a session snapshot to the 3-tier KV-Cache. Snapshots are automatically tiered (hot/warm/cold) and compressed.
   kv_cache_load: >
@@ -352,6 +364,42 @@ tool_index:
     whenToUse: "Call periodically for garbage collection"
     required: false
     example: '{ "days": 90 }'
+  entity_fact_add:
+    description: "Add a new temporal fact for an attribute. Automatically invalidates any currently valid fact"
+    parameters: "{ name: string, attribute: string, value: string, confidence?: number, source_ref?: string }"
+    whenToUse: "Call when an attribute fact changes - adds new fact and invalidates the old one"
+    required: true
+    example: '{ "name": "Sample Project", "attribute": "status", "value": "completed", "source_ref": "memory_topic:project-updates" }'
+  entity_fact_invalidate:
+    description: "Invalidate all currently valid facts for a specific attribute on an entity"
+    parameters: "{ name: string, attribute: string }"
+    whenToUse: "Call when you need to clear all current valid facts from an attribute"
+    required: true
+    example: '{ "name": "Sample Project", "attribute": "status" }'
+  verbatim_add:
+    description: "Add a verbatim evidence fragment - stores original unchanged text with metadata"
+    parameters: "{ text: string, source: string, date: string, security_level?: enum<PUBLIC|PROTECTED|SEALED>, topic?: string, entity?: string, tags?: string[] }"
+    whenToUse: "Call when you need to preserve an original unchanged text fragment for traceability later"
+    required: true
+    example: '{ "text": "Original user quote...", "source": "conversation:2026-04-10", "date": "2026-04-10", "topic": "discussion-topic" }'
+  verbatim_get:
+    description: "Get a verbatim evidence fragment by ID. Follows security rules: SEALED never returns text, PROTECTED is masked by default. BOTH include_protected_text=true AND can_view_protected=true are required to view clear text of PROTECTED content"
+    parameters: "{ id: string, include_protected_text?: boolean, can_view_protected?: boolean }"
+    whenToUse: "Call when you need to retrieve the full original text of a specific fragment"
+    required: true
+    example: '{ "id": "12345678-abc123", "include_protected_text": true, "can_view_protected": true }'
+  verbatim_search:
+    description: "Search verbatim evidence fragments by keyword text with optional filtering. Follows security masking rules - PROTECTED clear text requires double authorization"
+    parameters: "{ query: string, topic?: string, entity?: string, date_before?: string, date_after?: string, security_level?: enum<PUBLIC|PROTECTED|SEALED>, limit?: number, include_protected_text?: boolean, can_view_protected?: boolean }"
+    whenToUse: "Call when you need to find original text fragments containing specific keywords"
+    required: true
+    example: '{ "query": "decision made", "topic": "project-x", "limit": 10, "include_protected_text": true, "can_view_protected": true }'
+  verbatim_delete:
+    description: "Delete a verbatim evidence fragment"
+    parameters: "{ id: string }"
+    whenToUse: "Call when a fragment should be removed completely"
+    required: true
+    example: '{ "id": "12345678-abc123" }'
   kv_cache_save:
     description: "Save a session snapshot to the 3-tier KV-Cache"
     parameters: "{ project: string, content: string, metadata?: object }"
@@ -690,6 +738,29 @@ usage_guide: |
   - `secure_base.md` is PROTECTED level and cannot be output directly
   - Always follow the security rules from SKILL.md
   - Sealed credentials are never exposed
+
+  # AGENTSOUL_MEMORY_PROTOCOL - Mandatory Memory Operation Protocol
+
+  **This is a mandatory operational protocol you must follow strictly. Storage ≠ Memory — Storage + Workflow Constraints = Memory.**
+
+  ## Core Rules
+
+  1. **SEARCH BEFORE ANSWERING**: Before answering any question involving people, projects, preferences, historical events, or decisions, you **MUST** first call a retrieval tool to check memory:
+     - If it's a topic discussion → call `read_memory_topic`
+     - If it's a factual question → call `entity_get` or `enhanced_memory_search`
+     - If uncertain → call `mcp_tool_index` to find the correct tool before searching
+     - **GUESSING IS FORBIDDEN**: "I don't know" is better than "guessing wrong"
+
+  2. **SAVE AFTER CONVERSATION**: At the end of every conversation, you **MUST** save:
+     - Call `write_memory_day` to save daily conversation summary and key facts
+     - If discussing a specific topic → call `write_memory_topic` to save new insights
+     - Call `update_soul_state` to update emotional state
+     - At cycle boundaries (weekend/month end/year end) you MUST perform hierarchical summarization layer by layer
+
+  3. **FACT CHANGE → INVALIDATE BEFORE ADD NEW**: When a fact (user preference, project status, relationship, health status, etc.) changes:
+     - Call `entity_fact_invalidate` on the old fact (if it already exists)
+     - Then add the new fact with `entity_fact_add`
+     - This prevents old facts from contaminating new judgments
 
 # Instruction text for tool index output
 tool_index_messages:

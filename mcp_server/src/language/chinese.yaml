@@ -99,6 +99,18 @@ tool_descriptions:
     按名称删除实体。
   entity_prune: >
     修剪指定天数内未提及的旧实体。
+  entity_fact_add: >
+    添加一个新的时态事实，自动失效该属性当前所有有效事实。
+  entity_fact_invalidate: >
+    失效实体指定属性的所有当前有效事实。
+  verbatim_add: >
+    添加原文证据片段，存储原始未修改的文本和元数据。
+  verbatim_get: >
+    根据 ID 获取原文证据片段。
+  verbatim_search: >
+    按关键词搜索原文证据片段，支持可选过滤。
+  verbatim_delete: >
+    删除原文证据片段。
   kv_cache_save: >
     将会话快照保存到 3 层 KV-Cache。快照自动分层（热/温/冷）并压缩。
   kv_cache_load: >
@@ -352,6 +364,42 @@ tool_index:
     whenToUse: "定期进行垃圾回收时调用"
     required: false
     example: '{ "days": 90 }'
+  entity_fact_add:
+    description: "添加一个新的时态事实，自动失效该属性当前所有有效事实"
+    parameters: "{ name: string, attribute: string, value: string, confidence?: number, source_ref?: string }"
+    whenToUse: "当属性事实发生变化，需要添加新事实并使旧事实失效时调用"
+    required: true
+    example: '{ "name": "Sample Project", "attribute": "status", "value": "completed", "source_ref": "memory_topic:project-updates" }'
+  entity_fact_invalidate:
+    description: "失效实体指定属性的所有当前有效事实"
+    parameters: "{ name: string, attribute: string }"
+    whenToUse: "当需要清空某个属性的所有当前有效事实时调用"
+    required: true
+    example: '{ "name": "Sample Project", "attribute": "status" }'
+  verbatim_add:
+    description: "添加原文证据片段，存储原始未修改的文本和元数据"
+    parameters: "{ text: string, source: string, date: string, security_level?: enum<PUBLIC|PROTECTED|SEALED>, topic?: string, entity?: string, tags?: string[] }"
+    whenToUse: "当你需要保留原始文本片段用于将来可追溯时调用"
+    required: true
+    example: '{ "text": "Original user quote...", "source": "conversation:2026-04-10", "date": "2026-04-10", "topic": "discussion-topic" }'
+  verbatim_get:
+    description: "根据 ID 获取原文证据片段，遵循安全级别规则：SEALED 永不明文返回，PROTECTED 默认掩码，必须同时请求 include_protected_text=true AND can_view_protected=true 才可查看明文"
+    parameters: "{ id: string, include_protected_text?: boolean, can_view_protected?: boolean }"
+    whenToUse: "当你需要获取特定片段的完整内容时调用"
+    required: true
+    example: '{ "id": "12345678-abc123", "include_protected_text": true, "can_view_protected": true }'
+  verbatim_search:
+    description: "按关键词搜索原文证据片段，支持可选过滤，遵循安全级别掩码规则，PROTECTED 明文需要双授权"
+    parameters: "{ query: string, topic?: string, entity?: string, date_before?: string, date_after?: string, security_level?: enum<PUBLIC|PROTECTED|SEALED>, limit?: number, include_protected_text?: boolean, can_view_protected?: boolean }"
+    whenToUse: "当你需要查找包含特定关键词的原文片段时调用"
+    required: true
+    example: '{ "query": "decision made", "topic": "project-x", "limit": 10, "include_protected_text": true, "can_view_protected": true }'
+  verbatim_delete:
+    description: "删除原文证据片段"
+    parameters: "{ id: string }"
+    whenToUse: "当片段应该被完全移除时调用"
+    required: true
+    example: '{ "id": "12345678-abc123" }'
   kv_cache_save:
     description: "将会话快照保存到 3 层 KV-Cache"
     parameters: "{ project: string, content: string, metadata?: object }"
@@ -659,6 +707,29 @@ usage_guide: |
   - 归档主题：通过 `archive_memory_topic` 移至归档
   - **准入规则**：同一主题出现 ≥ 3 次 → 自动升级为独立 Topic 记忆
   - **归档规则**：主题完成 或 连续 3 个月无更新 → 必须归档
+
+  # AGENTSOUL_MEMORY_PROTOCOL - 记忆操作强制协议
+
+  **这是必须严格遵守的操作准则。存储不是记忆 — 存储 + 工作流程约束 = 记忆。**
+
+  ## 核心规则
+
+  1. **先查后答**：回答涉及任何人、项目、偏好、历史事件、决策前，**必须**先调用检索工具检查记忆：
+     - 如果是主题讨论 → 调用 `read_memory_topic`
+     - 如果是事实问题 → 调用 `entity_get` 或 `enhanced_memory_search`
+     - 如果不确定 → 调用 `mcp_tool_index` 找到正确工具再搜索
+     - **禁止猜测**："不知道"比"猜错"好
+
+  2. **会后保存**：每次对话结束，**必须**保存：
+     - 调用 `write_memory_day` 保存当日对话摘要和关键事实
+     - 如果讨论特定主题 → 调用 `write_memory_topic` 保存新见解
+     - 调用 `update_soul_state` 更新情绪状态
+     - 到周期节点（周末/月末/年末）必须执行逐层归纳
+
+  3. **事实变更 → 先 invalidate 再加新**：当一个事实（用户偏好、项目状态、关系、健康状况等）发生变化：
+     - 对旧事实调用 `entity_fact_invalidate`（如果已存在）
+     - 然后添加新事实 `entity_fact_add`
+     - 这样旧事实不会污染新判断
 
   ## 强制工具调用规则
 
