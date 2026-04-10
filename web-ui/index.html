@@ -1427,10 +1427,15 @@
             // 分组显示，按键降序排列（最新的在前）
             const sortedKeys = Object.keys(groups).sort().reverse();
 
-            sortedKeys.forEach(key => {
+            sortedKeys.forEach((key, index) => {
                 const group = groups[key];
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'memory-group';
+                // 默认只展开第一个（最新）分组，其他都收起
+                // 收起时不渲染DOM，点击展开后才渲染，减少初始DOM节点数
+                if (index > 0) {
+                    groupDiv.classList.add('collapsed');
+                }
                 groupDiv.innerHTML = `
                     <div class="memory-group-header">
                         <span>
@@ -1445,22 +1450,45 @@
                 // 点击折叠/展开
                 const header = groupDiv.querySelector('.memory-group-header');
                 header.addEventListener('click', () => {
+                    const wasCollapsed = groupDiv.classList.contains('collapsed');
                     groupDiv.classList.toggle('collapsed');
+                    // 如果是从收起变为展开，并且内容还没有渲染，则延迟渲染记忆项
+                    if (wasCollapsed) {
+                        const contentDiv = groupDiv.querySelector('.memory-group-content');
+                        if (contentDiv.children.length === 0) {
+                            // 懒渲染：展开时才创建DOM节点
+                            group.items.forEach(name => {
+                                const item = document.createElement('div');
+                                item.className = 'memory-item';
+                                item.dataset.name = name;
+                                const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
+                                item.innerHTML = `
+                                    <div class="memory-date">${name}</div>
+                                    <div class="memory-preview">${preview}</div>
+                                `;
+                                item.addEventListener('click', () => selectMemory(name));
+                                contentDiv.appendChild(item);
+                            });
+                        }
+                    }
                 });
 
                 const contentDiv = groupDiv.querySelector('.memory-group-content');
-                group.items.forEach(name => {
-                    const item = document.createElement('div');
-                    item.className = 'memory-item';
-                    item.dataset.name = name;
-                    const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
-                    item.innerHTML = `
-                        <div class="memory-date">${name}</div>
-                        <div class="memory-preview">${preview}</div>
-                    `;
-                    item.addEventListener('click', () => selectMemory(name));
-                    contentDiv.appendChild(item);
-                });
+                // 只有第一个分组初始展开时立即渲染
+                if (index === 0) {
+                    group.items.forEach(name => {
+                        const item = document.createElement('div');
+                        item.className = 'memory-item';
+                        item.dataset.name = name;
+                        const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
+                        item.innerHTML = `
+                            <div class="memory-date">${name}</div>
+                            <div class="memory-preview">${preview}</div>
+                        `;
+                        item.addEventListener('click', () => selectMemory(name));
+                        contentDiv.appendChild(item);
+                    });
+                }
 
                 container.appendChild(groupDiv);
             });
@@ -1969,10 +1997,15 @@
             // 分组显示，按键降序排列（最新的在前）
             const sortedKeys = Object.keys(groups).sort().reverse();
 
-            sortedKeys.forEach(key => {
+            sortedKeys.forEach((key, index) => {
                 const group = groups[key];
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'memory-group';
+                // 默认只展开第一个（最新）分组，其他都收起
+                // 收起时不渲染DOM，点击展开后才渲染，减少初始DOM节点数
+                if (index > 0) {
+                    groupDiv.classList.add('collapsed');
+                }
                 groupDiv.innerHTML = `
                     <div class="memory-group-header">
                         <span>
@@ -1987,22 +2020,45 @@
                 // 点击折叠/展开
                 const header = groupDiv.querySelector('.memory-group-header');
                 header.addEventListener('click', () => {
+                    const wasCollapsed = groupDiv.classList.contains('collapsed');
                     groupDiv.classList.toggle('collapsed');
+                    // 如果是从收起变为展开，并且内容还没有渲染，则延迟渲染记忆项
+                    if (wasCollapsed) {
+                        const contentDiv = groupDiv.querySelector('.memory-group-content');
+                        if (contentDiv.children.length === 0) {
+                            // 懒渲染：展开时才创建DOM节点
+                            group.items.forEach(name => {
+                                const item = document.createElement('div');
+                                item.className = 'memory-item';
+                                item.dataset.name = name;
+                                const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
+                                item.innerHTML = `
+                                    <div class="memory-date">${name}</div>
+                                    <div class="memory-preview">${preview}</div>
+                                `;
+                                item.addEventListener('click', () => selectMemory(name));
+                                contentDiv.appendChild(item);
+                            });
+                        }
+                    }
                 });
 
                 const contentDiv = groupDiv.querySelector('.memory-group-content');
-                group.items.forEach(name => {
-                    const item = document.createElement('div');
-                    item.className = 'memory-item';
-                    item.dataset.name = name;
-                    const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
-                    item.innerHTML = `
-                        <div class="memory-date">${name}</div>
-                        <div class="memory-preview">${preview}</div>
-                    `;
-                    item.addEventListener('click', () => selectMemory(name));
-                    contentDiv.appendChild(item);
-                });
+                // 只有第一个分组初始展开时立即渲染
+                if (index === 0) {
+                    group.items.forEach(name => {
+                        const item = document.createElement('div');
+                        item.className = 'memory-item';
+                        item.dataset.name = name;
+                        const preview = memoryCache[name].content.substring(0, 100).replace(/\n/g, ' ');
+                        item.innerHTML = `
+                            <div class="memory-date">${name}</div>
+                            <div class="memory-preview">${preview}</div>
+                        `;
+                        item.addEventListener('click', () => selectMemory(name));
+                        contentDiv.appendChild(item);
+                    });
+                }
 
                 container.appendChild(groupDiv);
             });
