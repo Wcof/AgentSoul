@@ -68,3 +68,6 @@ config.json
 
 # pre-commit
 .pre-commit-cache/
+
+# Prompt history backups
+.prompt_history/
