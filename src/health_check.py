@@ -31,6 +31,7 @@ from src.common.health_gate import (  # noqa: E402
     UnifiedCheckResult,
     calculate_gate_result,
     get_default_assessment,
+    handle_summary_output,
 )
 from src.config_loader import ConfigLoader  # noqa: E402
 
@@ -698,7 +699,7 @@ def main() -> None:
         check_results.insert(0, overall_check)
 
         output_format = "json" if args.json else "text"
-        summary = HealthSummary(
+        handle_summary_output(
             checker_name="health_check",
             overall_score=overall_score,
             assessment=assessment,
@@ -706,11 +707,10 @@ def main() -> None:
             min_score=args.min_score,
             gate_passed=gate_passed,
             exit_code=exit_code,
-            output_file=args.output,
-            output_format=output_format,
             check_results=check_results,
+            output_path=args.output,
+            output_format=output_format,
         )
-        print(summary.to_json())
 
     elif args.min_score is not None:
         if gate_passed:

@@ -15,7 +15,7 @@ from datetime import datetime
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(project_root))
 
-from src.common.health_gate import HealthSummary, UnifiedCheckResult  # noqa: E402
+from src.common.health_gate import HealthSummary, UnifiedCheckResult, handle_summary_output  # noqa: E402
 
 
 @dataclass
@@ -322,7 +322,7 @@ def main() -> None:
             else "可使用：环境已识别，但未检测到 AgentSoul 安装。"
         )
 
-        summary = HealthSummary(
+        handle_summary_output(
             checker_name="entry_detect",
             overall_score=overall_score,
             assessment=assessment,
@@ -330,11 +330,10 @@ def main() -> None:
             min_score=None,
             gate_passed=None,
             exit_code=0,
-            output_file=None,
-            output_format=None,
             check_results=check_results,
+            output_path=None,
+            output_format=None,
         )
-        print(summary.to_json())
         sys.exit(0)
 
     if args.generate_template:
@@ -510,7 +509,7 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
             overall_score = 80 if conflicts else 85
             assessment = "可使用：环境已识别，但未检测到 AgentSoul 安装，需要先安装 AgentSoul。"
 
-        summary = HealthSummary(
+        handle_summary_output(
             checker_name="entry_detect-precheck",
             overall_score=overall_score,
             assessment=assessment,
@@ -518,11 +517,10 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
             min_score=None,
             gate_passed=None,
             exit_code=0,
-            output_file=None,
-            output_format=None,
             check_results=check_results,
+            output_path=None,
+            output_format=None,
         )
-        print(summary.to_json())
         sys.exit(0)
 
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):

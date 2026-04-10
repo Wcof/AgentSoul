@@ -35,6 +35,7 @@ from src.common.health_gate import (  # noqa: E402
     HealthSummary,
     UnifiedCheckResult,
     calculate_gate_result,
+    handle_summary_output,
 )
 from src.storage.local import (  # noqa: E402
     LocalMemoryStorage,
@@ -677,7 +678,7 @@ def main() -> None:
             report.user_perceived_companionship,
         ]
         output_format = "json" if args.json else "markdown"
-        summary = HealthSummary(
+        handle_summary_output(
             checker_name="companionship_checker",
             overall_score=report.overall_score,
             assessment=report.assessment,
@@ -685,11 +686,10 @@ def main() -> None:
             min_score=args.min_score,
             gate_passed=gate_passed,
             exit_code=exit_code,
-            output_file=str(output_path),
-            output_format=output_format,
             check_results=results,
+            output_path=output_path,
+            output_format=output_format,
         )
-        print(summary.to_json())
     elif args.min_score is not None:
         if gate_passed:
             print(
