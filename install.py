@@ -20,27 +20,29 @@ AgentSoul · 人格插件安装脚本 v1.0
     - Python 3.10+
     - Node.js 18+ (MCP安装需要)
 """
+from __future__ import annotations
 
-import sys
-import re
-import json
-import yaml
 import argparse
+import json
+import re
 import subprocess
-from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 PROJECT_ROOT = Path(__file__).parent
 
 try:
-    from common import log, safe_file_stem, initialize_identity, get_default_pad_state
-    from src.config_loader import ConfigLoader, create_default_persona, DEFAULT_PERSONA_DATA
+    from common import get_default_pad_state, initialize_identity, log
+    from src.config_loader import DEFAULT_PERSONA_DATA, ConfigLoader, create_default_persona
     from src.config_manager.validator import ConfigValidator
 except ImportError:
     sys.path.insert(0, str(PROJECT_ROOT))
-    from common import log, safe_file_stem, initialize_identity, get_default_pad_state
-    from src.config_loader import ConfigLoader, create_default_persona, DEFAULT_PERSONA_DATA
+    from common import get_default_pad_state, initialize_identity, log
+    from src.config_loader import DEFAULT_PERSONA_DATA, ConfigLoader, create_default_persona
     from src.config_manager.validator import ConfigValidator
 
 # Import defaults from config_loader
@@ -53,16 +55,132 @@ ALLOWED_LANGUAGES = ConfigValidator.ALLOWED_LANGUAGES
 ALLOWED_EMOJI_FREQS = ConfigValidator.ALLOWED_EMOJI_FREQS
 
 
+class InstallationRollback:
+    """
+    Installation rollback tracker - tracks all changes made during installation
+    and can automatically roll back to original state if installation fails.
+    """
+    def __init__(self) -> None:
+        self._created_files: list[Path] = []
+        self._modified_files: list[tuple[Path, bytes]] = []  # (path, original_content)
+        self._created_dirs: list[Path] = []
+
+    def track_created_file(self, path: Path) -> None:
+        """Track a newly created file for potential rollback."""
+        if not path.exists():
+            return
+        self._created_files.append(path.resolve())
+
+    def track_modified_file(self, path: Path) -> None:
+        """Backup original content of a file before modifying it."""
+        if not path.exists():
+            return
+        with open(path, 'rb') as f:
+            original_content = f.read()
+        self._modified_files.append((path.resolve(), original_content))
+
+    def track_created_dir(self, path: Path) -> None:
+        """Track a newly created directory for potential rollback."""
+        if not path.exists():
+            return
+        # Only track if it was just created (empty)
+        if not any(path.iterdir()):
+            self._created_dirs.append(path.resolve())
+
+    def has_changes(self) -> bool:
+        """Check if there are any changes to rollback."""
+        return len(self._created_files) > 0 or len(self._modified_files) > 0 or len(self._created_dirs) > 0
+
+    def rollback(self) -> bool:
+        """
+        Rollback all changes made during installation.
+        Returns True if rollback completed successfully.
+        """
+        success = True
+
+        # Step 1: Delete newly created files
+        for file_path in reversed(self._created_files):
+            try:
+                if file_path.exists() and file_path.is_file():
+                    file_path.unlink()
+                    log(f"✓ Rollback: deleted created file {file_path}", "OK")
+            except Exception as e:
+                log(f"✗ Failed to delete created file {file_path}: {e}", "ERROR")
+                success = False
+
+        # Step 2: Restore modified files from backup
+        for (file_path, original_content) in reversed(self._modified_files):
+            try:
+                with open(file_path, 'wb') as f:
+                    f.write(original_content)
+                log(f"✓ Rollback: restored modified file {file_path}", "OK")
+            except Exception as e:
+                log(f"✗ Failed to restore modified file {file_path}: {e}", "ERROR")
+                success = False
+
+        # Step 3: Remove empty created directories
+        for dir_path in reversed(self._created_dirs):
+            try:
+                if dir_path.exists() and dir_path.is_dir():
+                    # Only remove if still empty
+                    if not any(dir_path.iterdir()):
+                        dir_path.rmdir()
+                        log(f"✓ Rollback: removed empty directory {dir_path}", "OK")
+            except Exception as e:
+                log(f"✗ Failed to remove directory {dir_path}: {e}", "ERROR")
+                success = False
+
+        # Clear all tracked changes after rollback
+        self._created_files.clear()
+        self._modified_files.clear()
+        self._created_dirs.clear()
+
+        return success
+
+
+# Global rollback tracker instance
+_rollback_tracker = InstallationRollback()
+
+
+def get_rollback_tracker() -> InstallationRollback:
+    """Get the global installation rollback tracker."""
+    global _rollback_tracker
+    return _rollback_tracker
+
+
+def perform_rollback() -> bool:
+    """Perform rollback of all installation changes."""
+    tracker = get_rollback_tracker()
+    if not tracker.has_changes():
+        log("No changes to rollback", "INFO")
+        return True
+    log("⚠️  Installation failed, starting automatic rollback...", "WARN")
+    success = tracker.rollback()
+    if success:
+        log("✅ Automatic rollback completed successfully, workspace restored to previous state", "OK")
+    else:
+        log("⚠️  Some files/directories could not be cleaned up automatically during rollback", "WARN")
+    return success
+
+
 def initialize_data_directories(project_root: Path) -> None:
     """Initialize all required data directories for enhanced memory and adaptive learning."""
+    tracker = get_rollback_tracker()
     # Initialize enhanced memory directories
     memories_dir = project_root / "data" / "memories"
+    created_parent = False
+    if not memories_dir.parent.exists():
+        created_parent = True
     memories_dir.mkdir(parents=True, exist_ok=True)
+    if created_parent:
+        tracker.track_created_dir(memories_dir.parent)
+    tracker.track_created_dir(memories_dir)
     log("已初始化记忆存储目录", "OK")
 
     # Initialize adaptive learning directories
     learning_dir = project_root / "data" / "learning"
     learning_dir.mkdir(parents=True, exist_ok=True)
+    tracker.track_created_dir(learning_dir)
     log("已初始化学习数据目录", "OK")
 
 
@@ -126,7 +244,7 @@ DISPLAY_NAMES = {
 }
 
 
-def select_from_list(prompt_key: str, allowed_values: List[str], default: str, lang: str) -> str:
+def select_from_list(prompt_key: str, allowed_values: list[str], default: str, lang: str) -> str:
     """Display options as numbered list and let user select by number.
 
     Args:
@@ -138,7 +256,8 @@ def select_from_list(prompt_key: str, allowed_values: List[str], default: str, l
     Returns:
         Selected value from allowed_values
     """
-    p = lambda k: PROMPTS[lang][k]
+    def p(k: str) -> str:
+        return PROMPTS[lang][k]
     print(p(prompt_key))
     for i, value in enumerate(allowed_values, 1):
         display_name = DISPLAY_NAMES[lang][prompt_key][value]
@@ -263,7 +382,7 @@ PROMPTS = {
 }
 
 
-def parse_comma_separated(text: str) -> List[str]:
+def parse_comma_separated(text: str) -> list[str]:
     """Convert comma-separated input to list of stripped strings.
 
     - Returns empty list if input is empty
@@ -292,7 +411,7 @@ def prompt_with_default(prompt_key: str, default: str, lang: str) -> str:
 
     # Enable readline for better Unicode (Chinese) backspace handling
     try:
-        import readline
+        import readline  # noqa: F401
         # readline automatically handles backspace correctly for Unicode
     except ImportError:
         pass
@@ -339,7 +458,8 @@ def run_interactive_config_wizard(project_root: Path) -> None:
             # Use Chinese for error messages before language is selected
             print(PROMPTS['zh']['invalid_language'])
 
-    p = lambda key: PROMPTS[lang][key]
+    def p(key: str) -> str:
+        return PROMPTS[lang][key]
 
     print()
     print(p('welcome'))
@@ -448,7 +568,19 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     }
 
     persona_path = project_root / "config" / "persona.yaml"
+    tracker = get_rollback_tracker()
+
+    created_parent = False
+    if not persona_path.parent.exists():
+        created_parent = True
     persona_path.parent.mkdir(parents=True, exist_ok=True)
+    if created_parent:
+        tracker.track_created_dir(persona_path.parent)
+
+    if persona_path.exists():
+        tracker.track_modified_file(persona_path)
+    else:
+        tracker.track_created_file(persona_path)
 
     with open(persona_path, "w", encoding="utf-8") as f:
         yaml.dump(config_data, f, allow_unicode=True, sort_keys=False)
@@ -459,7 +591,20 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     log(p('initializing_soul'), "STEP")
     soul_state_path = project_root / "data" / "soul" / "soul_variable" / "state_vector.json"
     soul_state_dir = soul_state_path.parent
+    tracker = get_rollback_tracker()
+
+    created_parent = False
+    current = soul_state_dir
+    while not current.exists():
+        created_parent = True
+        tracker.track_created_dir(current)
+        current = current.parent
     soul_state_dir.mkdir(parents=True, exist_ok=True)
+
+    if soul_state_path.exists():
+        tracker.track_modified_file(soul_state_path)
+    else:
+        tracker.track_created_file(soul_state_path)
 
     default_state = get_default_pad_state()
     soul_state_path.write_text(
@@ -483,7 +628,7 @@ def run_interactive_config_wizard(project_root: Path) -> None:
 # log and safe_file_stem imported from common
 
 
-def generate_persona_package(name: Optional[str] = None) -> None:
+def generate_persona_package(name: str | None = None) -> None:
     log("生成人格包文件...", "STEP")
 
     config_loader = ConfigLoader(PROJECT_ROOT)
@@ -504,9 +649,14 @@ def generate_persona_package(name: Optional[str] = None) -> None:
                     print("❌ 无效选项，请输入 y 或 n")
 
         if name is not None:
+            tracker = get_rollback_tracker()
+            if persona_path.exists():
+                tracker.track_modified_file(persona_path)
+            else:
+                tracker.track_created_file(persona_path)
             create_default_persona(persona_path)
 
-            with open(persona_path, "r", encoding="utf-8") as f:
+            with open(persona_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             if "agent" in config:
@@ -533,8 +683,7 @@ def generate_persona_package(name: Optional[str] = None) -> None:
     behavior_path = PROJECT_ROOT / "config" / "behavior.yaml"
     behavior = {}
     if behavior_path.exists():
-        with open(behavior_path, "r", encoding="utf-8") as f:
-            import yaml
+        with open(behavior_path, encoding="utf-8") as f:
             behavior = yaml.safe_load(f) or {}
 
     ai = persona.get("ai", {})
@@ -621,11 +770,14 @@ Trae 会自动加载项目根目录的规则文件，并支持 MCP。AgentSoul M
 
     def confirm_overwrite(file_path: Path) -> bool:
         """Check if file exists and ask for confirmation to overwrite"""
+        tracker = get_rollback_tracker()
         if not file_path.exists():
+            tracker.track_created_file(file_path)
             return True
         log(f"文件 {file_path} 已存在", "WARN")
+        tracker.track_modified_file(file_path)
         while True:
-            confirm = input(f"是否覆盖？[y/N]: ").strip().lower()
+            confirm = input("是否覆盖？[y/N]: ").strip().lower()
             if confirm in ["y", "yes"]:
                 return True
             elif confirm in ["n", "no", ""]:
@@ -692,13 +844,13 @@ def show_menu():
 
 def confirm_install(scope: str) -> bool:
     scope_desc = "当前 Session" if scope == "current_session" else "全局 Session"
-    print(f"\n⚠️  确认安装信息：")
+    print("\n⚠️  确认安装信息：")
     print(f"   - 装载范围：{scope_desc}")
     if scope == "global_session":
-        print(f"   - 注意：切换新 Session 后需要身份唤醒流程")
-        print(f"   - 建议：配合身份档案自动加载机制使用\n")
+        print("   - 注意：切换新 Session 后需要身份唤醒流程")
+        print("   - 建议：配合身份档案自动加载机制使用\n")
     else:
-        print(f"   - 注意：重启后需要重新装载\n")
+        print("   - 注意：重启后需要重新装载\n")
 
     while True:
         confirm = input("确认安装？[y/N]: ").strip().lower()
@@ -709,7 +861,7 @@ def confirm_install(scope: str) -> bool:
         print("❌ 无效选项，请输入 y 或 n")
 
 
-def get_openclaw_workspace() -> Optional[Path]:
+def get_openclaw_workspace() -> Path | None:
     """Find OpenClaw workspace location.
 
     Checks standard install locations and prompts user for custom path if not found.
@@ -771,7 +923,7 @@ def install_openclaw(scope: str) -> None:
     installer.install(scope)
 
 
-def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
+def install_mcp(run_after: bool = True, log_path: str | None = None) -> bool:
     log("安装 MCP 服务...", "STEP")
 
     config_loader = ConfigLoader(PROJECT_ROOT)
@@ -855,8 +1007,6 @@ def install_mcp(run_after: bool = True, log_path: Optional[str] = None) -> bool:
     # Pre-compute JSON config once - reuse everywhere
     json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
 
-    RegistrationHandler = Optional[Callable[[Path, str], None]]
-
     # 检测已安装的平台
     detected_platforms = []
     for display_name, detect_cmd, reg_handler, config_path in SUPPORTED_PLATFORMS:
@@ -933,7 +1083,7 @@ def is_claude_cli_installed() -> bool:
         return False
 
 
-def has_agentsoul_hook(settings: Dict[str, Any]) -> bool:
+def has_agentsoul_hook(settings: dict[str, Any]) -> bool:
     """Check if AgentSoul startup hook already exists in settings."""
     if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
         return False
@@ -945,7 +1095,7 @@ def has_agentsoul_hook(settings: Dict[str, Any]) -> bool:
     return False
 
 
-def remove_agentsoul_hooks(settings: Dict[str, Any]) -> bool:
+def remove_agentsoul_hooks(settings: dict[str, Any]) -> bool:
     """Remove all AgentSoul startup hooks from settings. Returns True if any were removed."""
     if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
         return False
@@ -968,7 +1118,7 @@ def remove_agentsoul_hooks(settings: Dict[str, Any]) -> bool:
     return removed
 
 
-def count_remaining_agentsoul_hooks(settings: Dict[str, Any]) -> int:
+def count_remaining_agentsoul_hooks(settings: dict[str, Any]) -> int:
     """Count how many AgentSoul startup hooks remain after removal."""
     if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
         return 0
@@ -984,18 +1134,18 @@ def count_remaining_agentsoul_hooks(settings: Dict[str, Any]) -> int:
 def register_claude_cli(mcp_full_path: Path, json_config: str) -> None:
     """Register AgentSoul MCP with Claude CLI using official command."""
     cmd = ["claude", "mcp", "add-json", "agentsoul", json_config]
-    log(f"使用 Claude CLI 官方命令注册 AgentSoul MCP...", "STEP")
+    log("使用 Claude CLI 官方命令注册 AgentSoul MCP...", "STEP")
 
     # Capture output to check if it's "already exists" vs real error
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode == 0:
-        log(f"✅ 已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
+        log("✅ 已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
     else:
         # Check if it's just "already exists" which isn't really an error
         output = (result.stdout + result.stderr).lower()
         if "already exists" in output or "already registered" in output:
-            log(f"✅ AgentSoul MCP 已经在 Claude CLI 中注册过，无需重复注册", "OK")
+            log("✅ AgentSoul MCP 已经在 Claude CLI 中注册过，无需重复注册", "OK")
         else:
             log(f"❌ Claude CLI 注册失败，请手动执行以下命令：\nclaude mcp add-json agentsoul '{json_config}'", "ERROR")
     return
@@ -1008,7 +1158,7 @@ def register_claude_cli(mcp_full_path: Path, json_config: str) -> None:
 
     try:
         import json
-        with open(settings_path, "r", encoding="utf-8") as f:
+        with open(settings_path, encoding="utf-8") as f:
             settings = json.load(f)
 
         # Check if hooks section exists
@@ -1052,9 +1202,9 @@ Failure to follow this sequence violates AgentSoul framework rules.
             with open(settings_path, "w", encoding="utf-8") as f:
                 json.dump(settings, f, indent=2, ensure_ascii=False)
             log(f"✅ 已自动配置 SessionStart hook 到 {settings_path}", "OK")
-            log(f" Claude 会在每次对话开始自动调用 AgentSoul MCP 工具", "INFO")
+            log(" Claude 会在每次对话开始自动调用 AgentSoul MCP 工具", "INFO")
         else:
-            log(f"✅ AgentSoul SessionStart hook 已存在，跳过", "INFO")
+            log("✅ AgentSoul SessionStart hook 已存在，跳过", "INFO")
 
     except Exception as e:
         log(f"自动配置 SessionStart hook 失败：{e}，请手动配置", "WARN")
@@ -1098,7 +1248,7 @@ def uninstall_mcp() -> bool:
             return False
 
         import json
-        with open(settings_path, "r", encoding="utf-8") as f:
+        with open(settings_path, encoding="utf-8") as f:
             settings = json.load(f)
 
         removed = remove_agentsoul_hooks(settings)
@@ -1131,7 +1281,7 @@ def uninstall_mcp() -> bool:
     removed_local = False
     if local_settings.exists():
         try:
-            removed_local = remove_agentsoul_hook(local_settings)
+            removed_local = remove_agentsoul_hooks(local_settings)
         except Exception as e:
             log(f"移除项目本地 SessionStart hook 失败：{e}，请手动移除", "WARN")
 
@@ -1145,7 +1295,7 @@ def uninstall_mcp() -> bool:
             return 0
         import json
         try:
-            with open(settings_path, 'r', encoding='utf-8') as f:
+            with open(settings_path, encoding='utf-8') as f:
                 settings = json.load(f)
             count = 0
             if "hooks" in settings and "SessionStart" in settings["hooks"]:
@@ -1249,6 +1399,11 @@ def check_and_initialize_configs(project_root: Path) -> None:
 
     # Step 1: Initialize master configuration (traditional method)
     log("初始化用户配置 (master)...", "STEP")
+    tracker = get_rollback_tracker()
+    if persona_path.exists():
+        tracker.track_modified_file(persona_path)
+    else:
+        tracker.track_created_file(persona_path)
     create_default_persona(persona_path)
 
     # Ask to open editor
@@ -1268,8 +1423,19 @@ def check_and_initialize_configs(project_root: Path) -> None:
 
     # Step 2: Initialize soul PAD state
     log("初始化灵魂 PAD 情感状态...", "STEP")
+    tracker = get_rollback_tracker()
     soul_state_dir = soul_state_path.parent
+
+    current = soul_state_dir
+    while not current.exists():
+        tracker.track_created_dir(current)
+        current = current.parent
     soul_state_dir.mkdir(parents=True, exist_ok=True)
+
+    if soul_state_path.exists():
+        tracker.track_modified_file(soul_state_path)
+    else:
+        tracker.track_created_file(soul_state_path)
 
     default_state = get_default_pad_state()
     soul_state_path.write_text(
@@ -1375,4 +1541,11 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n⚠️  Installation interrupted by user")
         print("\n⚠️  安装被用户中断")
+        perform_rollback()
+        sys.exit(1)
+    except Exception:
+        log("❌ Installation failed with an exception", "ERROR")
+        import traceback
+        traceback.print_exc()
+        perform_rollback()
         sys.exit(1)
