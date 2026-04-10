@@ -590,18 +590,29 @@
 
         .companionship-item {
             margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            transition: all 0.2s;
+        }
+
+        .companionship-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-color: #dee2e6;
         }
 
         body[data-theme="dark"] .companionship-item {
-            border-bottom-color: #444;
+            background: #333;
+            border-color: #444;
+        }
+
+        body[data-theme="dark"] .companionship-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
 
         .companionship-item:last-child {
-            border-bottom: none;
             margin-bottom: 0;
-            padding-bottom: 0;
         }
 
         .companionship-item-header {
@@ -661,10 +672,15 @@
             transition: width 0.3s;
         }
 
-        .score-color-0 { background: #e74c3c; }
-        .score-color-60 { background: #f39c12; }
-        .score-color-75 { background: #3498db; }
-        .score-color-90 { background: #27ae60; }
+        .score-color-0 { background: #e74c3c; color: white; }
+        .score-color-60 { background: #f39c12; color: white; }
+        .score-color-75 { background: #3498db; color: white; }
+        .score-color-90 { background: #27ae60; color: white; }
+
+        body[data-theme="dark"] .score-color-0 { background: #c0392b; }
+        body[data-theme="dark"] .score-color-60 { background: #d35400; }
+        body[data-theme="dark"] .score-color-75 { background: #2980b9; }
+        body[data-theme="dark"] .score-color-90 { background: #1e8449; }
 
         .companionship-issues, .companionship-recommendations {
             margin-top: 8px;
@@ -1040,7 +1056,7 @@
                 <h2>陪伴连续性检查报告</h2>
                 <div id="companionshipReport" style="display: none;">
                     <div class="overall-score" style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 3rem; font-weight: bold; color: #2980b9;" id="companionshipOverallScore">-</div>
+                        <div style="font-size: 3rem; font-weight: bold; padding: 10px; border-radius: 8px; display: inline-block;" id="companionshipOverallScore">-</div>
                         <div class="assessment" style="color: #7f8c8d; margin-top: 5px;" id="companionshipAssessment">-</div>
                     </div>
                     <div id="companionshipItems"></div>
@@ -2096,7 +2112,11 @@
             reportEl.style.display = 'block';
 
             // 整体得分
-            document.getElementById('companionshipOverallScore').textContent = data.overall_score + '/100';
+            const overallScoreEl = document.getElementById('companionshipOverallScore');
+            overallScoreEl.textContent = data.overall_score + '/100';
+            // 根据分数设置背景颜色
+            const overallColorClass = getScoreColorClass(data.overall_score);
+            overallScoreEl.className = overallColorClass;
             document.getElementById('companionshipAssessment').textContent = data.assessment;
 
             // 清空原有内容
