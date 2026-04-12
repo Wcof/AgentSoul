@@ -29,7 +29,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Literal, Optional
 
 import yaml
 
@@ -830,9 +830,9 @@ def show_menu():
     print("╚══════════════════════════════════════════════════════════════════╝\n")
     print("请选择操作：\n")
     print("1. 生成人格包（通用，支持所有工具）")
-    print("2. MCP 服务（安装并启动）")
+    print("2. MCP 服务（Claude/Codex 客户端安装管理）")
     print("3. OpenClaw 人格插件（深度集成）")
-    print("4. 卸载 Claude CLI 中的 AgentSoul MCP")
+    print("4. 卸载 Claude CLI 中的 AgentSoul MCP（强制自动清理）")
     print("0. 退出\n")
 
     while True:
@@ -1007,46 +1007,10 @@ def install_mcp(run_after: bool = True, log_path: str | None = None) -> bool:
     # Pre-compute JSON config once - reuse everywhere
     json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
 
-    # 检测已安装的平台
-    detected_platforms = []
-    for display_name, detect_cmd, reg_handler, config_path in SUPPORTED_PLATFORMS:
-        if not detect_cmd:
-            continue  # Skip platforms that can't be detected
-        try:
-            result = subprocess.run(detect_cmd.split(), capture_output=True, text=True)
-            if result.returncode == 0:
-                detected_platforms.append((display_name, reg_handler, config_path))
-        except (FileNotFoundError, OSError):
-            continue
+    # Generate bilingual Markdown install guide and enter client management menu
+    guide_path = generate_client_install_markdown(mcp_full_path)
+    log(f"已生成客户端安装指南（中英双语）：{guide_path}", "OK")
 
-    # 如果检测到已安装的平台，让用户选择是否注册
-    if detected_platforms:
-        print("检测到以下 MCP 客户端平台：\n")
-        for i, (display_name, _, _) in enumerate(detected_platforms, 1):
-            print(f"  {i}. {display_name}")
-        print(f"  {len(detected_platforms) + 1}. 不注册\n")
-
-        while True:
-            choice = input(f"请选择要注册到哪个平台 [1-{len(detected_platforms) + 1}，默认 {len(detected_platforms) + 1}]: ").strip()
-            if not choice:
-                # 默认选择"不注册"
-                break
-            try:
-                idx = int(choice) - 1
-                if idx == len(detected_platforms):
-                    # 用户选择不注册
-                    break
-                elif 0 <= idx < len(detected_platforms):
-                    display_name, reg_handler, _ = detected_platforms[idx]
-                    if reg_handler is not None:
-                        reg_handler(mcp_full_path, json_config)
-                    break
-                else:
-                    print(f"❌ 无效选项，请输入 1 到 {len(detected_platforms) + 1} 之间的数字")
-            except ValueError:
-                print("❌ 请输入有效的数字")
-
-    # 输出手动配置信息
     print("\n手动配置方式（复制到对应 MCP 客户端配置文件）：")
     print(f"""
 {{
@@ -1055,8 +1019,11 @@ def install_mcp(run_after: bool = True, log_path: str | None = None) -> bool:
   }}
 }}
 """)
-    print("Claude CLI 手动注册命令：")
-    print(f"claude mcp add-json agentsoul '{json_config}'\n")
+    print("Claude CLI 注册命令：")
+    print(f"claude mcp add-json agentsoul '{json_config}'")
+    print(f"claude mcp add-json --scope user agentsoul '{json_config}'\n")
+
+    manage_mcp_clients(mcp_full_path, json_config)
 
     if not run_after:
         return True
@@ -1083,43 +1050,32 @@ def is_claude_cli_installed() -> bool:
         return False
 
 
-def has_agentsoul_hook(settings: dict[str, Any]) -> bool:
-    """Check if AgentSoul startup hook already exists in settings."""
-    if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
+def is_codex_cli_installed() -> bool:
+    """Check if Codex CLI is installed on the system."""
+    try:
+        result = subprocess.run(["codex", "--version"], capture_output=True, text=True)
+        return result.returncode == 0
+    except (FileNotFoundError, OSError):
         return False
-    for hook in settings["hooks"]["SessionStart"]:
-        if "matcher" in hook and "hooks" in hook:
-            for subhook in hook["hooks"]:
-                if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
-                    return True
-    return False
 
 
-def remove_agentsoul_hooks(settings: dict[str, Any]) -> bool:
-    """Remove all AgentSoul startup hooks from settings. Returns True if any were removed."""
-    if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
-        return False
-    new_hooks = []
-    removed = False
-    for hook in settings["hooks"]["SessionStart"]:
-        if "matcher" in hook and "hooks" in hook:
-            is_agentsoul = False
-            for subhook in hook["hooks"]:
-                if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
-                    is_agentsoul = True
-                    break
-            if not is_agentsoul:
-                new_hooks.append(hook)
-            else:
-                removed = True
-        else:
-            new_hooks.append(hook)
-    settings["hooks"]["SessionStart"] = new_hooks
-    return removed
+def load_settings(settings_path: Path) -> dict[str, Any]:
+    """Load JSON settings file. Returns empty dict when file does not exist."""
+    if not settings_path.exists():
+        return {}
+    with open(settings_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_settings(settings_path: Path, settings: dict[str, Any]) -> None:
+    """Save JSON settings file, creating parent directory as needed."""
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(settings_path, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2, ensure_ascii=False)
 
 
 def count_remaining_agentsoul_hooks(settings: dict[str, Any]) -> int:
-    """Count how many AgentSoul startup hooks remain after removal."""
+    """Count how many AgentSoul startup hooks exist in settings dict."""
     if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
         return 0
     count = 0
@@ -1131,210 +1087,508 @@ def count_remaining_agentsoul_hooks(settings: dict[str, Any]) -> int:
     return count
 
 
-def register_claude_cli(mcp_full_path: Path, json_config: str) -> None:
-    """Register AgentSoul MCP with Claude CLI using official command."""
-    cmd = ["claude", "mcp", "add-json", "agentsoul", json_config]
-    log("使用 Claude CLI 官方命令注册 AgentSoul MCP...", "STEP")
+def has_agentsoul_hook(settings: dict[str, Any]) -> bool:
+    """Check if AgentSoul startup hook already exists in settings."""
+    return count_remaining_agentsoul_hooks(settings) > 0
 
-    # Capture output to check if it's "already exists" vs real error
-    result = subprocess.run(cmd, capture_output=True, text=True)
 
-    if result.returncode == 0:
-        log("✅ 已成功通过 Claude CLI 注册 AgentSoul MCP", "OK")
-    else:
-        # Check if it's just "already exists" which isn't really an error
-        output = (result.stdout + result.stderr).lower()
-        if "already exists" in output or "already registered" in output:
-            log("✅ AgentSoul MCP 已经在 Claude CLI 中注册过，无需重复注册", "OK")
+def remove_agentsoul_hooks(settings: dict[str, Any]) -> int:
+    """Remove all AgentSoul startup hooks from settings dict and return removed count."""
+    if "hooks" not in settings or "SessionStart" not in settings["hooks"]:
+        return 0
+    new_hooks: list[dict[str, Any]] = []
+    removed_count = 0
+    for hook in settings["hooks"]["SessionStart"]:
+        if "matcher" in hook and "hooks" in hook:
+            is_agentsoul = False
+            for subhook in hook["hooks"]:
+                if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
+                    is_agentsoul = True
+                    removed_count += 1
+                    break
+            if not is_agentsoul:
+                new_hooks.append(hook)
         else:
-            log(f"❌ Claude CLI 注册失败，请手动执行以下命令：\nclaude mcp add-json agentsoul '{json_config}'", "ERROR")
-    return
+            new_hooks.append(hook)
+    settings["hooks"]["SessionStart"] = new_hooks
+    return removed_count
 
-    # Auto-configure SessionStart hook to ensure Claude automatically calls AgentSoul MCP on startup
-    settings_path = Path.home() / ".claude" / "settings.json"
-    if not settings_path.exists():
-        log(f"Claude settings.json not found at {settings_path}, skipping auto-hook configuration", "WARN")
-        return
 
-    try:
-        import json
-        with open(settings_path, encoding="utf-8") as f:
-            settings = json.load(f)
-
-        # Check if hooks section exists
-        if "hooks" not in settings:
-            settings["hooks"] = {}
-        if "SessionStart" not in settings["hooks"]:
-            settings["hooks"]["SessionStart"] = []
-
-        # Check if AgentSoul hook already exists
-        agentsoul_hook_exists = has_agentsoul_hook(settings)
-        hook_content = """
-
+def get_agentsoul_hook_prompt() -> str:
+    """AgentSoul SessionStart hook prompt content."""
+    return """
 === AGENTSOUL PERSONALITY FRAMEWORK ===
 AgentSoul MCP is already configured for this project. YOU MUST follow this startup sequence at the BEGINNING of EVERY conversation:
 
-1.  Call `mcp__agentsoul__mcp_tool_index()` → Get complete tool index
-2.  Call `mcp__agentsoul__get_persona_config()` → Load who you are (AI) and who the user is (master)
-3.  Call `mcp__agentsoul__get_soul_state()` → Read current PAD emotion state
-4.  Call `mcp__agentsoul__get_base_rules` with `name="SKILL"` → Read top-level personality and security rules
-5.  Call `mcp__agentsoul__get_base_rules` with `name="memory_base"` → Read memory system rules
-6.  Call `mcp__agentsoul__get_mcp_usage_guide()` → Confirm workflow
-7.  Call `mcp__agentsoul__list_memory_topics()` → Get active memory topics
+1. Call `mcp__agentsoul__mcp_tool_index()` -> Get complete tool index
+2. Call `mcp__agentsoul__get_persona_config()` -> Load who you are (AI) and who the user is (master)
+3. Call `mcp__agentsoul__get_soul_state()` -> Read current PAD emotion state
+4. Call `mcp__agentsoul__get_base_rules` with `name="SKILL"` -> Read top-level personality and security rules
+5. Call `mcp__agentsoul__get_base_rules` with `name="memory_base"` -> Read memory system rules
+6. Call `mcp__agentsoul__get_mcp_usage_guide()` -> Confirm workflow
+7. Call `mcp__agentsoul__list_memory_topics()` -> Get active memory topics
 
 Failure to follow this sequence violates AgentSoul framework rules.
 ========================================
+""".strip()
+
+
+def ensure_agentsoul_hook(settings: dict[str, Any], hook_prompt: str) -> bool:
+    """Ensure AgentSoul SessionStart hook exists. Returns True if changed."""
+    if "hooks" not in settings:
+        settings["hooks"] = {}
+    if "SessionStart" not in settings["hooks"]:
+        settings["hooks"]["SessionStart"] = []
+    if has_agentsoul_hook(settings):
+        return False
+    settings["hooks"]["SessionStart"].append({
+        "id": "agentsoul-startup",
+        "matcher": ".*",
+        "hooks": [
+            {"type": "prompt", "prompt": hook_prompt}
+        ],
+    })
+    return True
+
+
+def remove_agentsoul_hook_file(settings_path: Path, force: bool = True) -> tuple[int, int]:
+    """
+    Remove AgentSoul hooks from one settings file.
+    Returns (removed_count, remaining_count).
+    """
+    if not settings_path.exists():
+        return (0, 0)
+    settings = load_settings(settings_path)
+    removed_total = 0
+    while True:
+        removed = remove_agentsoul_hooks(settings)
+        removed_total += removed
+        if not force or removed == 0:
+            break
+    if removed_total > 0:
+        save_settings(settings_path, settings)
+    remaining = count_remaining_agentsoul_hooks(settings)
+    return (removed_total, remaining)
+
+
+AGENTSOUL_BLOCK_BEGIN = "# BEGIN AGENTSOUL MCP"
+AGENTSOUL_BLOCK_END = "# END AGENTSOUL MCP"
+
+
+def upsert_managed_block(file_path: Path, block_body: str, begin: str, end: str) -> None:
+    """Upsert a managed text block into a file."""
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = file_path.read_text(encoding="utf-8") if file_path.exists() else ""
+    pattern = re.compile(rf"{re.escape(begin)}.*?{re.escape(end)}\n?", re.DOTALL)
+    managed = f"{begin}\n{block_body.rstrip()}\n{end}\n"
+    if pattern.search(existing):
+        updated = pattern.sub(managed, existing)
+    else:
+        suffix = "" if not existing or existing.endswith("\n") else "\n"
+        updated = f"{existing}{suffix}{managed}"
+    file_path.write_text(updated, encoding="utf-8")
+
+
+def remove_managed_block(file_path: Path, begin: str, end: str) -> bool:
+    """Remove managed text block from a file. Returns True if changed."""
+    if not file_path.exists():
+        return False
+    existing = file_path.read_text(encoding="utf-8")
+    pattern = re.compile(rf"{re.escape(begin)}.*?{re.escape(end)}\n?", re.DOTALL)
+    updated, n = pattern.subn("", existing)
+    if n > 0:
+        file_path.write_text(updated, encoding="utf-8")
+        return True
+    return False
+
+
+def has_managed_block(file_path: Path, begin: str, end: str) -> bool:
+    """Check if managed text block exists."""
+    if not file_path.exists():
+        return False
+    text = file_path.read_text(encoding="utf-8")
+    return begin in text and end in text
+
+
+def build_codex_mcp_block(mcp_full_path: Path) -> str:
+    """Build managed Codex MCP TOML snippet."""
+    escaped_path = str(mcp_full_path).replace("\\", "\\\\")
+    return (
+        "[mcp_servers.agentsoul]\n"
+        'command = "node"\n'
+        f'args = ["{escaped_path}"]\n'
+    )
+
+
+def codex_scope_paths(scope: Literal["local", "global", "both"]) -> list[Path]:
+    """Get Codex config paths for selected scope."""
+    paths: list[Path] = []
+    if scope in ("global", "both"):
+        paths.append(Path.home() / ".codex" / "config.toml")
+    if scope in ("local", "both"):
+        paths.append(PROJECT_ROOT / ".codex" / "config.toml")
+    return paths
+
+
+def codex_startup_md_paths(scope: Literal["local", "global", "both"]) -> list[Path]:
+    """Get Codex startup markdown paths for selected scope."""
+    paths: list[Path] = []
+    if scope in ("global", "both"):
+        paths.append(Path.home() / ".codex" / "agentsoul-startup.md")
+    if scope in ("local", "both"):
+        paths.append(PROJECT_ROOT / ".codex" / "agentsoul-startup.md")
+    return paths
+
+
+def codex_startup_markdown() -> str:
+    """Codex startup guidance fallback (when automatic startup hooks are unavailable)."""
+    return """# AgentSoul Startup (Codex)
+
+Codex currently has no stable SessionStart prompt hook equivalent. Use this startup checklist at the beginning of each session:
+
+1. Call `mcp__agentsoul__mcp_tool_index()`
+2. Call `mcp__agentsoul__get_persona_config()`
+3. Call `mcp__agentsoul__get_soul_state()`
+4. Call `mcp__agentsoul__get_base_rules` with `name="SKILL"`
+5. Call `mcp__agentsoul__get_base_rules` with `name="memory_base"`
+6. Call `mcp__agentsoul__get_mcp_usage_guide()`
+7. Call `mcp__agentsoul__list_memory_topics()`
+
+Memory write minimum:
+- end of session: `write_memory_day`
+- topic updates: `write_memory_topic`
+- fact changes: `entity_fact_invalidate` then `entity_fact_add`
 """
 
-        if not agentsoul_hook_exists:
-            # Add the AgentSoul hook
-            settings["hooks"]["SessionStart"].append({
-                "id": "agentsoul-startup",
-                "matcher": ".*",
-                "hooks": [
-                    {
-                        "type": "prompt",
-                        "prompt": hook_content
-                    }
-                ]
-            })
-            # Write back
-            with open(settings_path, "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-            log(f"✅ 已自动配置 SessionStart hook 到 {settings_path}", "OK")
-            log(" Claude 会在每次对话开始自动调用 AgentSoul MCP 工具", "INFO")
-        else:
-            log("✅ AgentSoul SessionStart hook 已存在，跳过", "INFO")
 
+def run_cli_command(cmd: list[str]) -> tuple[bool, str]:
+    """Run command and return (ok, combined_output)."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = (result.stdout or "") + (result.stderr or "")
+        return (result.returncode == 0, output.strip())
     except Exception as e:
-        log(f"自动配置 SessionStart hook 失败：{e}，请手动配置", "WARN")
-        log(f"提示：在 ~/.claude/settings.json 中添加 SessionStart hook 如：\n{json.dumps({'hooks': {'SessionStart': [{'matcher': '.*', 'hooks': [{'type': 'prompt', 'prompt': '...'}]}]}}, indent=2)}", "INFO")
+        return (False, str(e))
 
 
-# Supported MCP client platforms
-# Format: (display_name, detect_command, registration_handler, config_path)
-# - detect_command: command to check if platform is installed
-# - registration_handler: function to handle registration, None for manual only
-SUPPORTED_PLATFORMS = [
-    ("Claude CLI", "claude --version", register_claude_cli, None),
-    # Reserved: future platforms can be added here
-    # ("Trae", "trae --version", register_trae, Path.home() / ".trae" / "config.json"),
-    # ("Claude Desktop", "", None, ...),
-]
+class ClientInstaller:
+    """Base interface for MCP client installers."""
+    name: str = "base"
+
+    def detect(self) -> bool:
+        raise NotImplementedError
+
+    def install(self, scope: Literal["local", "global", "both"], mcp_full_path: Path, json_config: str) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+
+class ClaudeInstaller(ClientInstaller):
+    """Claude CLI MCP installer/uninstaller with SessionStart hook management."""
+
+    name = "Claude CLI"
+
+    def detect(self) -> bool:
+        return is_claude_cli_installed()
+
+    def install(self, scope: Literal["local", "global", "both"], mcp_full_path: Path, json_config: str) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        if not self.detect():
+            records.append({"client": self.name, "scope": scope, "action": "install", "success": False, "detail": "claude CLI not installed"})
+            return records
+
+        hook_prompt = get_agentsoul_hook_prompt()
+        if scope in ("global", "both"):
+            ok, msg = run_cli_command(["claude", "mcp", "add-json", "--scope", "user", "agentsoul", json_config])
+            settings_path = Path.home() / ".claude" / "settings.json"
+            settings = load_settings(settings_path) if settings_path.exists() else {}
+            changed = ensure_agentsoul_hook(settings, hook_prompt)
+            if changed:
+                save_settings(settings_path, settings)
+            records.append({"client": self.name, "scope": "global", "action": "install", "success": ok, "detail": msg or "registered"})
+
+        if scope in ("local", "both"):
+            ok, msg = run_cli_command(["claude", "mcp", "add-json", "agentsoul", json_config])
+            settings_path = PROJECT_ROOT / ".claude" / "settings.json"
+            settings = load_settings(settings_path) if settings_path.exists() else {}
+            changed = ensure_agentsoul_hook(settings, hook_prompt)
+            if changed:
+                save_settings(settings_path, settings)
+            records.append({"client": self.name, "scope": "local", "action": "install", "success": ok, "detail": msg or "registered"})
+        return records
+
+    def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        if not self.detect():
+            records.append({"client": self.name, "scope": scope, "action": "uninstall", "success": False, "detail": "claude CLI not installed"})
+            return records
+
+        if scope in ("global", "both"):
+            ok, msg = run_cli_command(["claude", "mcp", "remove", "--scope", "user", "agentsoul"])
+            removed, remaining = remove_agentsoul_hook_file(Path.home() / ".claude" / "settings.json", force=True)
+            records.append({"client": self.name, "scope": "global", "action": "uninstall", "success": ok and remaining == 0, "removed_hooks": removed, "remaining_hooks": remaining, "detail": msg or "removed"})
+
+        if scope in ("local", "both"):
+            ok, msg = run_cli_command(["claude", "mcp", "remove", "agentsoul"])
+            local_settings = PROJECT_ROOT / ".claude" / "settings.json"
+            removed, remaining = remove_agentsoul_hook_file(local_settings, force=True)
+            local_claude_dir = PROJECT_ROOT / ".claude"
+            if local_claude_dir.exists():
+                try:
+                    if not any(local_claude_dir.iterdir()):
+                        local_claude_dir.rmdir()
+                except Exception:
+                    pass
+            records.append({"client": self.name, "scope": "local", "action": "uninstall", "success": ok and remaining == 0, "removed_hooks": removed, "remaining_hooks": remaining, "detail": msg or "removed"})
+        return records
+
+    def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        if scope in ("global", "both"):
+            ok, msg = run_cli_command(["claude", "mcp", "get", "--scope", "user", "agentsoul"])
+            settings = load_settings(Path.home() / ".claude" / "settings.json")
+            records.append({"client": self.name, "scope": "global", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
+        if scope in ("local", "both"):
+            ok, msg = run_cli_command(["claude", "mcp", "get", "agentsoul"])
+            settings = load_settings(PROJECT_ROOT / ".claude" / "settings.json")
+            records.append({"client": self.name, "scope": "local", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
+        return records
+
+
+class CodexInstaller(ClientInstaller):
+    """Codex CLI MCP installer using managed config.toml blocks."""
+
+    name = "Codex CLI"
+
+    def detect(self) -> bool:
+        return is_codex_cli_installed()
+
+    def install(self, scope: Literal["local", "global", "both"], mcp_full_path: Path, json_config: str) -> list[dict[str, Any]]:
+        del json_config
+        records: list[dict[str, Any]] = []
+        if not self.detect():
+            records.append({"client": self.name, "scope": scope, "action": "install", "success": False, "detail": "codex CLI not installed"})
+            return records
+
+        block = build_codex_mcp_block(mcp_full_path)
+        for cfg in codex_scope_paths(scope):
+            upsert_managed_block(cfg, block, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
+            records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "install", "success": True, "detail": f"updated {cfg}"})
+
+        for md in codex_startup_md_paths(scope):
+            md.parent.mkdir(parents=True, exist_ok=True)
+            md.write_text(codex_startup_markdown(), encoding="utf-8")
+            records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback", "success": True, "detail": f"generated {md}"})
+        return records
+
+    def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for cfg in codex_scope_paths(scope):
+            changed = remove_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
+            records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
+        for md in codex_startup_md_paths(scope):
+            if md.exists():
+                md.unlink()
+                records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
+        local_dir = PROJECT_ROOT / ".codex"
+        if local_dir.exists():
+            try:
+                if not any(local_dir.iterdir()):
+                    local_dir.rmdir()
+            except Exception:
+                pass
+        return records
+
+    def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for cfg in codex_scope_paths(scope):
+            sc = "global" if str(cfg).startswith(str(Path.home())) else "local"
+            records.append({
+                "client": self.name,
+                "scope": sc,
+                "registered": has_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END),
+                "startup_fallback": (Path.home() / ".codex" / "agentsoul-startup.md").exists() if sc == "global" else (PROJECT_ROOT / ".codex" / "agentsoul-startup.md").exists(),
+                "detail": str(cfg),
+            })
+        return records
+
+
+def render_action_summary(title: str, records: list[dict[str, Any]]) -> None:
+    """Render structured action summary logs."""
+    if not records:
+        return
+    log(title, "STEP")
+    for rec in records:
+        status = "OK" if rec.get("success", rec.get("registered", False)) else "WARN"
+        detail = rec.get("detail", "")
+        scope = rec.get("scope", "n/a")
+        action = rec.get("action", "status")
+        extra = []
+        if "remaining_hooks" in rec:
+            extra.append(f"remaining_hooks={rec['remaining_hooks']}")
+        if "hook_count" in rec:
+            extra.append(f"hook_count={rec['hook_count']}")
+        line = f"{rec.get('client', 'client')} | scope={scope} | action={action} | {detail}"
+        if extra:
+            line += " | " + ", ".join(extra)
+        log(line, status)
+
+
+def ask_scope(default: Literal["local", "global", "both"] = "both") -> Literal["local", "global", "both"]:
+    """Prompt scope selection for client install/uninstall."""
+    options = {"1": "local", "2": "global", "3": "both"}
+    default_key = "3" if default == "both" else ("1" if default == "local" else "2")
+    print("\n请选择作用域：")
+    print("1. 项目本地")
+    print("2. 用户全局")
+    print("3. 同时（本地+全局）")
+    while True:
+        choice = input(f"请输入选项 [1-3，默认 {default_key}]: ").strip() or default_key
+        if choice in options:
+            return options[choice]  # type: ignore[return-value]
+        print("❌ 无效选项，请重新输入")
+
+
+def generate_client_install_markdown(mcp_full_path: Path) -> Path:
+    """Generate bilingual Markdown install guide for Claude and Codex."""
+    doc_path = PROJECT_ROOT / "docs" / "tutorials" / "05-mcp-client-install.md"
+    doc_path.parent.mkdir(parents=True, exist_ok=True)
+    json_config = f'{{"command":"node","args":["{mcp_full_path}"]}}'
+    codex_block = build_codex_mcp_block(mcp_full_path)
+    markdown = f"""# AgentSoul MCP Client Install Guide (Claude + Codex)
+
+## 中文
+
+### Claude CLI 安装
+```bash
+claude mcp add-json agentsoul '{json_config}'
+claude mcp add-json --scope user agentsoul '{json_config}'
+```
+
+### Claude CLI 卸载
+```bash
+claude mcp remove agentsoul
+claude mcp remove --scope user agentsoul
+```
+
+### Codex CLI 安装（config.toml）
+将以下片段写入 `~/.codex/config.toml`（全局）或 `<project>/.codex/config.toml`（本地）：
+```toml
+{AGENTSOUL_BLOCK_BEGIN}
+{codex_block.rstrip()}
+{AGENTSOUL_BLOCK_END}
+```
+
+### Codex CLI 卸载
+删除 `config.toml` 中 `{AGENTSOUL_BLOCK_BEGIN}` 到 `{AGENTSOUL_BLOCK_END}` 的整段。
+
+### 启动后记忆流程（必须）
+1. `mcp__agentsoul__mcp_tool_index()`
+2. `mcp__agentsoul__get_persona_config()`
+3. `mcp__agentsoul__get_soul_state()`
+4. `mcp__agentsoul__get_base_rules(name="SKILL")`
+5. `mcp__agentsoul__get_base_rules(name="memory_base")`
+6. `mcp__agentsoul__get_mcp_usage_guide()`
+7. `mcp__agentsoul__list_memory_topics()`
+
+最小读写闭环：`read_memory_topic` -> 对话 -> `write_memory_day` + `write_memory_topic`；事实变化使用 `entity_fact_invalidate` + `entity_fact_add`。
+
+## English
+
+### Claude CLI install
+```bash
+claude mcp add-json agentsoul '{json_config}'
+claude mcp add-json --scope user agentsoul '{json_config}'
+```
+
+### Claude CLI uninstall
+```bash
+claude mcp remove agentsoul
+claude mcp remove --scope user agentsoul
+```
+
+### Codex CLI install (config.toml)
+Write this block to `~/.codex/config.toml` (global) or `<project>/.codex/config.toml` (local):
+```toml
+{AGENTSOUL_BLOCK_BEGIN}
+{codex_block.rstrip()}
+{AGENTSOUL_BLOCK_END}
+```
+
+### Codex CLI uninstall
+Remove the full managed block between `{AGENTSOUL_BLOCK_BEGIN}` and `{AGENTSOUL_BLOCK_END}`.
+
+### Required startup memory workflow
+1. `mcp__agentsoul__mcp_tool_index()`
+2. `mcp__agentsoul__get_persona_config()`
+3. `mcp__agentsoul__get_soul_state()`
+4. `mcp__agentsoul__get_base_rules(name="SKILL")`
+5. `mcp__agentsoul__get_base_rules(name="memory_base")`
+6. `mcp__agentsoul__get_mcp_usage_guide()`
+7. `mcp__agentsoul__list_memory_topics()`
+
+Minimal read/write loop: `read_memory_topic` -> conversation -> `write_memory_day` + `write_memory_topic`; on fact change use `entity_fact_invalidate` then `entity_fact_add`.
+"""
+    doc_path.write_text(markdown, encoding="utf-8")
+    return doc_path
+
+
+def manage_mcp_clients(mcp_full_path: Path, json_config: str) -> None:
+    """Interactive client installation management for Claude and Codex."""
+    claude = ClaudeInstaller()
+    codex = CodexInstaller()
+    while True:
+        print("\nMCP 客户端安装管理：")
+        print("1. Claude 安装")
+        print("2. Claude 卸载")
+        print("3. Codex 安装")
+        print("4. Codex 卸载")
+        print("5. 一键安装（Claude+Codex）")
+        print("6. 一键卸载（Claude+Codex）")
+        print("7. 查看状态")
+        print("0. 返回")
+        choice = input("请输入选项 [0-7]: ").strip()
+        if choice == "0":
+            return
+        scope = ask_scope("both")
+        if choice == "1":
+            render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
+        elif choice == "2":
+            render_action_summary("Claude 卸载结果", claude.uninstall(scope))
+        elif choice == "3":
+            render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
+        elif choice == "4":
+            render_action_summary("Codex 卸载结果", codex.uninstall(scope))
+        elif choice == "5":
+            render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
+            render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
+        elif choice == "6":
+            render_action_summary("Claude 卸载结果", claude.uninstall(scope))
+            render_action_summary("Codex 卸载结果", codex.uninstall(scope))
+        elif choice == "7":
+            render_action_summary("Claude 状态", claude.status(scope))
+            render_action_summary("Codex 状态", codex.status(scope))
+        else:
+            print("❌ 无效选项，请重新输入")
 
 
 def uninstall_mcp() -> bool:
-    """Uninstall AgentSoul MCP from Claude CLI"""
-    log("卸载 Claude CLI 中的 AgentSoul MCP...", "STEP")
-
-    # 检测 Claude CLI 是否安装
-    if not is_claude_cli_installed():
-        log("未检测到 Claude CLI 安装，无需卸载", "INFO")
-        return False
-
-    log("检测到 Claude CLI，执行卸载...", "OK")
-
-    # 使用官方命令卸载
-    cmd = ["claude", "mcp", "remove", "agentsoul"]
-    result = subprocess.run(cmd, capture_output=False, text=True)
-    if result.returncode != 0:
-        log("MCP 卸载失败，请手动执行：claude mcp remove agentsoul", "ERROR")
-        return False
-
-    # Auto-remove the SessionStart hook from settings.json
-    def remove_agentsoul_hook_file(settings_path: Path) -> bool:
-        """Remove AgentSoul SessionStart hook from given settings file."""
-        if not settings_path.exists():
-            return False
-
-        import json
-        with open(settings_path, encoding="utf-8") as f:
-            settings = json.load(f)
-
-        removed = remove_agentsoul_hooks(settings)
-
-        # Write back if we removed anything
-        if removed:
-            with open(settings_path, "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-            log(f"✅ 已自动移除 SessionStart hook 从 {settings_path}", "OK")
-
-        # Post-check: verify all AgentSoul hooks are gone
-        # Check again in case there were multiple hooks
-        remaining = count_remaining_agentsoul_hooks(settings)
-        if remaining > 0:
-            log(f"⚠️  仍有 {remaining} 个 AgentSoul hook 残留在 {settings_path}，请手动移除", "WARN")
-
-        return removed
-
-    # Remove from global settings
-    global_settings = Path.home() / ".claude" / "settings.json"
-    removed_global = False
-    if global_settings.exists():
-        try:
-            removed_global = remove_agentsoul_hook_file(global_settings)
-        except Exception as e:
-            log(f"移除全局 SessionStart hook 失败：{e}，请手动移除", "WARN")
-
-    # Remove from project local settings (if we're running from the project directory)
-    local_settings = Path.cwd() / ".claude" / "settings.json"
-    removed_local = False
-    if local_settings.exists():
-        try:
-            removed_local = remove_agentsoul_hooks(local_settings)
-        except Exception as e:
-            log(f"移除项目本地 SessionStart hook 失败：{e}，请手动移除", "WARN")
-
-    if not removed_global and not removed_local:
-        log("✅ 未找到 AgentSoul SessionStart hook，跳过", "INFO")
-
-    # Final verification check - count any remaining AgentSoul hooks
-    def count_remaining_hooks(settings_path: Path) -> int:
-        """Count how many AgentSoul hooks remain after removal."""
-        if not settings_path.exists():
-            return 0
-        import json
-        try:
-            with open(settings_path, encoding='utf-8') as f:
-                settings = json.load(f)
-            count = 0
-            if "hooks" in settings and "SessionStart" in settings["hooks"]:
-                for hook in settings["hooks"]["SessionStart"]:
-                    if "matcher" in hook and "hooks" in hook:
-                        for subhook in hook["hooks"]:
-                            if subhook.get("type") == "prompt" and "AGENTSOUL PERSONALITY FRAMEWORK" in subhook.get("prompt", ""):
-                                count += 1
-            return count
-        except Exception:
-            return -1  # Error reading file
-
-    remaining_global = count_remaining_hooks(global_settings)
-    remaining_local = count_remaining_hooks(local_settings)
-    total_remaining = (remaining_global if remaining_global > 0 else 0) + (remaining_local if remaining_local > 0 else 0)
-
-    if total_remaining > 0:
-        log(f"⚠️  检测到仍有 {total_remaining} 个 AgentSoul hook 未移除，请手动检查清理：", "WARN")
-        if remaining_global > 0:
-            log(f"   - 全局: {global_settings}", "WARN")
-        if remaining_local > 0:
-            log(f"   - 本地: {local_settings}", "WARN")
+    """Backward-compatible uninstall command (Claude only)."""
+    log("卸载 Claude CLI 中的 AgentSoul MCP（强制自动清理）...", "STEP")
+    claude = ClaudeInstaller()
+    records = claude.uninstall("both")
+    render_action_summary("Claude 卸载结果", records)
+    ok = all(rec.get("success", False) for rec in records if rec.get("scope") in ("local", "global"))
+    if ok:
+        log("✅ MCP 卸载完成", "OK")
     else:
-        log("✅ 所有 AgentSoul hook 已清理干净", "OK")
-
-    # Clean up empty .claude directory in project if it's empty after removal
-    local_claude_dir = Path.cwd() / ".claude"
-    if local_claude_dir.exists():
-        # Check if directory is empty
-        try:
-            if not any(local_claude_dir.iterdir()):
-                local_claude_dir.rmdir()
-                log(f"✅ 已删除空项目目录 {local_claude_dir}", "OK")
-        except Exception:
-            # Ignore errors if directory isn't empty
-            pass
-
-    log("✅ MCP 卸载完成", "OK")
-    return True
+        log("⚠️  卸载完成但存在失败项，请查看上方详情", "WARN")
+    return ok
 
 
 def check_and_initialize_configs(project_root: Path) -> None:
@@ -1467,6 +1721,7 @@ def main():
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
   python3 install.py --openclaw --scope global  # OpenClaw 全局安装
   python3 install.py --uninstall            # 卸载 Claude CLI 中的 AgentSoul MCP
+  python3 install.py --status               # 查看 Claude/Codex MCP 注册状态
   python3 install.py --rollback            # 列出最近安装尝试并手动回滚
 """
     parser = argparse.ArgumentParser(
@@ -1482,22 +1737,23 @@ def main():
     parser.add_argument("--openclaw", action="store_true", help="安装 OpenClaw 人格插件")
     parser.add_argument("--scope", type=str, choices=["current", "global"], help="OpenClaw 装载范围")
     parser.add_argument("--uninstall", action="store_true", help="卸载 Claude CLI 中的 AgentSoul MCP")
+    parser.add_argument("--status", action="store_true", help="查看 Claude/Codex MCP 客户端注册状态")
     parser.add_argument("--rollback", action="store_true", help="列出最近安装尝试并手动回滚")
 
     args = parser.parse_args()
 
-    # Check and initialize soul and master configurations
-    check_and_initialize_configs(PROJECT_ROOT)
-
     if args.persona:
+        check_and_initialize_configs(PROJECT_ROOT)
         generate_persona_package(name=args.name)
         return
 
     if args.mcp:
+        check_and_initialize_configs(PROJECT_ROOT)
         install_mcp(run_after=not args.no_run, log_path=args.log)
         return
 
     if args.openclaw:
+        check_and_initialize_configs(PROJECT_ROOT)
         scope = "global_session" if args.scope == "global" else "current_session"
         install_openclaw(scope)
         return
@@ -1506,9 +1762,20 @@ def main():
         uninstall_mcp()
         return
 
+    if args.status:
+        scope = "both"
+        claude = ClaudeInstaller()
+        codex = CodexInstaller()
+        render_action_summary("Claude 状态", claude.status(scope))
+        render_action_summary("Codex 状态", codex.status(scope))
+        return
+
     if args.rollback:
         list_and_perform_rollback()
         return
+
+    # Interactive install mode requires configuration initialization.
+    check_and_initialize_configs(PROJECT_ROOT)
 
     choice = show_menu()
 

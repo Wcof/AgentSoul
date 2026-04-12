@@ -132,6 +132,16 @@ python3 install.py --mcp --no-run
 
 安装完成后，MCP 服务会自动注册到 Claude Code。重启 Claude Code 即可使用。
 
+### 4.1️⃣ 管理 Claude / Codex MCP 客户端配置
+
+`install.py --mcp` 现在会自动生成双语客户端安装指南，并进入客户端管理菜单，可分别安装/卸载：
+
+- Claude CLI（`claude mcp add-json` / `claude mcp remove`）
+- Codex CLI（自动写入 `~/.codex/config.toml` 或项目级 `.codex/config.toml`）
+
+自动生成文档位置：
+- [`docs/tutorials/05-mcp-client-install.md`](docs/tutorials/05-mcp-client-install.md)
+
 ### 5️⃣ 自动检测运行环境
 
 AgentSoul 可以自动检测当前运行环境（Claude Code / OpenAI Codex / Gemini）并输出对应的注入模板：
