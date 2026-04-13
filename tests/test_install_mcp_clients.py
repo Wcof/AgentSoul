@@ -109,6 +109,17 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertIn("mcp__agentsoul__get_mcp_usage_guide()", content)
         self.assertIn("entity_fact_invalidate", content)
 
+    def test_codex_agents_markdown_contains_required_calls(self):
+        content = install.codex_agents_markdown()
+        self.assertIn("mcp__agentsoul__mcp_tool_index()", content)
+        self.assertIn("write_memory_day", content)
+        self.assertIn("Do not claim persistence", content)
+
+    def test_codex_agents_md_paths_scope(self):
+        self.assertEqual(install.codex_agents_md_paths("global"), [])
+        self.assertEqual(len(install.codex_agents_md_paths("local")), 1)
+        self.assertEqual(len(install.codex_agents_md_paths("both")), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

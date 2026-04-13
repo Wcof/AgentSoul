@@ -1261,6 +1261,41 @@ Memory write minimum:
 """
 
 
+AGENTSOUL_AGENTS_BEGIN = "<!-- BEGIN AGENTSOUL STARTUP -->"
+AGENTSOUL_AGENTS_END = "<!-- END AGENTSOUL STARTUP -->"
+
+
+def codex_agents_md_paths(scope: Literal["local", "global", "both"]) -> list[Path]:
+    """Get AGENTS.md paths for selected scope.
+
+    Codex project behavior is controlled by project-local AGENTS.md.
+    """
+    if scope in ("local", "both"):
+        return [PROJECT_ROOT / "AGENTS.md"]
+    return []
+
+
+def codex_agents_markdown() -> str:
+    """Managed AGENTS.md block for Codex startup behavior."""
+    return """# AgentSoul Startup Rules (Codex)
+
+Before answering any user request in this project, run this MCP startup sequence first:
+
+1. `mcp__agentsoul__mcp_tool_index()`
+2. `mcp__agentsoul__get_persona_config()`
+3. `mcp__agentsoul__get_soul_state()`
+4. `mcp__agentsoul__get_base_rules(name="SKILL")`
+5. `mcp__agentsoul__get_base_rules(name="memory_base")`
+6. `mcp__agentsoul__get_mcp_usage_guide()`
+7. `mcp__agentsoul__list_memory_topics()`
+
+Then:
+- Respond with the loaded persona, tone, and safety rules.
+- Persist memory updates via MCP write tools (`write_memory_day`, `write_memory_topic`, `update_soul_state`).
+- Do not claim persistence if MCP write calls were not executed.
+"""
+
+
 def run_cli_command(cmd: list[str]) -> tuple[bool, str]:
     """Run command and return (ok, combined_output)."""
     try:
@@ -1269,6 +1304,17 @@ def run_cli_command(cmd: list[str]) -> tuple[bool, str]:
         return (result.returncode == 0, output.strip())
     except Exception as e:
         return (False, str(e))
+
+
+def run_cli_command_with_fallback(commands: list[list[str]]) -> tuple[bool, str]:
+    """Run command candidates in order, returning the first success."""
+    last_output = ""
+    for cmd in commands:
+        ok, output = run_cli_command(cmd)
+        if ok:
+            return (True, output)
+        last_output = output
+    return (False, last_output)
 
 
 class ClientInstaller:
@@ -1304,7 +1350,10 @@ class ClaudeInstaller(ClientInstaller):
 
         hook_prompt = get_agentsoul_hook_prompt()
         if scope in ("global", "both"):
-            ok, msg = run_cli_command(["claude", "mcp", "add-json", "--scope", "user", "agentsoul", json_config])
+            ok, msg = run_cli_command_with_fallback([
+                ["claude", "mcp", "add-json", "--scope", "user", "agentsoul", json_config],
+                ["claude", "mcp", "add-json", "-s", "user", "agentsoul", json_config],
+            ])
             settings_path = Path.home() / ".claude" / "settings.json"
             settings = load_settings(settings_path) if settings_path.exists() else {}
             changed = ensure_agentsoul_hook(settings, hook_prompt)
@@ -1313,7 +1362,10 @@ class ClaudeInstaller(ClientInstaller):
             records.append({"client": self.name, "scope": "global", "action": "install", "success": ok, "detail": msg or "registered"})
 
         if scope in ("local", "both"):
-            ok, msg = run_cli_command(["claude", "mcp", "add-json", "agentsoul", json_config])
+            ok, msg = run_cli_command_with_fallback([
+                ["claude", "mcp", "add-json", "agentsoul", json_config],
+                ["claude", "mcp", "add-json", "-s", "local", "agentsoul", json_config],
+            ])
             settings_path = PROJECT_ROOT / ".claude" / "settings.json"
             settings = load_settings(settings_path) if settings_path.exists() else {}
             changed = ensure_agentsoul_hook(settings, hook_prompt)
@@ -1329,12 +1381,18 @@ class ClaudeInstaller(ClientInstaller):
             return records
 
         if scope in ("global", "both"):
-            ok, msg = run_cli_command(["claude", "mcp", "remove", "--scope", "user", "agentsoul"])
+            ok, msg = run_cli_command_with_fallback([
+                ["claude", "mcp", "remove", "--scope", "user", "agentsoul"],
+                ["claude", "mcp", "remove", "agentsoul", "-s", "user"],
+            ])
             removed, remaining = remove_agentsoul_hook_file(Path.home() / ".claude" / "settings.json", force=True)
             records.append({"client": self.name, "scope": "global", "action": "uninstall", "success": ok and remaining == 0, "removed_hooks": removed, "remaining_hooks": remaining, "detail": msg or "removed"})
 
         if scope in ("local", "both"):
-            ok, msg = run_cli_command(["claude", "mcp", "remove", "agentsoul"])
+            ok, msg = run_cli_command_with_fallback([
+                ["claude", "mcp", "remove", "agentsoul"],
+                ["claude", "mcp", "remove", "agentsoul", "-s", "local"],
+            ])
             local_settings = PROJECT_ROOT / ".claude" / "settings.json"
             removed, remaining = remove_agentsoul_hook_file(local_settings, force=True)
             local_claude_dir = PROJECT_ROOT / ".claude"
@@ -1350,11 +1408,17 @@ class ClaudeInstaller(ClientInstaller):
     def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         if scope in ("global", "both"):
-            ok, msg = run_cli_command(["claude", "mcp", "get", "--scope", "user", "agentsoul"])
+            ok, msg = run_cli_command_with_fallback([
+                ["claude", "mcp", "get", "agentsoul", "-s", "user"],
+                ["claude", "mcp", "get", "--scope", "user", "agentsoul"],
+            ])
             settings = load_settings(Path.home() / ".claude" / "settings.json")
             records.append({"client": self.name, "scope": "global", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
         if scope in ("local", "both"):
-            ok, msg = run_cli_command(["claude", "mcp", "get", "agentsoul"])
+            ok, msg = run_cli_command_with_fallback([
+                ["claude", "mcp", "get", "agentsoul", "-s", "local"],
+                ["claude", "mcp", "get", "agentsoul"],
+            ])
             settings = load_settings(PROJECT_ROOT / ".claude" / "settings.json")
             records.append({"client": self.name, "scope": "local", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
         return records
@@ -1384,6 +1448,10 @@ class CodexInstaller(ClientInstaller):
             md.parent.mkdir(parents=True, exist_ok=True)
             md.write_text(codex_startup_markdown(), encoding="utf-8")
             records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback", "success": True, "detail": f"generated {md}"})
+
+        for agents_md in codex_agents_md_paths(scope):
+            upsert_managed_block(agents_md, codex_agents_markdown(), AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
+            records.append({"client": self.name, "scope": "local", "action": "agents_md", "success": True, "detail": f"updated {agents_md}"})
         return records
 
     def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
@@ -1395,6 +1463,9 @@ class CodexInstaller(ClientInstaller):
             if md.exists():
                 md.unlink()
                 records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
+        for agents_md in codex_agents_md_paths(scope):
+            changed = remove_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
+            records.append({"client": self.name, "scope": "local", "action": "agents_md_remove", "success": True, "detail": f"{'removed' if changed else 'not found'} {agents_md}"})
         local_dir = PROJECT_ROOT / ".codex"
         if local_dir.exists():
             try:
@@ -1414,6 +1485,14 @@ class CodexInstaller(ClientInstaller):
                 "registered": has_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END),
                 "startup_fallback": (Path.home() / ".codex" / "agentsoul-startup.md").exists() if sc == "global" else (PROJECT_ROOT / ".codex" / "agentsoul-startup.md").exists(),
                 "detail": str(cfg),
+            })
+        for agents_md in codex_agents_md_paths(scope):
+            records.append({
+                "client": self.name,
+                "scope": "local",
+                "action": "agents_md_status",
+                "registered": has_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END),
+                "detail": str(agents_md),
             })
         return records
 

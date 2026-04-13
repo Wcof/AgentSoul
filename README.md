@@ -138,9 +138,23 @@ python3 install.py --mcp --no-run
 
 - Claude CLI（`claude mcp add-json` / `claude mcp remove`）
 - Codex CLI（自动写入 `~/.codex/config.toml` 或项目级 `.codex/config.toml`）
+- Codex 启动指令（自动生成项目根 `AGENTS.md` 托管片段 + `.codex/agentsoul-startup.md`）
 
 自动生成文档位置：
 - [`docs/tutorials/05-mcp-client-install.md`](docs/tutorials/05-mcp-client-install.md)
+
+### 4.2️⃣ 必须启动 MCP 吗？只用 Skill 可以吗？
+
+结论：
+- **要“持久人格 + 记忆写入 + 情感状态”生效，必须启用 MCP。**
+- 只用 Skill/提示词可以做到“像某种人格说话”，但**不能替代** MCP 的持久化读写能力。
+
+原因：
+- 人格与用户档案来自 `get_persona_config`
+- 情感状态来自 `get_soul_state`
+- 记忆持久化依赖 `write_memory_day` / `write_memory_topic` / `update_soul_state`
+
+如果不启用 MCP，模型每次都是“临时上下文”，重启会话后无法保证连续性。
 
 ### 5️⃣ 自动检测运行环境
 
