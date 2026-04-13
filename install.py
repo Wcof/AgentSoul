@@ -923,7 +923,42 @@ def install_openclaw(scope: str) -> None:
     installer.install(scope)
 
 
-def install_mcp(run_after: bool = True, log_path: str | None = None) -> bool:
+def ask_client_target(default: Literal["both", "claude", "codex"] = "both") -> Literal["both", "claude", "codex"]:
+    """Prompt client target for MCP registration."""
+    options = {"1": "both", "2": "claude", "3": "codex"}
+    default_key = "1" if default == "both" else ("2" if default == "claude" else "3")
+    print("\n请选择要安装的客户端：")
+    print("1. Claude + Codex（推荐）")
+    print("2. 仅 Claude")
+    print("3. 仅 Codex")
+    while True:
+        choice = input(f"请输入选项 [1-3，默认 {default_key}]: ").strip() or default_key
+        if choice in options:
+            return options[choice]  # type: ignore[return-value]
+        print("❌ 无效选项，请重新输入")
+
+
+def install_selected_clients(
+    mcp_full_path: Path,
+    json_config: str,
+    scope: Literal["local", "global", "both"],
+    target: Literal["both", "claude", "codex"],
+) -> None:
+    """Install selected MCP clients in selected scope."""
+    claude = ClaudeInstaller()
+    codex = CodexInstaller()
+    if target in ("both", "claude"):
+        render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
+    if target in ("both", "codex"):
+        render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
+
+
+def install_mcp(
+    run_after: bool = True,
+    log_path: str | None = None,
+    client_scope: Literal["local", "global", "both"] | None = None,
+    client_target: Literal["both", "claude", "codex"] | None = None,
+) -> bool:
     log("安装 MCP 服务...", "STEP")
 
     config_loader = ConfigLoader(PROJECT_ROOT)
@@ -1023,7 +1058,20 @@ def install_mcp(run_after: bool = True, log_path: str | None = None) -> bool:
     print(f"claude mcp add-json agentsoul '{json_config}'")
     print(f"claude mcp add-json --scope user agentsoul '{json_config}'\n")
 
-    manage_mcp_clients(mcp_full_path, json_config)
+    # Install client registration right away during MCP setup.
+    resolved_scope = client_scope if client_scope is not None else ask_scope("both")
+    resolved_target = client_target if client_target is not None else ask_client_target("both")
+    install_selected_clients(mcp_full_path, json_config, resolved_scope, resolved_target)
+
+    # Optional advanced client management menu.
+    while True:
+        answer = input("\n是否继续进入 MCP 客户端高级管理菜单？[y/N]: ").strip().lower()
+        if answer in ("", "n", "no"):
+            break
+        if answer in ("y", "yes"):
+            manage_mcp_clients(mcp_full_path, json_config)
+            break
+        print("❌ 无效选项，请输入 y 或 n")
 
     if not run_after:
         return True
@@ -1797,6 +1845,7 @@ def main():
   python3 install.py --persona --name "小明" # 自定义 Agent 名称生成
   python3 install.py --mcp                   # 安装并启动 MCP 服务
   python3 install.py --mcp --no-run         # 仅安装 MCP，不启动
+  python3 install.py --mcp --client-scope both  # 安装时同时写入项目级+全局客户端配置
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
   python3 install.py --openclaw --scope global  # OpenClaw 全局安装
   python3 install.py --uninstall            # 卸载 Claude CLI 中的 AgentSoul MCP
@@ -1813,6 +1862,18 @@ def main():
     parser.add_argument("--mcp", action="store_true", help="安装并启动 MCP 服务")
     parser.add_argument("--no-run", action="store_true", help="仅安装，不启动 MCP")
     parser.add_argument("--log", type=str, help="MCP 日志输出路径")
+    parser.add_argument(
+        "--client-scope",
+        type=str,
+        choices=["local", "global", "both"],
+        help="MCP 客户端注册作用域（项目级/全局/同时），仅用于 --mcp",
+    )
+    parser.add_argument(
+        "--client-target",
+        type=str,
+        choices=["both", "claude", "codex"],
+        help="MCP 客户端类型（Claude/Codex/同时），仅用于 --mcp",
+    )
     parser.add_argument("--openclaw", action="store_true", help="安装 OpenClaw 人格插件")
     parser.add_argument("--scope", type=str, choices=["current", "global"], help="OpenClaw 装载范围")
     parser.add_argument("--uninstall", action="store_true", help="卸载 Claude CLI 中的 AgentSoul MCP")
@@ -1828,7 +1889,12 @@ def main():
 
     if args.mcp:
         check_and_initialize_configs(PROJECT_ROOT)
-        install_mcp(run_after=not args.no_run, log_path=args.log)
+        install_mcp(
+            run_after=not args.no_run,
+            log_path=args.log,
+            client_scope=args.client_scope,
+            client_target=args.client_target,
+        )
         return
 
     if args.openclaw:

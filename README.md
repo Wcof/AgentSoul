@@ -128,6 +128,9 @@ python3 install.py --mcp
 
 # 仅安装不启动
 python3 install.py --mcp --no-run
+
+# 安装时直接选择客户端作用域（项目级/全局/同时）
+python3 install.py --mcp --client-scope both --client-target both
 ```
 
 安装完成后，MCP 服务会自动注册到 Claude Code。重启 Claude Code 即可使用。
