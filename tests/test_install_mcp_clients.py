@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import install
 
@@ -119,6 +120,28 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertEqual(install.codex_agents_md_paths("global"), [])
         self.assertEqual(len(install.codex_agents_md_paths("local")), 1)
         self.assertEqual(len(install.codex_agents_md_paths("both")), 1)
+
+    def test_trae_scope_paths_both(self):
+        paths = install.trae_scope_paths("both")
+        self.assertEqual(len(paths), 2)
+        self.assertTrue(any(str(p).endswith(".trae/mcp.json") for p in paths))
+
+    def test_upsert_remove_mcp_server_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cfg = Path(temp_dir) / "mcp.json"
+            install._upsert_mcp_server_in_json(
+                cfg, "agentsoul", {"command": "node", "args": ["/tmp/a.js"]}
+            )
+            self.assertTrue(install._has_mcp_server_in_json(cfg, "agentsoul"))
+            removed = install._remove_mcp_server_in_json(cfg, "agentsoul")
+            self.assertTrue(removed)
+            self.assertFalse(install._has_mcp_server_in_json(cfg, "agentsoul"))
+
+    def test_find_project_by_name_uses_discovery(self):
+        fake_projects = [Path("/tmp/foo"), Path("/tmp/bar/app-one")]
+        with mock.patch.object(install, "discover_project_candidates", return_value=fake_projects):
+            self.assertEqual(install.find_project_by_name("foo"), Path("/tmp/foo"))
+            self.assertEqual(install.find_project_by_name("app-one"), Path("/tmp/bar/app-one"))
 
 
 if __name__ == "__main__":

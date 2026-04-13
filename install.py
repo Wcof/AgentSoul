@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -34,6 +35,7 @@ from typing import Any, Dict, List, Literal, Optional
 import yaml
 
 PROJECT_ROOT = Path(__file__).parent
+PROJECT_MARKER_FILES = ("AGENTS.md", "AGENT.md", "CLAUDE.md", "TRAE.md")
 
 try:
     from common import get_default_pad_state, initialize_identity, log
@@ -923,16 +925,24 @@ def install_openclaw(scope: str) -> None:
     installer.install(scope)
 
 
-def ask_client_target(default: Literal["both", "claude", "codex"] = "both") -> Literal["both", "claude", "codex"]:
+def ask_client_target(default: Literal["all", "claude", "codex", "trae"] = "all") -> Literal["all", "claude", "codex", "trae"]:
     """Prompt client target for MCP registration."""
-    options = {"1": "both", "2": "claude", "3": "codex"}
-    default_key = "1" if default == "both" else ("2" if default == "claude" else "3")
+    options = {"1": "all", "2": "claude", "3": "codex", "4": "trae"}
+    if default == "all":
+        default_key = "1"
+    elif default == "claude":
+        default_key = "2"
+    elif default == "codex":
+        default_key = "3"
+    else:
+        default_key = "4"
     print("\n请选择要安装的客户端：")
-    print("1. Claude + Codex（推荐）")
+    print("1. Claude + Codex + Trae（推荐）")
     print("2. 仅 Claude")
     print("3. 仅 Codex")
+    print("4. 仅 Trae")
     while True:
-        choice = input(f"请输入选项 [1-3，默认 {default_key}]: ").strip() or default_key
+        choice = input(f"请输入选项 [1-4，默认 {default_key}]: ").strip() or default_key
         if choice in options:
             return options[choice]  # type: ignore[return-value]
         print("❌ 无效选项，请重新输入")
@@ -942,22 +952,27 @@ def install_selected_clients(
     mcp_full_path: Path,
     json_config: str,
     scope: Literal["local", "global", "both"],
-    target: Literal["both", "claude", "codex"],
+    target: Literal["all", "claude", "codex", "trae"],
+    project_root: Path = PROJECT_ROOT,
 ) -> None:
     """Install selected MCP clients in selected scope."""
-    claude = ClaudeInstaller()
-    codex = CodexInstaller()
-    if target in ("both", "claude"):
+    claude = ClaudeInstaller(project_root)
+    codex = CodexInstaller(project_root)
+    trae = TraeInstaller(project_root)
+    if target in ("all", "claude"):
         render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
-    if target in ("both", "codex"):
+    if target in ("all", "codex"):
         render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
+    if target in ("all", "trae"):
+        render_action_summary("Trae 安装结果", trae.install(scope, mcp_full_path, json_config))
 
 
 def install_mcp(
     run_after: bool = True,
     log_path: str | None = None,
     client_scope: Literal["local", "global", "both"] | None = None,
-    client_target: Literal["both", "claude", "codex"] | None = None,
+    client_target: Literal["all", "claude", "codex", "trae"] | None = None,
+    project_selector: str | None = None,
 ) -> bool:
     log("安装 MCP 服务...", "STEP")
 
@@ -1060,8 +1075,26 @@ def install_mcp(
 
     # Install client registration right away during MCP setup.
     resolved_scope = client_scope if client_scope is not None else ask_scope("both")
-    resolved_target = client_target if client_target is not None else ask_client_target("both")
-    install_selected_clients(mcp_full_path, json_config, resolved_scope, resolved_target)
+    selected_project_root = PROJECT_ROOT.resolve()
+    if resolved_scope in ("local", "both"):
+        if project_selector:
+            found = find_project_by_name(project_selector)
+            if found is None:
+                log(f"未找到项目：{project_selector}，将使用当前项目 {PROJECT_ROOT}", "WARN")
+            else:
+                selected_project_root = found
+                log(f"本地作用域目标项目：{selected_project_root}", "OK")
+        elif client_scope is None:
+            selected_project_root = ask_project_root(PROJECT_ROOT)
+            log(f"本地作用域目标项目：{selected_project_root}", "OK")
+    resolved_target = client_target if client_target is not None else ask_client_target("all")
+    install_selected_clients(
+        mcp_full_path,
+        json_config,
+        resolved_scope,
+        resolved_target,
+        project_root=selected_project_root,
+    )
 
     # Optional advanced client management menu.
     while True:
@@ -1069,7 +1102,7 @@ def install_mcp(
         if answer in ("", "n", "no"):
             break
         if answer in ("y", "yes"):
-            manage_mcp_clients(mcp_full_path, json_config)
+            manage_mcp_clients(mcp_full_path, json_config, selected_project_root)
             break
         print("❌ 无效选项，请输入 y 或 n")
 
@@ -1268,23 +1301,23 @@ def build_codex_mcp_block(mcp_full_path: Path) -> str:
     )
 
 
-def codex_scope_paths(scope: Literal["local", "global", "both"]) -> list[Path]:
+def codex_scope_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
     """Get Codex config paths for selected scope."""
     paths: list[Path] = []
     if scope in ("global", "both"):
         paths.append(Path.home() / ".codex" / "config.toml")
     if scope in ("local", "both"):
-        paths.append(PROJECT_ROOT / ".codex" / "config.toml")
+        paths.append(project_root / ".codex" / "config.toml")
     return paths
 
 
-def codex_startup_md_paths(scope: Literal["local", "global", "both"]) -> list[Path]:
+def codex_startup_md_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
     """Get Codex startup markdown paths for selected scope."""
     paths: list[Path] = []
     if scope in ("global", "both"):
         paths.append(Path.home() / ".codex" / "agentsoul-startup.md")
     if scope in ("local", "both"):
-        paths.append(PROJECT_ROOT / ".codex" / "agentsoul-startup.md")
+        paths.append(project_root / ".codex" / "agentsoul-startup.md")
     return paths
 
 
@@ -1313,13 +1346,13 @@ AGENTSOUL_AGENTS_BEGIN = "<!-- BEGIN AGENTSOUL STARTUP -->"
 AGENTSOUL_AGENTS_END = "<!-- END AGENTSOUL STARTUP -->"
 
 
-def codex_agents_md_paths(scope: Literal["local", "global", "both"]) -> list[Path]:
+def codex_agents_md_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
     """Get AGENTS.md paths for selected scope.
 
     Codex project behavior is controlled by project-local AGENTS.md.
     """
     if scope in ("local", "both"):
-        return [PROJECT_ROOT / "AGENTS.md"]
+        return [project_root / "AGENTS.md"]
     return []
 
 
@@ -1365,9 +1398,68 @@ def run_cli_command_with_fallback(commands: list[list[str]]) -> tuple[bool, str]
     return (False, last_output)
 
 
+def trae_scope_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
+    """Get Trae MCP config paths for selected scope."""
+    paths: list[Path] = []
+    if scope in ("global", "both"):
+        paths.append(Path.home() / ".trae" / "mcp.json")
+    if scope in ("local", "both"):
+        paths.append(project_root / ".trae" / "mcp.json")
+    return paths
+
+
+def _load_json_obj(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+        if not raw:
+            return {}
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return obj
+    except Exception:
+        return {}
+    return {}
+
+
+def _upsert_mcp_server_in_json(path: Path, server_name: str, config: dict[str, Any]) -> None:
+    """Upsert MCP server entry in JSON object with mcpServers map."""
+    data = _load_json_obj(path)
+    servers = data.get("mcpServers")
+    if not isinstance(servers, dict):
+        servers = {}
+    servers[server_name] = config
+    data["mcpServers"] = servers
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _remove_mcp_server_in_json(path: Path, server_name: str) -> bool:
+    if not path.exists():
+        return False
+    data = _load_json_obj(path)
+    servers = data.get("mcpServers")
+    if not isinstance(servers, dict) or server_name not in servers:
+        return False
+    servers.pop(server_name, None)
+    data["mcpServers"] = servers
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return True
+
+
+def _has_mcp_server_in_json(path: Path, server_name: str) -> bool:
+    data = _load_json_obj(path)
+    servers = data.get("mcpServers")
+    return isinstance(servers, dict) and server_name in servers
+
+
 class ClientInstaller:
     """Base interface for MCP client installers."""
     name: str = "base"
+
+    def __init__(self, project_root: Path = PROJECT_ROOT) -> None:
+        self.project_root = project_root.resolve()
 
     def detect(self) -> bool:
         raise NotImplementedError
@@ -1414,7 +1506,7 @@ class ClaudeInstaller(ClientInstaller):
                 ["claude", "mcp", "add-json", "agentsoul", json_config],
                 ["claude", "mcp", "add-json", "-s", "local", "agentsoul", json_config],
             ])
-            settings_path = PROJECT_ROOT / ".claude" / "settings.json"
+            settings_path = self.project_root / ".claude" / "settings.json"
             settings = load_settings(settings_path) if settings_path.exists() else {}
             changed = ensure_agentsoul_hook(settings, hook_prompt)
             if changed:
@@ -1441,9 +1533,9 @@ class ClaudeInstaller(ClientInstaller):
                 ["claude", "mcp", "remove", "agentsoul"],
                 ["claude", "mcp", "remove", "agentsoul", "-s", "local"],
             ])
-            local_settings = PROJECT_ROOT / ".claude" / "settings.json"
+            local_settings = self.project_root / ".claude" / "settings.json"
             removed, remaining = remove_agentsoul_hook_file(local_settings, force=True)
-            local_claude_dir = PROJECT_ROOT / ".claude"
+            local_claude_dir = self.project_root / ".claude"
             if local_claude_dir.exists():
                 try:
                     if not any(local_claude_dir.iterdir()):
@@ -1467,7 +1559,7 @@ class ClaudeInstaller(ClientInstaller):
                 ["claude", "mcp", "get", "agentsoul", "-s", "local"],
                 ["claude", "mcp", "get", "agentsoul"],
             ])
-            settings = load_settings(PROJECT_ROOT / ".claude" / "settings.json")
+            settings = load_settings(self.project_root / ".claude" / "settings.json")
             records.append({"client": self.name, "scope": "local", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
         return records
 
@@ -1488,33 +1580,82 @@ class CodexInstaller(ClientInstaller):
             return records
 
         block = build_codex_mcp_block(mcp_full_path)
-        for cfg in codex_scope_paths(scope):
+        for cfg in codex_scope_paths(scope, self.project_root):
             upsert_managed_block(cfg, block, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
             records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "install", "success": True, "detail": f"updated {cfg}"})
 
-        for md in codex_startup_md_paths(scope):
+        for md in codex_startup_md_paths(scope, self.project_root):
             md.parent.mkdir(parents=True, exist_ok=True)
             md.write_text(codex_startup_markdown(), encoding="utf-8")
             records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback", "success": True, "detail": f"generated {md}"})
 
-        for agents_md in codex_agents_md_paths(scope):
+        for agents_md in codex_agents_md_paths(scope, self.project_root):
             upsert_managed_block(agents_md, codex_agents_markdown(), AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
             records.append({"client": self.name, "scope": "local", "action": "agents_md", "success": True, "detail": f"updated {agents_md}"})
         return records
 
+
+class TraeInstaller(ClientInstaller):
+    """Trae MCP installer using managed JSON mcpServers config."""
+
+    name = "Trae"
+
+    def detect(self) -> bool:
+        # No stable public CLI is required for config-file mode.
+        return True
+
+    def install(self, scope: Literal["local", "global", "both"], mcp_full_path: Path, json_config: str) -> list[dict[str, Any]]:
+        del json_config
+        records: list[dict[str, Any]] = []
+        server_cfg = {"command": "node", "args": [str(mcp_full_path)]}
+        for cfg in trae_scope_paths(scope, self.project_root):
+            _upsert_mcp_server_in_json(cfg, "agentsoul", server_cfg)
+            records.append({
+                "client": self.name,
+                "scope": "global" if str(cfg).startswith(str(Path.home())) else "local",
+                "action": "install",
+                "success": True,
+                "detail": f"updated {cfg}",
+            })
+        return records
+
     def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
-        for cfg in codex_scope_paths(scope):
+        for cfg in trae_scope_paths(scope, self.project_root):
+            changed = _remove_mcp_server_in_json(cfg, "agentsoul")
+            records.append({
+                "client": self.name,
+                "scope": "global" if str(cfg).startswith(str(Path.home())) else "local",
+                "action": "uninstall",
+                "success": True,
+                "detail": f"{'removed' if changed else 'not found'} {cfg}",
+            })
+        return records
+
+    def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for cfg in trae_scope_paths(scope, self.project_root):
+            records.append({
+                "client": self.name,
+                "scope": "global" if str(cfg).startswith(str(Path.home())) else "local",
+                "registered": _has_mcp_server_in_json(cfg, "agentsoul"),
+                "detail": str(cfg),
+            })
+        return records
+
+    def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for cfg in codex_scope_paths(scope, self.project_root):
             changed = remove_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
             records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
-        for md in codex_startup_md_paths(scope):
+        for md in codex_startup_md_paths(scope, self.project_root):
             if md.exists():
                 md.unlink()
                 records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
-        for agents_md in codex_agents_md_paths(scope):
+        for agents_md in codex_agents_md_paths(scope, self.project_root):
             changed = remove_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
             records.append({"client": self.name, "scope": "local", "action": "agents_md_remove", "success": True, "detail": f"{'removed' if changed else 'not found'} {agents_md}"})
-        local_dir = PROJECT_ROOT / ".codex"
+        local_dir = self.project_root / ".codex"
         if local_dir.exists():
             try:
                 if not any(local_dir.iterdir()):
@@ -1525,16 +1666,16 @@ class CodexInstaller(ClientInstaller):
 
     def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
-        for cfg in codex_scope_paths(scope):
+        for cfg in codex_scope_paths(scope, self.project_root):
             sc = "global" if str(cfg).startswith(str(Path.home())) else "local"
             records.append({
                 "client": self.name,
                 "scope": sc,
                 "registered": has_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END),
-                "startup_fallback": (Path.home() / ".codex" / "agentsoul-startup.md").exists() if sc == "global" else (PROJECT_ROOT / ".codex" / "agentsoul-startup.md").exists(),
+                "startup_fallback": (Path.home() / ".codex" / "agentsoul-startup.md").exists() if sc == "global" else (self.project_root / ".codex" / "agentsoul-startup.md").exists(),
                 "detail": str(cfg),
             })
-        for agents_md in codex_agents_md_paths(scope):
+        for agents_md in codex_agents_md_paths(scope, self.project_root):
             records.append({
                 "client": self.name,
                 "scope": "local",
@@ -1581,13 +1722,91 @@ def ask_scope(default: Literal["local", "global", "both"] = "both") -> Literal["
         print("❌ 无效选项，请重新输入")
 
 
+def discover_project_candidates(max_depth: int = 4, max_results: int = 80) -> list[Path]:
+    """Discover project folders by marker files."""
+    roots = [
+        PROJECT_ROOT.parent,
+        Path.home() / "Downloads" / "project",
+        Path.home() / "Downloads",
+        Path.home() / "workspace",
+        Path.home() / "projects",
+    ]
+    seen_dirs: set[Path] = set()
+    results: list[Path] = []
+    skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", ".codex", ".claude"}
+
+    for root in roots:
+        if not root.exists() or not root.is_dir():
+            continue
+        root_depth = len(root.resolve().parts)
+        for current, dirs, files in os.walk(root):
+            current_path = Path(current)
+            depth = len(current_path.resolve().parts) - root_depth
+            if depth > max_depth:
+                dirs[:] = []
+                continue
+            dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".pytest")]
+            if any(marker in files for marker in PROJECT_MARKER_FILES):
+                resolved = current_path.resolve()
+                if resolved not in seen_dirs:
+                    seen_dirs.add(resolved)
+                    results.append(resolved)
+                    if len(results) >= max_results:
+                        return sorted(results)
+    if PROJECT_ROOT.resolve() not in seen_dirs:
+        results.append(PROJECT_ROOT.resolve())
+    return sorted(results)
+
+
+def find_project_by_name(name: str) -> Path | None:
+    """Find a project folder by basename or full path text."""
+    key = name.strip()
+    if not key:
+        return None
+    direct = Path(key).expanduser()
+    if direct.exists() and direct.is_dir():
+        return direct.resolve()
+    candidates = discover_project_candidates()
+    lower = key.lower()
+    for c in candidates:
+        if c.name.lower() == lower or str(c).lower().endswith(lower):
+            return c
+    return None
+
+
+def ask_project_root(default_root: Path = PROJECT_ROOT) -> Path:
+    """Prompt user to select project root for local-scope installs."""
+    default_root = default_root.resolve()
+    candidates = discover_project_candidates()
+    ordered: list[Path] = []
+    if default_root not in candidates:
+        ordered.append(default_root)
+    ordered.extend(candidates)
+    print("\n请选择项目（用于本地作用域安装）：")
+    for idx, p in enumerate(ordered, start=1):
+        label = p.name
+        if p == default_root:
+            label += " (当前项目)"
+        print(f"{idx}. {label} -> {p}")
+    default_idx = 1
+    while True:
+        choice = input(f"请输入选项 [1-{len(ordered)}，默认 {default_idx}]: ").strip()
+        if choice == "":
+            return ordered[default_idx - 1]
+        if choice.isdigit():
+            idx = int(choice)
+            if 1 <= idx <= len(ordered):
+                return ordered[idx - 1]
+        print("❌ 无效选项，请重新输入")
+
+
 def generate_client_install_markdown(mcp_full_path: Path) -> Path:
-    """Generate bilingual Markdown install guide for Claude and Codex."""
+    """Generate bilingual Markdown install guide for Claude, Codex and Trae."""
     doc_path = PROJECT_ROOT / "docs" / "tutorials" / "05-mcp-client-install.md"
     doc_path.parent.mkdir(parents=True, exist_ok=True)
     json_config = f'{{"command":"node","args":["{mcp_full_path}"]}}'
     codex_block = build_codex_mcp_block(mcp_full_path)
-    markdown = f"""# AgentSoul MCP Client Install Guide (Claude + Codex)
+    markdown = f"""# AgentSoul MCP Client Install Guide (Claude + Codex + Trae)
 
 ## 中文
 
@@ -1613,6 +1832,16 @@ claude mcp remove --scope user agentsoul
 
 ### Codex CLI 卸载
 删除 `config.toml` 中 `{AGENTSOUL_BLOCK_BEGIN}` 到 `{AGENTSOUL_BLOCK_END}` 的整段。
+
+### Trae 安装（mcp.json）
+将以下 JSON 写入 `~/.trae/mcp.json`（全局）或 `<project>/.trae/mcp.json`（本地）：
+```json
+{{
+  "mcpServers": {{
+    "agentsoul": {json_config}
+  }}
+}}
+```
 
 ### 启动后记忆流程（必须）
 1. `mcp__agentsoul__mcp_tool_index()`
@@ -1650,6 +1879,16 @@ Write this block to `~/.codex/config.toml` (global) or `<project>/.codex/config.
 ### Codex CLI uninstall
 Remove the full managed block between `{AGENTSOUL_BLOCK_BEGIN}` and `{AGENTSOUL_BLOCK_END}`.
 
+### Trae install (mcp.json)
+Write this JSON to `~/.trae/mcp.json` (global) or `<project>/.trae/mcp.json` (local):
+```json
+{{
+  "mcpServers": {{
+    "agentsoul": {json_config}
+  }}
+}}
+```
+
 ### Required startup memory workflow
 1. `mcp__agentsoul__mcp_tool_index()`
 2. `mcp__agentsoul__get_persona_config()`
@@ -1665,23 +1904,33 @@ Minimal read/write loop: `read_memory_topic` -> conversation -> `write_memory_da
     return doc_path
 
 
-def manage_mcp_clients(mcp_full_path: Path, json_config: str) -> None:
-    """Interactive client installation management for Claude and Codex."""
-    claude = ClaudeInstaller()
-    codex = CodexInstaller()
+def manage_mcp_clients(mcp_full_path: Path, json_config: str, project_root: Path = PROJECT_ROOT) -> None:
+    """Interactive client installation management for Claude, Codex and Trae."""
+    selected_project = project_root.resolve()
     while True:
+        claude = ClaudeInstaller(selected_project)
+        codex = CodexInstaller(selected_project)
+        trae = TraeInstaller(selected_project)
         print("\nMCP 客户端安装管理：")
+        print(f"当前本地项目：{selected_project}")
         print("1. Claude 安装")
         print("2. Claude 卸载")
         print("3. Codex 安装")
         print("4. Codex 卸载")
-        print("5. 一键安装（Claude+Codex）")
-        print("6. 一键卸载（Claude+Codex）")
-        print("7. 查看状态")
+        print("5. Trae 安装")
+        print("6. Trae 卸载")
+        print("7. 一键安装（Claude+Codex+Trae）")
+        print("8. 一键卸载（Claude+Codex+Trae）")
+        print("9. 查看状态")
+        print("10. 切换本地目标项目")
         print("0. 返回")
-        choice = input("请输入选项 [0-7]: ").strip()
+        choice = input("请输入选项 [0-10]: ").strip()
         if choice == "0":
             return
+        if choice == "10":
+            selected_project = ask_project_root(selected_project)
+            log(f"已切换本地目标项目：{selected_project}", "OK")
+            continue
         scope = ask_scope("both")
         if choice == "1":
             render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
@@ -1692,25 +1941,36 @@ def manage_mcp_clients(mcp_full_path: Path, json_config: str) -> None:
         elif choice == "4":
             render_action_summary("Codex 卸载结果", codex.uninstall(scope))
         elif choice == "5":
+            render_action_summary("Trae 安装结果", trae.install(scope, mcp_full_path, json_config))
+        elif choice == "6":
+            render_action_summary("Trae 卸载结果", trae.uninstall(scope))
+        elif choice == "7":
             render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
             render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
-        elif choice == "6":
+            render_action_summary("Trae 安装结果", trae.install(scope, mcp_full_path, json_config))
+        elif choice == "8":
             render_action_summary("Claude 卸载结果", claude.uninstall(scope))
             render_action_summary("Codex 卸载结果", codex.uninstall(scope))
-        elif choice == "7":
+            render_action_summary("Trae 卸载结果", trae.uninstall(scope))
+        elif choice == "9":
             render_action_summary("Claude 状态", claude.status(scope))
             render_action_summary("Codex 状态", codex.status(scope))
+            render_action_summary("Trae 状态", trae.status(scope))
         else:
             print("❌ 无效选项，请重新输入")
 
 
-def uninstall_mcp() -> bool:
-    """Backward-compatible uninstall command (Claude only)."""
-    log("卸载 Claude CLI 中的 AgentSoul MCP（强制自动清理）...", "STEP")
-    claude = ClaudeInstaller()
-    records = claude.uninstall("both")
-    render_action_summary("Claude 卸载结果", records)
-    ok = all(rec.get("success", False) for rec in records if rec.get("scope") in ("local", "global"))
+def uninstall_mcp(project_root: Path = PROJECT_ROOT) -> bool:
+    """Uninstall AgentSoul MCP from Claude/Codex/Trae."""
+    log("卸载 Claude/Codex/Trae 中的 AgentSoul MCP...", "STEP")
+    claude = ClaudeInstaller(project_root)
+    codex = CodexInstaller(project_root)
+    trae = TraeInstaller(project_root)
+    render_action_summary("Claude 卸载结果", claude.uninstall("both"))
+    render_action_summary("Codex 卸载结果", codex.uninstall("both"))
+    render_action_summary("Trae 卸载结果", trae.uninstall("both"))
+    status_ok = claude.status("both") + codex.status("both") + trae.status("both")
+    ok = all(not rec.get("registered", False) for rec in status_ok if "registered" in rec)
     if ok:
         log("✅ MCP 卸载完成", "OK")
     else:
@@ -1845,11 +2105,12 @@ def main():
   python3 install.py --persona --name "小明" # 自定义 Agent 名称生成
   python3 install.py --mcp                   # 安装并启动 MCP 服务
   python3 install.py --mcp --no-run         # 仅安装 MCP，不启动
-  python3 install.py --mcp --client-scope both  # 安装时同时写入项目级+全局客户端配置
+  python3 install.py --mcp --client-scope both --client-target all  # 安装到 Claude/Codex/Trae 的项目级+全局
+  python3 install.py --mcp --client-scope local --project my-app     # 指定项目名执行本地安装
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
   python3 install.py --openclaw --scope global  # OpenClaw 全局安装
-  python3 install.py --uninstall            # 卸载 Claude CLI 中的 AgentSoul MCP
-  python3 install.py --status               # 查看 Claude/Codex MCP 注册状态
+  python3 install.py --uninstall            # 卸载 Claude/Codex/Trae 中的 AgentSoul MCP
+  python3 install.py --status               # 查看 Claude/Codex/Trae MCP 注册状态
   python3 install.py --rollback            # 列出最近安装尝试并手动回滚
 """
     parser = argparse.ArgumentParser(
@@ -1871,13 +2132,18 @@ def main():
     parser.add_argument(
         "--client-target",
         type=str,
-        choices=["both", "claude", "codex"],
-        help="MCP 客户端类型（Claude/Codex/同时），仅用于 --mcp",
+        choices=["all", "claude", "codex", "trae"],
+        help="MCP 客户端类型（Claude/Codex/Trae/全部），仅用于 --mcp",
+    )
+    parser.add_argument(
+        "--project",
+        type=str,
+        help="本地作用域目标项目（支持项目名或路径），用于 --mcp/--status/--uninstall",
     )
     parser.add_argument("--openclaw", action="store_true", help="安装 OpenClaw 人格插件")
     parser.add_argument("--scope", type=str, choices=["current", "global"], help="OpenClaw 装载范围")
-    parser.add_argument("--uninstall", action="store_true", help="卸载 Claude CLI 中的 AgentSoul MCP")
-    parser.add_argument("--status", action="store_true", help="查看 Claude/Codex MCP 客户端注册状态")
+    parser.add_argument("--uninstall", action="store_true", help="卸载 Claude/Codex/Trae 中的 AgentSoul MCP")
+    parser.add_argument("--status", action="store_true", help="查看 Claude/Codex/Trae MCP 客户端注册状态")
     parser.add_argument("--rollback", action="store_true", help="列出最近安装尝试并手动回滚")
 
     args = parser.parse_args()
@@ -1894,6 +2160,7 @@ def main():
             log_path=args.log,
             client_scope=args.client_scope,
             client_target=args.client_target,
+            project_selector=args.project,
         )
         return
 
@@ -1904,15 +2171,19 @@ def main():
         return
 
     if args.uninstall:
-        uninstall_mcp()
+        target_project = find_project_by_name(args.project) if args.project else PROJECT_ROOT
+        uninstall_mcp(target_project or PROJECT_ROOT)
         return
 
     if args.status:
         scope = "both"
-        claude = ClaudeInstaller()
-        codex = CodexInstaller()
+        target_project = find_project_by_name(args.project) if args.project else PROJECT_ROOT
+        claude = ClaudeInstaller(target_project or PROJECT_ROOT)
+        codex = CodexInstaller(target_project or PROJECT_ROOT)
+        trae = TraeInstaller(target_project or PROJECT_ROOT)
         render_action_summary("Claude 状态", claude.status(scope))
         render_action_summary("Codex 状态", codex.status(scope))
+        render_action_summary("Trae 状态", trae.status(scope))
         return
 
     if args.rollback:

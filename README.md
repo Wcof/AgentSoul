@@ -130,18 +130,24 @@ python3 install.py --mcp
 python3 install.py --mcp --no-run
 
 # 安装时直接选择客户端作用域（项目级/全局/同时）
-python3 install.py --mcp --client-scope both --client-target both
+python3 install.py --mcp --client-scope both --client-target all
+
+# 指定项目名执行项目级安装（会匹配扫描到的项目）
+python3 install.py --mcp --client-scope local --project my-app
 ```
 
 安装完成后，MCP 服务会自动注册到 Claude Code。重启 Claude Code 即可使用。
 
-### 4.1️⃣ 管理 Claude / Codex MCP 客户端配置
+### 4.1️⃣ 管理 Claude / Codex / Trae MCP 客户端配置
 
 `install.py --mcp` 现在会自动生成双语客户端安装指南，并进入客户端管理菜单，可分别安装/卸载：
 
 - Claude CLI（`claude mcp add-json` / `claude mcp remove`）
 - Codex CLI（自动写入 `~/.codex/config.toml` 或项目级 `.codex/config.toml`）
+- Trae（自动写入 `~/.trae/mcp.json` 或项目级 `.trae/mcp.json`）
 - Codex 启动指令（自动生成项目根 `AGENTS.md` 托管片段 + `.codex/agentsoul-startup.md`）
+
+当作用域选择“项目级”或“同时”时，安装器会先扫描候选项目（依据 `AGENTS.md` / `AGENT.md` / `CLAUDE.md` / `TRAE.md`）并让你选择项目名称。
 
 自动生成文档位置：
 - [`docs/tutorials/05-mcp-client-install.md`](docs/tutorials/05-mcp-client-install.md)
