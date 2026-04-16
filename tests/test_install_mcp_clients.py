@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import argparse
 from pathlib import Path
 from unittest import mock
 
@@ -10,6 +11,32 @@ import install
 
 
 class TestInstallMcpClients(unittest.TestCase):
+    def test_parse_clients_csv(self):
+        self.assertEqual(install.parse_clients_csv("all"), ["claude", "codex", "trae"])
+        self.assertEqual(install.parse_clients_csv("codex,claude"), ["claude", "codex"])
+        with self.assertRaises(ValueError):
+            install.parse_clients_csv("foo")
+
+    def test_build_install_plan_profile_and_override_priority(self):
+        plan = install.build_install_plan(
+            profile="project",
+            scope="global",
+            clients_csv="codex",
+            project_selector=None,
+            run_after=False,
+        )
+        self.assertEqual(plan.matrix.scope, "global")
+        self.assertEqual(plan.matrix.clients, ["codex"])
+
+    def test_resolve_project_selector_strict_ambiguous(self):
+        metas = [
+            {"name": "app-one", "path": "/tmp/a/app-one", "markers": ["AGENTS.md"]},
+            {"name": "app-two", "path": "/tmp/b/app-two", "markers": ["AGENTS.md"]},
+        ]
+        with mock.patch.object(install, "discover_project_metadata", return_value=metas):
+            with self.assertRaises(ValueError):
+                install.resolve_project_selector("app", "local", "custom", strict=True)
+
     def test_remove_agentsoul_hooks_returns_count(self):
         settings = {
             "hooks": {
@@ -295,6 +322,22 @@ class TestInstallMcpClients(unittest.TestCase):
         ):
             ok = install.uninstall_mcp(Path("/tmp/project"), "both", "all")
             self.assertFalse(ok)
+
+    def test_handle_mcp_install_register_only_requires_dist(self):
+        args = argparse.Namespace(
+            mcp_command="install",
+            profile="custom",
+            scope="local",
+            clients="claude",
+            project=None,
+            run=False,
+            prepare_only=False,
+            register_only=True,
+            log=None,
+        )
+        with mock.patch.object(install, "get_mcp_dist_index", return_value=Path("/tmp/not-exists/index.js")):
+            rc = install.handle_mcp_subcommand(args)
+            self.assertEqual(rc, 1)
 
 
 if __name__ == "__main__":

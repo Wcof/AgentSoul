@@ -29,6 +29,7 @@ import re
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -56,6 +57,28 @@ except ImportError:
 ALLOWED_TONES = ConfigValidator.ALLOWED_TONES
 ALLOWED_LANGUAGES = ConfigValidator.ALLOWED_LANGUAGES
 ALLOWED_EMOJI_FREQS = ConfigValidator.ALLOWED_EMOJI_FREQS
+
+ClientKey = Literal["claude", "codex", "trae"]
+ScopeKey = Literal["local", "global", "both"]
+TargetKey = Literal["all", "claude", "codex", "trae"]
+ProfileKey = Literal["quick", "project", "global", "full", "custom"]
+
+
+@dataclass
+class TargetMatrix:
+    clients: list[ClientKey]
+    scope: ScopeKey
+    project_root: Path
+
+
+@dataclass
+class InstallPlan:
+    profile: ProfileKey
+    matrix: TargetMatrix
+    do_prepare: bool
+    do_register: bool
+    do_run: bool
+    do_post_check: bool
 
 
 class InstallationRollback:
@@ -965,6 +988,180 @@ def ask_install_mode(default: Literal["quick", "project", "global", "custom"] = 
         print("❌ 无效选项，请重新输入")
 
 
+def parse_clients_csv(clients: str | None) -> list[ClientKey]:
+    """Parse comma separated client list."""
+    if clients is None or clients.strip() == "":
+        return ["claude", "codex", "trae"]
+    raw = [c.strip().lower() for c in clients.split(",") if c.strip()]
+    if not raw:
+        return ["claude", "codex", "trae"]
+    if "all" in raw:
+        return ["claude", "codex", "trae"]
+    allowed: set[str] = {"claude", "codex", "trae"}
+    invalid = [c for c in raw if c not in allowed]
+    if invalid:
+        raise ValueError(f"不支持的客户端: {', '.join(invalid)}")
+    # keep stable order to avoid nondeterministic execution order
+    ordered: list[ClientKey] = []
+    for key in ("claude", "codex", "trae"):
+        if key in raw:
+            ordered.append(key)  # type: ignore[arg-type]
+    return ordered
+
+
+def target_to_clients(target: TargetKey) -> list[ClientKey]:
+    if target == "all":
+        return ["claude", "codex", "trae"]
+    return [target]
+
+
+def clients_to_target(clients: list[ClientKey]) -> TargetKey:
+    if clients == ["claude", "codex", "trae"]:
+        return "all"
+    if len(clients) == 1:
+        return clients[0]
+    raise ValueError("install_selected_clients 仅支持单客户端或 all，请使用列表执行器")
+
+
+def discover_project_metadata(max_depth: int = 4, max_results: int = 80) -> list[dict[str, Any]]:
+    """Discover candidate projects and marker files."""
+    roots = [
+        PROJECT_ROOT.parent,
+        Path.home() / "Downloads" / "project",
+        Path.home() / "Downloads",
+        Path.home() / "workspace",
+        Path.home() / "projects",
+    ]
+    seen_dirs: set[Path] = set()
+    results: list[dict[str, Any]] = []
+    skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", ".codex", ".claude"}
+
+    for root in roots:
+        if not root.exists() or not root.is_dir():
+            continue
+        root_depth = len(root.resolve().parts)
+        for current, dirs, files in os.walk(root):
+            current_path = Path(current)
+            depth = len(current_path.resolve().parts) - root_depth
+            if depth > max_depth:
+                dirs[:] = []
+                continue
+            dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".pytest")]
+            markers = sorted([marker for marker in PROJECT_MARKER_FILES if marker in files])
+            if markers:
+                resolved = current_path.resolve()
+                if resolved not in seen_dirs:
+                    seen_dirs.add(resolved)
+                    results.append({"name": resolved.name, "path": str(resolved), "markers": markers})
+                    if len(results) >= max_results:
+                        return sorted(results, key=lambda x: x["path"])
+
+    default_project = PROJECT_ROOT.resolve()
+    if default_project not in seen_dirs:
+        results.append({"name": default_project.name, "path": str(default_project), "markers": []})
+    return sorted(results, key=lambda x: x["path"])
+
+
+def resolve_project_selector(
+    selector: str | None,
+    scope: ScopeKey,
+    profile: ProfileKey,
+    strict: bool = True,
+    default_root: Path = PROJECT_ROOT,
+) -> Path:
+    """Resolve project selector with strict ambiguity handling."""
+    default_project = default_root.resolve()
+    needs_project = scope in ("local", "both")
+    if not needs_project:
+        return default_project
+    if selector is None or selector.strip() == "":
+        if profile == "project":
+            return default_project if not strict else ask_project_root(default_project)
+        return default_project
+
+    raw = selector.strip()
+    direct = Path(raw).expanduser()
+    if direct.exists() and direct.is_dir():
+        return direct.resolve()
+
+    metas = discover_project_metadata()
+    exact: list[Path] = []
+    prefix: list[Path] = []
+    lower = raw.lower()
+    for item in metas:
+        p = Path(item["path"])
+        name = item["name"].lower()
+        path_s = str(p).lower()
+        if name == lower or path_s == lower or path_s.endswith(lower):
+            exact.append(p)
+        elif name.startswith(lower):
+            prefix.append(p)
+
+    candidates = exact if exact else prefix
+    if len(candidates) == 1:
+        return candidates[0].resolve()
+    if len(candidates) > 1:
+        raise ValueError(f"项目选择存在歧义：{raw}，匹配到 {', '.join(str(c) for c in candidates)}")
+    if strict:
+        raise ValueError(f"未找到项目：{raw}")
+    log(f"未找到项目：{raw}，将使用当前项目 {default_project}", "WARN")
+    return default_project
+
+
+def build_install_plan(
+    profile: ProfileKey | None,
+    scope: ScopeKey | None,
+    clients_csv: str | None,
+    legacy_target: TargetKey | None = None,
+    project_selector: str | None = None,
+    run_after: bool = False,
+    prepare_only: bool = False,
+    register_only: bool = False,
+    strict_project: bool = True,
+) -> InstallPlan:
+    """Normalize all install inputs into a single plan object."""
+    selected_profile: ProfileKey = profile or "quick"
+    profile_defaults: dict[ProfileKey, tuple[ScopeKey, list[ClientKey], bool]] = {
+        "quick": ("both", ["claude", "codex", "trae"], False),
+        "project": ("local", ["claude", "codex", "trae"], False),
+        "global": ("global", ["claude", "codex", "trae"], False),
+        "full": ("both", ["claude", "codex", "trae"], True),
+        "custom": ("both", ["claude", "codex", "trae"], False),
+    }
+    default_scope, default_clients, default_post_check = profile_defaults[selected_profile]
+
+    resolved_scope = scope or default_scope
+    if clients_csv is not None:
+        resolved_clients = parse_clients_csv(clients_csv)
+    elif legacy_target is not None:
+        resolved_clients = target_to_clients(legacy_target)
+    else:
+        resolved_clients = default_clients
+
+    resolved_project = resolve_project_selector(
+        selector=project_selector,
+        scope=resolved_scope,
+        profile=selected_profile,
+        strict=strict_project,
+        default_root=PROJECT_ROOT,
+    )
+
+    if prepare_only and register_only:
+        raise ValueError("--prepare-only 与 --register-only 不能同时使用")
+    do_prepare = not register_only
+    do_register = not prepare_only
+    do_run = run_after and not prepare_only
+
+    return InstallPlan(
+        profile=selected_profile,
+        matrix=TargetMatrix(clients=resolved_clients, scope=resolved_scope, project_root=resolved_project),
+        do_prepare=do_prepare,
+        do_register=do_register,
+        do_run=do_run,
+        do_post_check=default_post_check,
+    )
+
+
 def install_selected_clients(
     mcp_full_path: Path,
     json_config: str,
@@ -989,6 +1186,153 @@ def selected_client_names(target: Literal["all", "claude", "codex", "trae"]) -> 
     if target == "all":
         return ["claude", "codex", "trae"]
     return [target]
+
+
+def install_selected_clients_by_list(
+    mcp_full_path: Path,
+    json_config: str,
+    scope: ScopeKey,
+    clients: list[ClientKey],
+    project_root: Path = PROJECT_ROOT,
+) -> None:
+    installers: dict[ClientKey, ClientInstaller] = {
+        "claude": ClaudeInstaller(project_root),
+        "codex": CodexInstaller(project_root),
+        "trae": TraeInstaller(project_root),
+    }
+    for key in clients:
+        installer = installers[key]
+        render_action_summary(f"{installer.name} 安装结果", installer.install(scope, mcp_full_path, json_config))
+
+
+def uninstall_selected_clients_by_list(
+    scope: ScopeKey,
+    clients: list[ClientKey],
+    project_root: Path = PROJECT_ROOT,
+) -> list[dict[str, Any]]:
+    installers: dict[ClientKey, ClientInstaller] = {
+        "claude": ClaudeInstaller(project_root),
+        "codex": CodexInstaller(project_root),
+        "trae": TraeInstaller(project_root),
+    }
+    all_records: list[dict[str, Any]] = []
+    for key in clients:
+        installer = installers[key]
+        records = installer.uninstall(scope)
+        render_action_summary(f"{installer.name} 卸载结果", records)
+        all_records.extend(records)
+    return all_records
+
+
+def status_selected_clients_by_list(
+    scope: ScopeKey,
+    clients: list[ClientKey],
+    project_root: Path = PROJECT_ROOT,
+    render: bool = True,
+) -> list[dict[str, Any]]:
+    installers: dict[ClientKey, ClientInstaller] = {
+        "claude": ClaudeInstaller(project_root),
+        "codex": CodexInstaller(project_root),
+        "trae": TraeInstaller(project_root),
+    }
+    all_records: list[dict[str, Any]] = []
+    for key in clients:
+        installer = installers[key]
+        records = installer.status(scope)
+        if render:
+            render_action_summary(f"{installer.name} 状态", records)
+        all_records.extend(records)
+    return all_records
+
+
+def ensure_identity_and_pad_state() -> bool:
+    """Validate config and initialize identity/pad metadata for MCP install."""
+    config_loader = ConfigLoader(PROJECT_ROOT)
+    if not config_loader.is_config_valid():
+        log("persona.yaml 配置无效或不存在，请先配置 config/persona.yaml", "ERROR")
+        log("提示: 运行 'python3 install.py --persona' 生成默认配置", "INFO")
+        return False
+    try:
+        initialize_identity(PROJECT_ROOT, PROJECT_ROOT)
+        soul_state_dir = PROJECT_ROOT / "data" / "soul" / "soul_variable"
+        soul_state_dir.mkdir(parents=True, exist_ok=True)
+        soul_state_path = soul_state_dir / "state_vector.json"
+        if not soul_state_path.exists():
+            default_state = get_default_pad_state()
+            soul_state_path.write_text(
+                json.dumps(default_state, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            log("已初始化默认 PAD 情感状态向量", "OK")
+    except Exception as e:
+        log(f"注入身份档案失败: {e}", "ERROR")
+        return False
+    return True
+
+
+def get_mcp_dist_index() -> Path:
+    return (PROJECT_ROOT / "mcp_server" / "dist" / "index.js").absolute()
+
+
+def prepare_mcp_runtime() -> bool:
+    """Prepare MCP runtime: node/npm checks + npm install + build."""
+    mcp_dir = PROJECT_ROOT / "mcp_server"
+    if not mcp_dir.exists():
+        log("MCP 服务目录不存在", "ERROR")
+        return False
+
+    ok, msg = run_cli_command(["node", "--version"])
+    if not ok:
+        log("未找到 Node.js，请先安装 Node.js 18+", "ERROR")
+        return False
+    log(f"检测到 Node.js {msg}", "OK")
+
+    ok, msg = run_cli_command(["npm", "--version"])
+    if not ok:
+        log("未找到 npm，请安装完整的 Node.js 开发环境", "ERROR")
+        return False
+    log(f"检测到 npm {msg}", "OK")
+
+    log("安装 npm 依赖...", "STEP")
+    result = subprocess.run(["npm", "install"], cwd=mcp_dir, capture_output=True, text=True)
+    if result.returncode != 0:
+        log(f"npm install 失败: {result.stderr}", "ERROR")
+        return False
+    log("npm 依赖安装完成", "OK")
+
+    def needs_rebuild() -> bool:
+        dist_index = mcp_dir / "dist" / "index.js"
+        if not dist_index.exists():
+            return True
+        dist_mtime = dist_index.stat().st_mtime
+        for path in (mcp_dir / "src").rglob("*.ts"):
+            if path.stat().st_mtime > dist_mtime:
+                return True
+        return False
+
+    if needs_rebuild():
+        log("检测到源码变更，编译 TypeScript...", "STEP")
+        result = subprocess.run(["npm", "run", "build"], cwd=mcp_dir, capture_output=True, text=True)
+        if result.returncode != 0:
+            log(f"编译失败: {result.stderr}", "ERROR")
+            return False
+        log("编译完成", "OK")
+    else:
+        log("未检测到源码变更，跳过编译", "OK")
+    return True
+
+
+def run_mcp_foreground(log_path: str | None = None) -> None:
+    log("启动 MCP 服务（Ctrl+C 退出）...", "STEP")
+    logs_dir = PROJECT_ROOT / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    resolved_log = Path(log_path) if log_path else (logs_dir / "mcp.log")
+    mcp_dir = PROJECT_ROOT / "mcp_server"
+    cmd = f'cd "{mcp_dir}" && node dist/index.js 2>&1 | tee -a "{resolved_log}"'
+    try:
+        subprocess.run(["/bin/zsh", "-lc", cmd], check=False)
+    except KeyboardInterrupt:
+        log("MCP 服务已停止", "INFO")
 
 
 def uninstall_selected_clients(
@@ -1040,169 +1384,65 @@ def install_mcp(
     client_scope: Literal["local", "global", "both"] | None = None,
     client_target: Literal["all", "claude", "codex", "trae"] | None = None,
     project_selector: str | None = None,
+    enter_advanced_menu: bool = False,
 ) -> bool:
     log("安装 MCP 服务...", "STEP")
 
-    config_loader = ConfigLoader(PROJECT_ROOT)
-    if not config_loader.is_config_valid():
-        log("persona.yaml 配置无效或不存在，请先配置 config/persona.yaml", "ERROR")
-        log("提示: 运行 'python3 install.py --persona' 生成默认配置", "INFO")
-        return False
+    profile: ProfileKey | None = install_mode
+    if profile is None and client_scope is None and client_target is None and project_selector is None:
+        # Legacy interactive behavior keeps quick as default suggestion.
+        profile = ask_install_mode("quick")
+    elif profile is None:
+        profile = "custom"
 
     try:
-        initialize_identity(PROJECT_ROOT, PROJECT_ROOT)
-
-        # 创建默认 PAD 情感状态文件
-        soul_state_dir = PROJECT_ROOT / "data" / "soul" / "soul_variable"
-        soul_state_dir.mkdir(parents=True, exist_ok=True)
-        soul_state_path = soul_state_dir / "state_vector.json"
-        if not soul_state_path.exists():
-            import json
-            default_state = get_default_pad_state()
-            soul_state_path.write_text(
-                json.dumps(default_state, indent=2, ensure_ascii=False),
-                encoding="utf-8"
-            )
-            log("已初始化默认 PAD 情感状态向量", "OK")
-    except Exception as e:
-        log(f"注入身份档案失败: {e}", "ERROR")
+        plan = build_install_plan(
+            profile=profile,
+            scope=client_scope,
+            clients_csv=None,
+            legacy_target=client_target,
+            project_selector=project_selector,
+            run_after=run_after,
+            strict_project=False,
+        )
+    except ValueError as e:
+        log(f"安装参数无效: {e}", "ERROR")
         return False
 
-    mcp_dir = PROJECT_ROOT / "mcp_server"
-    if not mcp_dir.exists():
-        log("MCP 服务目录不存在", "ERROR")
+    if plan.do_prepare and not ensure_identity_and_pad_state():
         return False
 
-    import subprocess
-    try:
-        result = subprocess.run(["node", "--version"], capture_output=True, text=True)
-        log(f"检测到 Node.js {result.stdout.strip()}", "OK")
-    except FileNotFoundError:
-        log("未找到 Node.js，请先安装 Node.js 18+", "ERROR")
+    if plan.do_prepare and not prepare_mcp_runtime():
         return False
 
-    # 检查 npm 是否存在
-    try:
-        result = subprocess.run(["npm", "--version"], capture_output=True, text=True)
-        log(f"检测到 npm {result.stdout.strip()}", "OK")
-    except FileNotFoundError:
-        log("未找到 npm，请安装完整的 Node.js 开发环境", "ERROR")
+    mcp_full_path = get_mcp_dist_index()
+    if plan.do_register and not mcp_full_path.exists():
+        log("dist/index.js 不存在。请先执行 prepare 阶段（例如: python3 install.py mcp install --prepare-only）", "ERROR")
         return False
 
-    log("安装 npm 依赖...", "STEP")
-    result = subprocess.run(["npm", "install"], cwd=mcp_dir, capture_output=True, text=True)
-    if result.returncode != 0:
-        log(f"npm install 失败: {result.stderr}", "ERROR")
-        return False
-    log("npm 依赖安装完成", "OK")
-
-    def needs_rebuild() -> bool:
-        dist_index = mcp_dir / "dist" / "index.js"
-        if not dist_index.exists():
-            return True
-        dist_mtime = dist_index.stat().st_mtime
-        for path in (mcp_dir / "src").rglob("*.ts"):
-            if path.stat().st_mtime > dist_mtime:
-                return True
-        return False
-
-    if needs_rebuild():
-        log("检测到源码变更，编译 TypeScript...", "STEP")
-        result = subprocess.run(["npm", "run", "build"], cwd=mcp_dir, capture_output=True, text=True)
-        if result.returncode != 0:
-            log(f"编译失败: {result.stderr}", "ERROR")
-            return False
-        log("编译完成", "OK")
-    else:
-        log("未检测到源码变更，跳过编译", "OK")
-
-    print("\n✅ MCP 服务安装完成！\n")
-    print("配置说明：")
-    mcp_full_path = (mcp_dir / "dist" / "index.js").absolute()
-    print(f"MCP 服务路径：{mcp_full_path}\n")
-
-    # Pre-compute JSON config once - reuse everywhere
     json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
-
-    # Generate bilingual Markdown install guide and enter client management menu
     guide_path = generate_client_install_markdown(mcp_full_path)
     log(f"已生成客户端安装指南（中英双语）：{guide_path}", "OK")
+    log(f"MCP 服务路径：{mcp_full_path}", "OK")
 
-    print("\n手动配置方式（复制到对应 MCP 客户端配置文件）：")
-    print(f"""
-{{
-  "mcpServers": {{
-    "agentsoul": {json_config}
-  }}
-}}
-""")
-    print("Claude CLI 注册命令：")
-    print(f"claude mcp add-json agentsoul '{json_config}'")
-    print(f"claude mcp add-json --scope user agentsoul '{json_config}'\n")
+    if plan.do_register:
+        install_selected_clients_by_list(
+            mcp_full_path,
+            json_config,
+            plan.matrix.scope,
+            plan.matrix.clients,
+            project_root=plan.matrix.project_root,
+        )
 
-    # Install client registration right away during MCP setup.
-    selected_mode = install_mode
-    if selected_mode is None and client_scope is None and client_target is None and project_selector is None:
-        selected_mode = ask_install_mode("quick")
-    elif selected_mode is None:
-        selected_mode = "custom"
+    if enter_advanced_menu:
+        manage_mcp_clients(mcp_full_path, json_config, plan.matrix.project_root)
 
-    if selected_mode == "quick":
-        resolved_scope: Literal["local", "global", "both"] = "both"
-        resolved_target: Literal["all", "claude", "codex", "trae"] = "all"
-    elif selected_mode == "project":
-        resolved_scope = "local"
-        resolved_target = "all"
-    elif selected_mode == "global":
-        resolved_scope = "global"
-        resolved_target = "all"
-    else:
-        resolved_scope = client_scope if client_scope is not None else ask_scope("both")
-        resolved_target = client_target if client_target is not None else ask_client_target("all")
+    if plan.do_post_check:
+        status_selected_clients_by_list(plan.matrix.scope, plan.matrix.clients, plan.matrix.project_root)
 
-    selected_project_root = PROJECT_ROOT.resolve()
-    if resolved_scope in ("local", "both"):
-        if project_selector:
-            found = find_project_by_name(project_selector)
-            if found is None:
-                log(f"未找到项目：{project_selector}，将使用当前项目 {PROJECT_ROOT}", "WARN")
-            else:
-                selected_project_root = found
-                log(f"本地作用域目标项目：{selected_project_root}", "OK")
-        elif selected_mode in ("project", "custom") and client_scope is None:
-            selected_project_root = ask_project_root(PROJECT_ROOT)
-            log(f"本地作用域目标项目：{selected_project_root}", "OK")
-    install_selected_clients(
-        mcp_full_path,
-        json_config,
-        resolved_scope,
-        resolved_target,
-        project_root=selected_project_root,
-    )
+    if plan.do_run:
+        run_mcp_foreground(log_path)
 
-    # Optional advanced client management menu.
-    while True:
-        answer = input("\n是否继续进入 MCP 客户端高级管理菜单？[y/N]: ").strip().lower()
-        if answer in ("", "n", "no"):
-            break
-        if answer in ("y", "yes"):
-            manage_mcp_clients(mcp_full_path, json_config, selected_project_root)
-            break
-        print("❌ 无效选项，请输入 y 或 n")
-
-    if not run_after:
-        return True
-
-    log("启动 MCP 服务（Ctrl+C 退出）...", "STEP")
-    logs_dir = PROJECT_ROOT / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    resolved_log = Path(log_path) if log_path else (logs_dir / "mcp.log")
-
-    cmd = f'cd "{mcp_dir}" && node dist/index.js 2>&1 | tee -a "{resolved_log}"'
-    try:
-        subprocess.run(["/bin/zsh", "-lc", cmd], check=False)
-    except KeyboardInterrupt:
-        log("MCP 服务已停止", "INFO")
     return True
 
 
@@ -1973,38 +2213,8 @@ def ask_scope(default: Literal["local", "global", "both"] = "both") -> Literal["
 
 def discover_project_candidates(max_depth: int = 4, max_results: int = 80) -> list[Path]:
     """Discover project folders by marker files."""
-    roots = [
-        PROJECT_ROOT.parent,
-        Path.home() / "Downloads" / "project",
-        Path.home() / "Downloads",
-        Path.home() / "workspace",
-        Path.home() / "projects",
-    ]
-    seen_dirs: set[Path] = set()
-    results: list[Path] = []
-    skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", ".codex", ".claude"}
-
-    for root in roots:
-        if not root.exists() or not root.is_dir():
-            continue
-        root_depth = len(root.resolve().parts)
-        for current, dirs, files in os.walk(root):
-            current_path = Path(current)
-            depth = len(current_path.resolve().parts) - root_depth
-            if depth > max_depth:
-                dirs[:] = []
-                continue
-            dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".pytest")]
-            if any(marker in files for marker in PROJECT_MARKER_FILES):
-                resolved = current_path.resolve()
-                if resolved not in seen_dirs:
-                    seen_dirs.add(resolved)
-                    results.append(resolved)
-                    if len(results) >= max_results:
-                        return sorted(results)
-    if PROJECT_ROOT.resolve() not in seen_dirs:
-        results.append(PROJECT_ROOT.resolve())
-    return sorted(results)
+    metas = discover_project_metadata(max_depth=max_depth, max_results=max_results)
+    return [Path(item["path"]) for item in metas]
 
 
 def find_project_by_name(name: str) -> Path | None:
@@ -2017,9 +2227,14 @@ def find_project_by_name(name: str) -> Path | None:
         return direct.resolve()
     candidates = discover_project_candidates()
     lower = key.lower()
-    for c in candidates:
-        if c.name.lower() == lower or str(c).lower().endswith(lower):
-            return c
+    exact = [c for c in candidates if c.name.lower() == lower or str(c).lower().endswith(lower)]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        return None
+    prefix = [c for c in candidates if c.name.lower().startswith(lower)]
+    if len(prefix) == 1:
+        return prefix[0]
     return None
 
 
@@ -2228,6 +2443,180 @@ def uninstall_mcp(
     return ok
 
 
+def _json_is_corrupt(path: Path) -> bool:
+    if not path.exists():
+        return False
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+        if raw == "":
+            return False
+        return not isinstance(json.loads(raw), dict)
+    except Exception:
+        return True
+
+
+def _can_write_target(path: Path) -> bool:
+    probe = path if path.exists() else path.parent
+    try:
+        probe.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return False
+    return os.access(probe, os.W_OK)
+
+
+def _doctor_report_status(checks: list[dict[str, Any]]) -> int:
+    has_error = any(c["status"] == "error" for c in checks)
+    has_warn = any(c["status"] == "warn" for c in checks)
+    if has_error:
+        return 1
+    if has_warn:
+        return 2
+    return 0
+
+
+def run_mcp_doctor(matrix: TargetMatrix, as_json: bool = False) -> int:
+    checks: list[dict[str, Any]] = []
+    ok, msg = run_cli_command(["node", "--version"])
+    checks.append({"id": "node", "status": "ok" if ok else "error", "detail": msg or "node not found"})
+    ok, msg = run_cli_command(["npm", "--version"])
+    checks.append({"id": "npm", "status": "ok" if ok else "error", "detail": msg or "npm not found"})
+
+    dist = get_mcp_dist_index()
+    checks.append({"id": "dist-index", "status": "ok" if dist.exists() else "warn", "detail": str(dist)})
+
+    path_checks: list[Path] = []
+    if "claude" in matrix.clients:
+        path_checks.extend(claude_mcp_json_paths(matrix.scope, matrix.project_root))
+    if "codex" in matrix.clients:
+        path_checks.extend(codex_scope_paths(matrix.scope, matrix.project_root))
+    if "trae" in matrix.clients:
+        path_checks.extend(trae_scope_paths(matrix.scope, matrix.project_root))
+    for p in _dedupe_paths(path_checks):
+        writable = _can_write_target(p)
+        checks.append({
+            "id": "path-writable",
+            "path": str(p),
+            "status": "ok" if writable else "warn",
+            "detail": f"writable={writable}",
+        })
+
+    if "claude" in matrix.clients:
+        for p in claude_mcp_json_paths(matrix.scope, matrix.project_root):
+            checks.append({
+                "id": "claude-json-corrupt",
+                "path": str(p),
+                "status": "warn" if _json_is_corrupt(p) else "ok",
+                "detail": "corrupt json" if _json_is_corrupt(p) else "valid",
+            })
+    if "trae" in matrix.clients:
+        for p in trae_scope_paths(matrix.scope, matrix.project_root):
+            checks.append({
+                "id": "trae-json-corrupt",
+                "path": str(p),
+                "status": "warn" if _json_is_corrupt(p) else "ok",
+                "detail": "corrupt json" if _json_is_corrupt(p) else "valid",
+            })
+
+    status_records = status_selected_clients_by_list(matrix.scope, matrix.clients, matrix.project_root, render=False)
+    for rec in status_records:
+        if "registered" in rec:
+            checks.append({
+                "id": "registration",
+                "client": rec.get("client"),
+                "scope": rec.get("scope"),
+                "status": "ok" if rec.get("registered") else "warn",
+                "detail": rec.get("detail"),
+            })
+        if rec.get("hook_count", 0) and rec.get("hook_count", 0) > 1:
+            checks.append({
+                "id": "claude-hook-dup",
+                "client": rec.get("client"),
+                "scope": rec.get("scope"),
+                "status": "warn",
+                "detail": f"hook_count={rec.get('hook_count')}",
+            })
+
+    code = _doctor_report_status(checks)
+    if as_json:
+        print(json.dumps({"checks": checks, "exit_code": code}, indent=2, ensure_ascii=False))
+    else:
+        log("MCP Doctor 检查结果", "STEP")
+        for item in checks:
+            status = item["status"]
+            level = "OK" if status == "ok" else ("WARN" if status == "warn" else "ERROR")
+            summary = f"{item['id']} | {item.get('client', '')} {item.get('scope', '')}".strip()
+            detail = item.get("detail", "")
+            log(f"{summary} | {detail}", level)
+    return code
+
+
+def run_mcp_repair(matrix: TargetMatrix) -> int:
+    repaired = 0
+    if "claude" in matrix.clients:
+        for p in claude_mcp_json_paths(matrix.scope, matrix.project_root):
+            if _json_is_corrupt(p):
+                _load_json_obj_for_update(p)
+                if not p.exists():
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_text("{}\n", encoding="utf-8")
+                repaired += 1
+                log(f"已修复 Claude 配置损坏文件: {p}", "OK")
+    if "trae" in matrix.clients:
+        for p in trae_scope_paths(matrix.scope, matrix.project_root):
+            if _json_is_corrupt(p):
+                _load_json_obj_for_update(p)
+                if not p.exists():
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_text("{}\n", encoding="utf-8")
+                repaired += 1
+                log(f"已修复 Trae 配置损坏文件: {p}", "OK")
+    if "codex" in matrix.clients:
+        for cfg in codex_scope_paths(matrix.scope, matrix.project_root):
+            scope = path_scope_label_by_project(cfg, matrix.project_root)
+            startup = codex_home_dir() / "agentsoul-startup.md" if scope == "global" else matrix.project_root / ".codex" / "agentsoul-startup.md"
+            if startup.exists() and not has_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END):
+                startup.unlink()
+                repaired += 1
+                log(f"已移除 Codex 孤儿 startup 文件: {startup}", "OK")
+
+    if "claude" in matrix.clients:
+        hook_prompt = get_agentsoul_hook_prompt()
+        settings_paths: list[Path] = []
+        if matrix.scope in ("global", "both"):
+            settings_paths.append(Path.home() / ".claude" / "settings.json")
+        if matrix.scope in ("local", "both"):
+            settings_paths.append(matrix.project_root / ".claude" / "settings.json")
+        for s in settings_paths:
+            settings = load_settings(s) if s.exists() else {}
+            hooks = count_remaining_agentsoul_hooks(settings)
+            if hooks > 1:
+                remove_agentsoul_hooks(settings)
+                ensure_agentsoul_hook(settings, hook_prompt)
+                save_settings(s, settings)
+                repaired += 1
+                log(f"已修复 Claude 重复 hook: {s}", "OK")
+
+    if repaired == 0:
+        log("未发现可修复项", "INFO")
+    else:
+        log(f"修复完成，共处理 {repaired} 项", "OK")
+
+    # Re-check; return doctor style exit code.
+    return run_mcp_doctor(matrix, as_json=False)
+
+
+def print_project_list(as_json: bool = False) -> int:
+    metas = discover_project_metadata()
+    if as_json:
+        print(json.dumps({"projects": metas}, indent=2, ensure_ascii=False))
+        return 0
+    log("可选项目列表", "STEP")
+    for item in metas:
+        markers = ",".join(item.get("markers", [])) or "-"
+        log(f"{item['name']} | {item['path']} | markers={markers}", "INFO")
+    return 0
+
+
 def check_and_initialize_configs(project_root: Path) -> None:
     """Check for existing soul and master configs and prompt for initialization.
 
@@ -2347,25 +2736,180 @@ def check_and_initialize_configs(project_root: Path) -> None:
     print()
 
 
+LEGACY_MCP_NOTICE_PRINTED = False
+
+
+def warn_legacy_mcp_notice() -> None:
+    global LEGACY_MCP_NOTICE_PRINTED
+    if LEGACY_MCP_NOTICE_PRINTED:
+        return
+    LEGACY_MCP_NOTICE_PRINTED = True
+    log("检测到旧版 MCP 参数入口，已自动映射到新命令。建议改用 `python3 install.py mcp ...`", "WARN")
+
+
+def resolve_matrix_from_cli_args(
+    profile: ProfileKey | None,
+    scope: ScopeKey | None,
+    clients: str | None,
+    project: str | None,
+    legacy_target: TargetKey | None = None,
+    strict_project: bool = True,
+) -> TargetMatrix:
+    plan = build_install_plan(
+        profile=profile,
+        scope=scope,
+        clients_csv=clients,
+        legacy_target=legacy_target,
+        project_selector=project,
+        run_after=False,
+        strict_project=strict_project,
+    )
+    return plan.matrix
+
+
+def handle_mcp_subcommand(args: argparse.Namespace) -> int:
+    cmd = args.mcp_command
+    if cmd == "project-list":
+        return print_project_list(as_json=getattr(args, "json", False))
+
+    if cmd == "guide":
+        mcp_full_path = get_mcp_dist_index()
+        guide_path = generate_client_install_markdown(mcp_full_path)
+        log(f"已生成客户端安装指南: {guide_path}", "OK")
+        return 0
+
+    if cmd == "install":
+        try:
+            plan = build_install_plan(
+                profile=args.profile,
+                scope=args.scope,
+                clients_csv=args.clients,
+                project_selector=args.project,
+                run_after=args.run,
+                prepare_only=args.prepare_only,
+                register_only=args.register_only,
+                strict_project=True,
+            )
+        except ValueError as e:
+            log(f"参数错误: {e}", "ERROR")
+            return 1
+
+        if plan.do_prepare:
+            check_and_initialize_configs(PROJECT_ROOT)
+            if not ensure_identity_and_pad_state():
+                return 1
+            if not prepare_mcp_runtime():
+                return 1
+
+        mcp_full_path = get_mcp_dist_index()
+        if plan.do_register and not mcp_full_path.exists():
+            log("register-only 需要已构建 dist/index.js。请先执行 `python3 install.py mcp install --prepare-only`", "ERROR")
+            return 1
+
+        json_config = f'{{"command": "node", "args": ["{mcp_full_path}"]}}'
+        generate_client_install_markdown(mcp_full_path)
+        if plan.do_register:
+            install_selected_clients_by_list(
+                mcp_full_path,
+                json_config,
+                plan.matrix.scope,
+                plan.matrix.clients,
+                project_root=plan.matrix.project_root,
+            )
+        if plan.do_post_check:
+            status_selected_clients_by_list(plan.matrix.scope, plan.matrix.clients, plan.matrix.project_root)
+        if plan.do_run:
+            run_mcp_foreground(args.log)
+        return 0
+
+    if cmd == "status":
+        try:
+            matrix = resolve_matrix_from_cli_args(
+                profile=None,
+                scope=args.scope,
+                clients=args.clients,
+                project=args.project,
+                strict_project=True,
+            )
+        except ValueError as e:
+            log(f"参数错误: {e}", "ERROR")
+            return 1
+        records = status_selected_clients_by_list(
+            matrix.scope,
+            matrix.clients,
+            matrix.project_root,
+            render=not getattr(args, "json", False),
+        )
+        if getattr(args, "json", False):
+            print(json.dumps({"records": records}, indent=2, ensure_ascii=False))
+        return 0
+
+    if cmd == "uninstall":
+        try:
+            matrix = resolve_matrix_from_cli_args(
+                profile=None,
+                scope=args.scope,
+                clients=args.clients,
+                project=args.project,
+                strict_project=True,
+            )
+        except ValueError as e:
+            log(f"参数错误: {e}", "ERROR")
+            return 1
+        uninstall_records = uninstall_selected_clients_by_list(matrix.scope, matrix.clients, matrix.project_root)
+        status_records = status_selected_clients_by_list(matrix.scope, matrix.clients, matrix.project_root)
+        uninstall_ok = all(rec.get("success", True) for rec in uninstall_records)
+        status_ok = all(not rec.get("registered", False) for rec in status_records if "registered" in rec)
+        return 0 if (uninstall_ok and status_ok) else 1
+
+    if cmd == "doctor":
+        try:
+            matrix = resolve_matrix_from_cli_args(
+                profile=None,
+                scope=args.scope,
+                clients=args.clients,
+                project=args.project,
+                strict_project=True,
+            )
+        except ValueError as e:
+            log(f"参数错误: {e}", "ERROR")
+            return 1
+        return run_mcp_doctor(matrix, as_json=getattr(args, "json", False))
+
+    if cmd == "repair":
+        try:
+            matrix = resolve_matrix_from_cli_args(
+                profile=None,
+                scope=args.scope,
+                clients=args.clients,
+                project=args.project,
+                strict_project=True,
+            )
+        except ValueError as e:
+            log(f"参数错误: {e}", "ERROR")
+            return 1
+        return run_mcp_repair(matrix)
+
+    log("未知 mcp 子命令", "ERROR")
+    return 1
+
+
 def main():
     epilog = """
 示例用法:
   python3 install.py                         # 交互式安装
   python3 install.py --persona               # 仅生成人格包
   python3 install.py --persona --name "小明" # 自定义 Agent 名称生成
-  python3 install.py --mcp                   # 安装并启动 MCP 服务
-  python3 install.py --mcp --no-run         # 仅安装 MCP，不启动
-  python3 install.py --mcp --install-mode quick  # 快速模式：三端 + 本地/全局
-  python3 install.py --mcp --install-mode project  # 项目模式：仅项目级并选择项目
-  python3 install.py --mcp --client-scope both --client-target all  # 安装到 Claude/Codex/Trae 的项目级+全局
-  python3 install.py --mcp --client-scope local --project my-app     # 指定项目名执行本地安装
-  python3 install.py --status --client-scope global --client-target codex  # 仅检查 Codex 全局状态
-  python3 install.py --uninstall --client-scope global --client-target trae # 仅卸载 Trae 全局注册
+  python3 install.py mcp install --profile quick
+  python3 install.py mcp status --scope global --clients codex
+  python3 install.py mcp uninstall --scope global --clients trae
+  python3 install.py mcp doctor --scope both --clients all --json
+  python3 install.py mcp repair --scope both --clients all
+  python3 install.py mcp project-list
+  python3 install.py mcp guide
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
   python3 install.py --openclaw --scope global  # OpenClaw 全局安装
-  python3 install.py --uninstall            # 卸载 Claude/Codex/Trae 中的 AgentSoul MCP
-  python3 install.py --status               # 查看 Claude/Codex/Trae MCP 注册状态
-  python3 install.py --rollback            # 列出最近安装尝试并手动回滚
+  python3 install.py --mcp --install-mode quick  # 兼容入口（将映射到 mcp install）
 """
     parser = argparse.ArgumentParser(
         description="AgentSoul 人格插件安装脚本",
@@ -2374,7 +2918,7 @@ def main():
     )
     parser.add_argument("--persona", action="store_true", help="仅生成人格包")
     parser.add_argument("--name", type=str, help="自定义 Agent 名称")
-    parser.add_argument("--mcp", action="store_true", help="安装并启动 MCP 服务")
+    parser.add_argument("--mcp", action="store_true", help="兼容入口：安装并启动 MCP 服务（建议改用 `mcp install`）")
     parser.add_argument("--no-run", action="store_true", help="仅安装，不启动 MCP")
     parser.add_argument("--log", type=str, help="MCP 日志输出路径")
     parser.add_argument(
@@ -2402,11 +2946,58 @@ def main():
     )
     parser.add_argument("--openclaw", action="store_true", help="安装 OpenClaw 人格插件")
     parser.add_argument("--scope", type=str, choices=["current", "global"], help="OpenClaw 装载范围")
-    parser.add_argument("--uninstall", action="store_true", help="卸载 Claude/Codex/Trae 中的 AgentSoul MCP")
-    parser.add_argument("--status", action="store_true", help="查看 Claude/Codex/Trae MCP 客户端注册状态")
+    parser.add_argument("--uninstall", action="store_true", help="兼容入口：卸载 Claude/Codex/Trae 中的 AgentSoul MCP")
+    parser.add_argument("--status", action="store_true", help="兼容入口：查看 Claude/Codex/Trae MCP 客户端注册状态")
     parser.add_argument("--rollback", action="store_true", help="列出最近安装尝试并手动回滚")
 
+    subparsers = parser.add_subparsers(dest="command")
+    mcp_parser = subparsers.add_parser("mcp", help="MCP 安装/状态/修复命令")
+    mcp_subparsers = mcp_parser.add_subparsers(dest="mcp_command")
+
+    mcp_install = mcp_subparsers.add_parser("install", help="安装 MCP（prepare/register/run）")
+    mcp_install.add_argument("--profile", choices=["quick", "project", "global", "full", "custom"], default="quick")
+    mcp_install.add_argument("--scope", choices=["local", "global", "both"])
+    mcp_install.add_argument("--clients", type=str, help="客户端列表：all 或 claude,codex,trae")
+    mcp_install.add_argument("--project", type=str, help="本地作用域项目（路径/名称）")
+    mcp_install.add_argument("--run", action="store_true", help="安装完成后启动 MCP 服务")
+    mcp_install.add_argument("--prepare-only", action="store_true", help="仅执行 prepare（node/npm/build）")
+    mcp_install.add_argument("--register-only", action="store_true", help="仅执行 register（客户端注册）")
+    mcp_install.add_argument("--log", type=str, help="MCP 日志输出路径（配合 --run）")
+
+    mcp_status = mcp_subparsers.add_parser("status", help="查看 MCP 客户端注册状态")
+    mcp_status.add_argument("--scope", choices=["local", "global", "both"], default="both")
+    mcp_status.add_argument("--clients", type=str, default="all", help="客户端列表：all 或 claude,codex,trae")
+    mcp_status.add_argument("--project", type=str, help="本地作用域项目（路径/名称）")
+    mcp_status.add_argument("--json", action="store_true", help="JSON 输出")
+
+    mcp_uninstall = mcp_subparsers.add_parser("uninstall", help="卸载 MCP 客户端注册")
+    mcp_uninstall.add_argument("--scope", choices=["local", "global", "both"], default="both")
+    mcp_uninstall.add_argument("--clients", type=str, default="all", help="客户端列表：all 或 claude,codex,trae")
+    mcp_uninstall.add_argument("--project", type=str, help="本地作用域项目（路径/名称）")
+
+    mcp_doctor = mcp_subparsers.add_parser("doctor", help="诊断 MCP 安装与注册健康状态")
+    mcp_doctor.add_argument("--scope", choices=["local", "global", "both"], default="both")
+    mcp_doctor.add_argument("--clients", type=str, default="all", help="客户端列表：all 或 claude,codex,trae")
+    mcp_doctor.add_argument("--project", type=str, help="本地作用域项目（路径/名称）")
+    mcp_doctor.add_argument("--json", action="store_true", help="JSON 输出")
+
+    mcp_repair = mcp_subparsers.add_parser("repair", help="修复 MCP 受管配置中的异常状态")
+    mcp_repair.add_argument("--scope", choices=["local", "global", "both"], default="both")
+    mcp_repair.add_argument("--clients", type=str, default="all", help="客户端列表：all 或 claude,codex,trae")
+    mcp_repair.add_argument("--project", type=str, help="本地作用域项目（路径/名称）")
+
+    mcp_project_list = mcp_subparsers.add_parser("project-list", help="列出可识别项目")
+    mcp_project_list.add_argument("--json", action="store_true", help="JSON 输出")
+
+    mcp_subparsers.add_parser("guide", help="生成 MCP 客户端安装指南")
+
     args = parser.parse_args()
+
+    if args.command == "mcp":
+        rc = handle_mcp_subcommand(args)
+        if rc != 0:
+            sys.exit(rc)
+        return
 
     if args.persona:
         check_and_initialize_configs(PROJECT_ROOT)
@@ -2414,6 +3005,7 @@ def main():
         return
 
     if args.mcp:
+        warn_legacy_mcp_notice()
         check_and_initialize_configs(PROJECT_ROOT)
         install_mcp(
             run_after=not args.no_run,
@@ -2422,6 +3014,7 @@ def main():
             client_scope=args.client_scope,
             client_target=args.client_target,
             project_selector=args.project,
+            enter_advanced_menu=False,
         )
         return
 
@@ -2432,21 +3025,32 @@ def main():
         return
 
     if args.uninstall:
-        target_project = find_project_by_name(args.project) if args.project else PROJECT_ROOT
-        uninstall_mcp(
-            target_project or PROJECT_ROOT,
+        warn_legacy_mcp_notice()
+        clients = "all" if (args.client_target or "all") == "all" else str(args.client_target)
+        ns = argparse.Namespace(
+            mcp_command="uninstall",
             scope=args.client_scope or "both",
-            target=args.client_target or "all",
+            clients=clients,
+            project=args.project,
         )
+        rc = handle_mcp_subcommand(ns)
+        if rc != 0:
+            sys.exit(rc)
         return
 
     if args.status:
-        target_project = find_project_by_name(args.project) if args.project else PROJECT_ROOT
-        status_selected_clients(
-            args.client_scope or "both",
-            args.client_target or "all",
-            target_project or PROJECT_ROOT,
+        warn_legacy_mcp_notice()
+        clients = "all" if (args.client_target or "all") == "all" else str(args.client_target)
+        ns = argparse.Namespace(
+            mcp_command="status",
+            scope=args.client_scope or "both",
+            clients=clients,
+            project=args.project,
+            json=False,
         )
+        rc = handle_mcp_subcommand(ns)
+        if rc != 0:
+            sys.exit(rc)
         return
 
     if args.rollback:

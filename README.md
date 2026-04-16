@@ -123,36 +123,30 @@ python3 install.py --persona --name "小明"
 安装 MCP 服务后，Claude Code 等支持 MCP 的客户端可以通过 API 调用 AgentSoul 的所有能力：
 
 ```bash
-# 自动安装并启动 MCP 服务
-python3 install.py --mcp
+# 任务导向入口（推荐）
+python3 install.py mcp install --profile quick
+python3 install.py mcp install --profile project --project my-app
+python3 install.py mcp install --scope both --clients all
+python3 install.py mcp install --prepare-only
+python3 install.py mcp install --register-only --scope local --clients claude --project my-app
+python3 install.py mcp install --run --log ./logs/mcp.log
 
-# 仅安装不启动
-python3 install.py --mcp --no-run
+# 状态/诊断/修复/卸载
+python3 install.py mcp status --scope global --clients codex
+python3 install.py mcp doctor --scope both --clients all --json
+python3 install.py mcp repair --scope both --clients all
+python3 install.py mcp uninstall --scope global --clients trae
 
-# 快速模式（推荐）：三端 + 本地/全局
-python3 install.py --mcp --install-mode quick
-
-# 项目模式：仅项目级并选择项目
-python3 install.py --mcp --install-mode project
-
-# 安装时直接选择客户端作用域（项目级/全局/同时）
-python3 install.py --mcp --client-scope both --client-target all
-
-# 指定项目名执行项目级安装（会匹配扫描到的项目）
-python3 install.py --mcp --client-scope local --project my-app
-
-# 精确状态检查：仅检查 Codex 全局
-python3 install.py --status --client-scope global --client-target codex
-
-# 精确卸载：仅卸载 Trae 全局
-python3 install.py --uninstall --client-scope global --client-target trae
+# 项目发现与指南
+python3 install.py mcp project-list
+python3 install.py mcp guide
 ```
 
 安装完成后，MCP 服务会自动注册到 Claude Code。重启 Claude Code 即可使用。
 
 ### 4.1️⃣ 管理 Claude / Codex / Trae MCP 客户端配置
 
-`install.py --mcp` 现在会自动生成双语客户端安装指南，并进入客户端管理菜单，可分别安装/卸载：
+`install.py mcp install` 会自动生成双语客户端安装指南，并按目标矩阵安装客户端：
 
 - Claude CLI（`claude mcp add-json` / `claude mcp remove`）
 - Codex CLI（自动写入 `~/.codex/config.toml` 或项目级 `.codex/config.toml`）
@@ -161,12 +155,17 @@ python3 install.py --uninstall --client-scope global --client-target trae
 
 当作用域选择“项目级”或“同时”时，安装器会先扫描候选项目（依据 `AGENTS.md` / `AGENT.md` / `CLAUDE.md` / `TRAE.md`）并让你选择项目名称。
 
-安装/卸载自修复机制：
+诊断/修复机制：
 - 当 CLI 命令报错时，安装器会自动检查并修复相关配置文件（例如 Claude 的 `~/.claude.json` / 项目 `.mcp.json`）。
-- 卸载阶段会执行“命令结果 + 配置残留”双重校验，避免显示成功但仍有残留注册。
+- `mcp doctor` 提供统一健康检查（文本或 JSON）。
+- `mcp repair` 只修复 AgentSoul 受管配置，并在修复后复检状态一致性。
 - 路径与配置逻辑同时兼容 macOS 与 Windows（含 Windows `APPDATA` 候选路径）。
 - Codex 全局路径支持 `CODEX_HOME` 覆盖，便于多环境隔离安装。
 - 配置文件损坏时会自动备份为 `*.corrupt-<timestamp>.bak` 后再修复写入，降低误覆盖风险。
+
+兼容入口（保留一个迁移周期）：
+- `--mcp --install-mode --client-scope --client-target --project --status --uninstall`
+- 旧参数会自动映射到新命令执行，并给出迁移提示。
 
 自动生成文档位置：
 - [`docs/tutorials/05-mcp-client-install.md`](docs/tutorials/05-mcp-client-install.md)
