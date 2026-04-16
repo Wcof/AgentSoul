@@ -27,7 +27,6 @@ sys.path.insert(0, str(project_root))
 
 from common import get_project_root, log  # noqa: E402
 from src.common.health_gate import (  # noqa: E402
-    HealthSummary,
     UnifiedCheckResult,
     calculate_gate_result,
     get_default_assessment,

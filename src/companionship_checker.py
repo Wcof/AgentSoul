@@ -32,7 +32,6 @@ from src.abstract import (  # noqa: E402
     UnifiedSoulStorage,
 )
 from src.common.health_gate import (  # noqa: E402
-    HealthSummary,
     UnifiedCheckResult,
     calculate_gate_result,
     handle_summary_output,

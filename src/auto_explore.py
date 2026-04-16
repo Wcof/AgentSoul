@@ -17,7 +17,7 @@ from pathlib import Path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(project_root))
 
-from common import get_project_root, log  # noqa: E402
+from common import get_project_root  # noqa: E402
 
 
 @dataclass
@@ -178,12 +178,12 @@ class AutoExplorer:
             print("=" * 60)
             return
 
-        print(f"📋 建议探索候选:")
+        print("📋 建议探索候选:")
         print(f"  标题: {candidate.title}")
         print(f"  分类: {candidate.category}")
         print(f"  描述: {candidate.description}")
         print()
-        print(f"✅ 圆心约束（Master Agent 不出圈）检查:")
+        print("✅ 圆心约束（Master Agent 不出圈）检查:")
         for question, passed in candidate.center_check.items():
             mark = "✓" if passed else "✗"
             q_name = {
@@ -198,7 +198,7 @@ class AutoExplorer:
         print()
         print(f"💡 建议: {candidate.recommendation}")
         print()
-        print(f"📊 统计:")
+        print("📊 统计:")
         empty_slots, _ = self.read_update_plan()
         partial, unimplemented = self.read_capability_map()
         print(f"  空候选槽位: {len(empty_slots)}")
@@ -227,7 +227,7 @@ def main() -> None:
 
     if args.summary_json:
         # Import here to avoid circular import
-        from src.common.health_gate import HealthSummary, UnifiedCheckResult, handle_summary_output
+        from src.common.health_gate import UnifiedCheckResult, handle_summary_output
 
         check_results = []
         overall_score = 100

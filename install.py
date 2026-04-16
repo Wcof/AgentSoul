@@ -62,6 +62,15 @@ ClientKey = Literal["claude", "codex", "trae"]
 ScopeKey = Literal["local", "global", "both"]
 TargetKey = Literal["all", "claude", "codex", "trae"]
 ProfileKey = Literal["quick", "project", "global", "full", "custom"]
+NOISY_PROJECT_DIR_NAMES = {
+    ".backup",
+    ".agent",
+    "skills",
+    "skill",
+    "system",
+    "__pycache__",
+    "node_modules",
+}
 
 
 @dataclass
@@ -1033,7 +1042,7 @@ def discover_project_metadata(max_depth: int = 4, max_results: int = 80) -> list
         Path.home() / "projects",
     ]
     seen_dirs: set[Path] = set()
-    results: list[dict[str, Any]] = []
+    raw_results: list[dict[str, Any]] = []
     skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", ".codex", ".claude"}
 
     for root in roots:
@@ -1050,16 +1059,50 @@ def discover_project_metadata(max_depth: int = 4, max_results: int = 80) -> list
             markers = sorted([marker for marker in PROJECT_MARKER_FILES if marker in files])
             if markers:
                 resolved = current_path.resolve()
+                if any(part.lower() in NOISY_PROJECT_DIR_NAMES for part in resolved.parts):
+                    continue
                 if resolved not in seen_dirs:
                     seen_dirs.add(resolved)
-                    results.append({"name": resolved.name, "path": str(resolved), "markers": markers})
-                    if len(results) >= max_results:
-                        return sorted(results, key=lambda x: x["path"])
+                    confidence = 50
+                    if (resolved / ".git").exists():
+                        confidence += 30
+                    if any((resolved / p).exists() for p in ("pyproject.toml", "package.json", "README.md", "config")):
+                        confidence += 20
+                    raw_results.append(
+                        {
+                            "name": resolved.name,
+                            "path": str(resolved),
+                            "markers": markers,
+                            "kind": "project",
+                            "confidence": min(confidence, 100),
+                        }
+                    )
+                    if len(raw_results) >= max_results:
+                        break
 
     default_project = PROJECT_ROOT.resolve()
     if default_project not in seen_dirs:
-        results.append({"name": default_project.name, "path": str(default_project), "markers": []})
-    return sorted(results, key=lambda x: x["path"])
+        raw_results.append(
+            {
+                "name": default_project.name,
+                "path": str(default_project),
+                "markers": [],
+                "kind": "project",
+                "confidence": 90,
+            }
+        )
+
+    # Prefer top-level project roots over nested subfolders when both are detected.
+    ordered = sorted(raw_results, key=lambda x: (-int(x.get("confidence", 0)), len(Path(x["path"]).parts), x["path"]))
+    selected: list[dict[str, Any]] = []
+    selected_paths: list[Path] = []
+    for item in ordered:
+        candidate = Path(item["path"])
+        if any(candidate != parent and str(candidate).startswith(str(parent) + os.sep) for parent in selected_paths):
+            continue
+        selected.append(item)
+        selected_paths.append(candidate)
+    return sorted(selected, key=lambda x: x["path"])
 
 
 def resolve_project_selector(
@@ -2538,7 +2581,8 @@ def run_mcp_doctor(matrix: TargetMatrix, as_json: bool = False) -> int:
 
     code = _doctor_report_status(checks)
     if as_json:
-        print(json.dumps({"checks": checks, "exit_code": code}, indent=2, ensure_ascii=False))
+        components = summarize_component_checks(checks)
+        print(json.dumps({"components": components, "checks": checks, "exit_code": code}, indent=2, ensure_ascii=False))
     else:
         log("MCP Doctor 检查结果", "STEP")
         for item in checks:
@@ -2615,6 +2659,84 @@ def print_project_list(as_json: bool = False) -> int:
         markers = ",".join(item.get("markers", [])) or "-"
         log(f"{item['name']} | {item['path']} | markers={markers}", "INFO")
     return 0
+
+
+def summarize_component_status(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for rec in records:
+        component = rec.get("client", "unknown")
+        scope = rec.get("scope", "unknown")
+        grouped.setdefault((component, scope), []).append(rec)
+
+    out: list[dict[str, Any]] = []
+    for (component, scope), items in sorted(grouped.items(), key=lambda x: (x[0][0], x[0][1])):
+        bool_values = [bool(i.get("registered")) for i in items if "registered" in i]
+        if bool_values and all(bool_values):
+            status = "ok"
+        elif bool_values and any(bool_values):
+            status = "warn"
+        else:
+            status = "warn"
+        out.append(
+            {
+                "component": component,
+                "scope": scope,
+                "status": status,
+                "checks": [
+                    {
+                        "action": i.get("action", "status"),
+                        "registered": i.get("registered"),
+                        "detail": i.get("detail", ""),
+                        "hook_count": i.get("hook_count"),
+                    }
+                    for i in items
+                ],
+                "recommended_fix": (
+                    "运行 `python3 install.py mcp install --scope "
+                    + scope
+                    + " --clients "
+                    + component.split()[0].lower().replace("cli", "")
+                    + "` 重新注册"
+                    if status != "ok"
+                    else ""
+                ),
+            }
+        )
+    return out
+
+
+def summarize_component_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in checks:
+        component = str(item.get("client", "system"))
+        scope = str(item.get("scope", "global"))
+        grouped.setdefault((component, scope), []).append(item)
+
+    results: list[dict[str, Any]] = []
+    for (component, scope), items in sorted(grouped.items(), key=lambda x: (x[0][0], x[0][1])):
+        statuses = [str(i.get("status", "warn")) for i in items]
+        if any(s == "error" for s in statuses):
+            status = "error"
+        elif any(s == "warn" for s in statuses):
+            status = "warn"
+        else:
+            status = "ok"
+        results.append(
+            {
+                "component": component,
+                "scope": scope,
+                "status": status,
+                "checks": items,
+                "recommended_fix": (
+                    "运行 `python3 install.py mcp repair --scope "
+                    + scope
+                    + " --clients all` 自动修复后再执行 doctor"
+                    if status != "ok"
+                    else ""
+                ),
+            }
+        )
+    return results
 
 
 def check_and_initialize_configs(project_root: Path) -> None:
@@ -2744,7 +2866,10 @@ def warn_legacy_mcp_notice() -> None:
     if LEGACY_MCP_NOTICE_PRINTED:
         return
     LEGACY_MCP_NOTICE_PRINTED = True
-    log("检测到旧版 MCP 参数入口，已自动映射到新命令。建议改用 `python3 install.py mcp ...`", "WARN")
+    log(
+        "检测到旧版 MCP 参数入口，已自动映射到新命令。推荐替代：`mcp install` / `mcp status` / `mcp uninstall`",
+        "WARN",
+    )
 
 
 def resolve_matrix_from_cli_args(
@@ -2841,7 +2966,16 @@ def handle_mcp_subcommand(args: argparse.Namespace) -> int:
             render=not getattr(args, "json", False),
         )
         if getattr(args, "json", False):
-            print(json.dumps({"records": records}, indent=2, ensure_ascii=False))
+            print(
+                json.dumps(
+                    {
+                        "components": summarize_component_status(records),
+                        "records": records,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
         return 0
 
     if cmd == "uninstall":
@@ -3069,16 +3203,40 @@ def main():
     if choice == "1":
         generate_persona_package()
     elif choice == "2":
-        install_mcp()
+        profile = ask_install_mode("quick")
+        ns = argparse.Namespace(
+            mcp_command="install",
+            profile=profile,
+            scope=None,
+            clients=None,
+            project=None,
+            run=False,
+            prepare_only=False,
+            register_only=False,
+            log=None,
+        )
+        rc = handle_mcp_subcommand(ns)
+        if rc != 0:
+            sys.exit(rc)
     elif choice == "3":
         scope = ask_session_scope()
         if not confirm_install(scope):
             return
         install_openclaw(scope)
     elif choice == "4":
-        target_project = ask_project_root(PROJECT_ROOT)
-        log(f"本地卸载目标项目：{target_project}", "OK")
-        uninstall_mcp(target_project)
+        uninstall_scope = ask_scope("both")
+        target_project = ask_project_root(PROJECT_ROOT) if uninstall_scope in ("local", "both") else None
+        if target_project is not None:
+            log(f"本地卸载目标项目：{target_project}", "OK")
+        ns = argparse.Namespace(
+            mcp_command="uninstall",
+            scope=uninstall_scope,
+            clients="all",
+            project=str(target_project) if target_project is not None else None,
+        )
+        rc = handle_mcp_subcommand(ns)
+        if rc != 0:
+            sys.exit(rc)
 
 
 def get_install_tracker_path() -> Path:

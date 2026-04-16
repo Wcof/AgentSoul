@@ -6,16 +6,21 @@ and output the available injection methods for Master Agent continuity.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from urllib.parse import unquote
 
 # Calculate project root manually before importing common (chicken-and-egg)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, str(project_root))
 
-from src.common.health_gate import HealthSummary, UnifiedCheckResult, handle_summary_output  # noqa: E402
+from src.common.health_gate import UnifiedCheckResult, handle_summary_output  # noqa: E402
 
 
 @dataclass
@@ -367,13 +372,10 @@ def main() -> None:
             sys.exit(1)
 
         try:
-            import json
-            import base64
             # Base64 decode
             json_str_bytes = base64.b64decode(hash_part)
             json_str = json_str_bytes.decode('utf-8')
             # URL decode
-            from urllib.parse import unquote
             json_str = unquote(json_str)
             share_data = json.loads(json_str)
 
@@ -491,7 +493,7 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
                 # Check if this was created by AgentSoul installation
                 is_agentsoul_file = False
                 try:
-                    with open(f, 'r', encoding='utf-8') as f_check:
+                    with open(f, encoding='utf-8') as f_check:
                         content = f_check.read(2000)  # Check first 2000 chars
                         if 'AgentSoul' in content or 'agentsoul' in content.lower():
                             is_agentsoul_file = True
@@ -594,9 +596,6 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
 
     if args.cleanup_memory:
         # Memory directory cleanup: scan for duplicate/corrupted/empty files
-        import json
-        import hashlib
-        from pathlib import Path
 
         # Find memory root directory
         # Common memory locations
@@ -619,7 +618,7 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
             sys.exit(1)
 
         # Scan all memory files
-        memory_files = []
+        memory_files: list[Path] = []
         for ext in ["*.md", "*.json"]:
             memory_files.extend(memory_root.rglob(ext))
 
@@ -641,8 +640,8 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
                     empty_files.append(file_path)
                     continue
 
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
+                with open(file_path, encoding='utf-8') as fp:
+                    content = fp.read().strip()
 
                 if not content:
                     empty_files.append(file_path)
@@ -676,23 +675,23 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
 
         if empty_files:
             print(f"⚠️  空文件 ({len(empty_files)}):")
-            for f in empty_files:
-                print(f"  - {f.relative_to(memory_root)}")
+            for item in empty_files:
+                print(f"  - {item.relative_to(memory_root)}")
             print()
 
         if corrupted_files:
             print(f"⚠️  损坏/无法读取文件 ({len(corrupted_files)}):")
-            for f, err in corrupted_files:
-                print(f"  - {f.relative_to(memory_root)}: {err}")
+            for item, err in corrupted_files:
+                print(f"  - {item.relative_to(memory_root)}: {err}")
             print()
 
         if duplicate_groups:
             print(f"⚠️  重复内容文件 ({len(duplicate_groups)} 组):")
             for i, group in enumerate(duplicate_groups, 1):
                 print(f"  组 {i}:")
-                for f in group:
-                    print(f"    - {f.relative_to(memory_root)}")
-            print()
+                for item in group:
+                    print(f"    - {item.relative_to(memory_root)}")
+                print()
 
         total_issues = len(empty_files) + len(corrupted_files) + sum(len(g) - 1 for g in duplicate_groups)
 
