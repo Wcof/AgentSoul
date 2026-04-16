@@ -158,6 +158,10 @@ class TestInstallMcpClients(unittest.TestCase):
         with mock.patch("builtins.input", return_value="3"):
             self.assertEqual(install.ask_install_mode("quick"), "global")
 
+    def test_selected_client_names(self):
+        self.assertEqual(install.selected_client_names("all"), ["claude", "codex", "trae"])
+        self.assertEqual(install.selected_client_names("claude"), ["claude"])
+
     def test_codex_installer_install_and_uninstall_local(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -204,6 +208,21 @@ class TestInstallMcpClients(unittest.TestCase):
             records = installer.status("global")
             self.assertEqual(len(records), 1)
             self.assertTrue(records[0].get("registered"))
+
+    def test_uninstall_mcp_respects_scope_and_target(self):
+        with mock.patch.object(
+            install, "uninstall_selected_clients", return_value=[]
+        ) as mocked_uninstall, mock.patch.object(
+            install, "status_selected_clients", return_value=[{"registered": False}]
+        ) as mocked_status:
+            ok = install.uninstall_mcp(
+                Path("/tmp/project"),
+                scope="global",
+                target="trae",
+            )
+            self.assertTrue(ok)
+            mocked_uninstall.assert_called_once_with("global", "trae", Path("/tmp/project"))
+            mocked_status.assert_called_once_with("global", "trae", Path("/tmp/project"))
 
 
 if __name__ == "__main__":

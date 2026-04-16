@@ -983,6 +983,55 @@ def install_selected_clients(
         render_action_summary("Trae 安装结果", trae.install(scope, mcp_full_path, json_config))
 
 
+def selected_client_names(target: Literal["all", "claude", "codex", "trae"]) -> list[str]:
+    """Expand client target selector into concrete client keys."""
+    if target == "all":
+        return ["claude", "codex", "trae"]
+    return [target]
+
+
+def uninstall_selected_clients(
+    scope: Literal["local", "global", "both"],
+    target: Literal["all", "claude", "codex", "trae"],
+    project_root: Path = PROJECT_ROOT,
+) -> list[dict[str, Any]]:
+    """Uninstall selected clients under given scope."""
+    installers = {
+        "claude": ClaudeInstaller(project_root),
+        "codex": CodexInstaller(project_root),
+        "trae": TraeInstaller(project_root),
+    }
+    all_records: list[dict[str, Any]] = []
+    for key in selected_client_names(target):
+        installer = installers[key]
+        title = f"{installer.name} 卸载结果"
+        records = installer.uninstall(scope)
+        render_action_summary(title, records)
+        all_records.extend(records)
+    return all_records
+
+
+def status_selected_clients(
+    scope: Literal["local", "global", "both"],
+    target: Literal["all", "claude", "codex", "trae"],
+    project_root: Path = PROJECT_ROOT,
+) -> list[dict[str, Any]]:
+    """Collect and render selected client status under given scope."""
+    installers = {
+        "claude": ClaudeInstaller(project_root),
+        "codex": CodexInstaller(project_root),
+        "trae": TraeInstaller(project_root),
+    }
+    all_records: list[dict[str, Any]] = []
+    for key in selected_client_names(target):
+        installer = installers[key]
+        title = f"{installer.name} 状态"
+        records = installer.status(scope)
+        render_action_summary(title, records)
+        all_records.extend(records)
+    return all_records
+
+
 def install_mcp(
     run_after: bool = True,
     log_path: str | None = None,
@@ -2003,27 +2052,22 @@ def manage_mcp_clients(mcp_full_path: Path, json_config: str, project_root: Path
             render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
             render_action_summary("Trae 安装结果", trae.install(scope, mcp_full_path, json_config))
         elif choice == "8":
-            render_action_summary("Claude 卸载结果", claude.uninstall(scope))
-            render_action_summary("Codex 卸载结果", codex.uninstall(scope))
-            render_action_summary("Trae 卸载结果", trae.uninstall(scope))
+            uninstall_selected_clients(scope, "all", selected_project)
         elif choice == "9":
-            render_action_summary("Claude 状态", claude.status(scope))
-            render_action_summary("Codex 状态", codex.status(scope))
-            render_action_summary("Trae 状态", trae.status(scope))
+            status_selected_clients(scope, "all", selected_project)
         else:
             print("❌ 无效选项，请重新输入")
 
 
-def uninstall_mcp(project_root: Path = PROJECT_ROOT) -> bool:
-    """Uninstall AgentSoul MCP from Claude/Codex/Trae."""
-    log("卸载 Claude/Codex/Trae 中的 AgentSoul MCP...", "STEP")
-    claude = ClaudeInstaller(project_root)
-    codex = CodexInstaller(project_root)
-    trae = TraeInstaller(project_root)
-    render_action_summary("Claude 卸载结果", claude.uninstall("both"))
-    render_action_summary("Codex 卸载结果", codex.uninstall("both"))
-    render_action_summary("Trae 卸载结果", trae.uninstall("both"))
-    status_ok = claude.status("both") + codex.status("both") + trae.status("both")
+def uninstall_mcp(
+    project_root: Path = PROJECT_ROOT,
+    scope: Literal["local", "global", "both"] = "both",
+    target: Literal["all", "claude", "codex", "trae"] = "all",
+) -> bool:
+    """Uninstall AgentSoul MCP from selected clients."""
+    log("卸载 AgentSoul MCP...", "STEP")
+    uninstall_selected_clients(scope, target, project_root)
+    status_ok = status_selected_clients(scope, target, project_root)
     ok = all(not rec.get("registered", False) for rec in status_ok if "registered" in rec)
     if ok:
         log("✅ MCP 卸载完成", "OK")
@@ -2163,6 +2207,8 @@ def main():
   python3 install.py --mcp --install-mode project  # 项目模式：仅项目级并选择项目
   python3 install.py --mcp --client-scope both --client-target all  # 安装到 Claude/Codex/Trae 的项目级+全局
   python3 install.py --mcp --client-scope local --project my-app     # 指定项目名执行本地安装
+  python3 install.py --status --client-scope global --client-target codex  # 仅检查 Codex 全局状态
+  python3 install.py --uninstall --client-scope global --client-target trae # 仅卸载 Trae 全局注册
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
   python3 install.py --openclaw --scope global  # OpenClaw 全局安装
   python3 install.py --uninstall            # 卸载 Claude/Codex/Trae 中的 AgentSoul MCP
@@ -2189,13 +2235,13 @@ def main():
         "--client-scope",
         type=str,
         choices=["local", "global", "both"],
-        help="MCP 客户端注册作用域（项目级/全局/同时），仅用于 --mcp",
+        help="MCP 客户端作用域（项目级/全局/同时），用于 --mcp/--status/--uninstall",
     )
     parser.add_argument(
         "--client-target",
         type=str,
         choices=["all", "claude", "codex", "trae"],
-        help="MCP 客户端类型（Claude/Codex/Trae/全部），仅用于 --mcp",
+        help="MCP 客户端类型（Claude/Codex/Trae/全部），用于 --mcp/--status/--uninstall",
     )
     parser.add_argument(
         "--project",
@@ -2235,18 +2281,20 @@ def main():
 
     if args.uninstall:
         target_project = find_project_by_name(args.project) if args.project else PROJECT_ROOT
-        uninstall_mcp(target_project or PROJECT_ROOT)
+        uninstall_mcp(
+            target_project or PROJECT_ROOT,
+            scope=args.client_scope or "both",
+            target=args.client_target or "all",
+        )
         return
 
     if args.status:
-        scope = "both"
         target_project = find_project_by_name(args.project) if args.project else PROJECT_ROOT
-        claude = ClaudeInstaller(target_project or PROJECT_ROOT)
-        codex = CodexInstaller(target_project or PROJECT_ROOT)
-        trae = TraeInstaller(target_project or PROJECT_ROOT)
-        render_action_summary("Claude 状态", claude.status(scope))
-        render_action_summary("Codex 状态", codex.status(scope))
-        render_action_summary("Trae 状态", trae.status(scope))
+        status_selected_clients(
+            args.client_scope or "both",
+            args.client_target or "all",
+            target_project or PROJECT_ROOT,
+        )
         return
 
     if args.rollback:

@@ -140,6 +140,12 @@ python3 install.py --mcp --client-scope both --client-target all
 
 # 指定项目名执行项目级安装（会匹配扫描到的项目）
 python3 install.py --mcp --client-scope local --project my-app
+
+# 精确状态检查：仅检查 Codex 全局
+python3 install.py --status --client-scope global --client-target codex
+
+# 精确卸载：仅卸载 Trae 全局
+python3 install.py --uninstall --client-scope global --client-target trae
 ```
 
 安装完成后，MCP 服务会自动注册到 Claude Code。重启 Claude Code 即可使用。
