@@ -165,6 +165,8 @@ python3 install.py --uninstall --client-scope global --client-target trae
 - 当 CLI 命令报错时，安装器会自动检查并修复相关配置文件（例如 Claude 的 `~/.claude.json` / 项目 `.mcp.json`）。
 - 卸载阶段会执行“命令结果 + 配置残留”双重校验，避免显示成功但仍有残留注册。
 - 路径与配置逻辑同时兼容 macOS 与 Windows（含 Windows `APPDATA` 候选路径）。
+- Codex 全局路径支持 `CODEX_HOME` 覆盖，便于多环境隔离安装。
+- 配置文件损坏时会自动备份为 `*.corrupt-<timestamp>.bak` 后再修复写入，降低误覆盖风险。
 
 自动生成文档位置：
 - [`docs/tutorials/05-mcp-client-install.md`](docs/tutorials/05-mcp-client-install.md)

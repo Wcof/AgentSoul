@@ -28,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -1388,20 +1389,20 @@ def codex_scope_paths(scope: Literal["local", "global", "both"], project_root: P
     """Get Codex config paths for selected scope."""
     paths: list[Path] = []
     if scope in ("global", "both"):
-        paths.append(Path.home() / ".codex" / "config.toml")
+        paths.append(codex_home_dir() / "config.toml")
     if scope in ("local", "both"):
         paths.append(project_root / ".codex" / "config.toml")
-    return paths
+    return _dedupe_paths(paths)
 
 
 def codex_startup_md_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
     """Get Codex startup markdown paths for selected scope."""
     paths: list[Path] = []
     if scope in ("global", "both"):
-        paths.append(Path.home() / ".codex" / "agentsoul-startup.md")
+        paths.append(codex_home_dir() / "agentsoul-startup.md")
     if scope in ("local", "both"):
         paths.append(project_root / ".codex" / "agentsoul-startup.md")
-    return paths
+    return _dedupe_paths(paths)
 
 
 def codex_startup_markdown() -> str:
@@ -1512,6 +1513,28 @@ def appdata_dir() -> Path | None:
     return None
 
 
+def codex_home_dir() -> Path:
+    """Resolve Codex home dir.
+
+    Priority:
+      - $CODEX_HOME
+      - ~/.codex
+    """
+    env_home = os.environ.get("CODEX_HOME")
+    if env_home:
+        return Path(env_home)
+    return Path.home() / ".codex"
+
+
+def path_scope_label_by_project(path: Path, project_root: Path) -> Literal["global", "local"]:
+    """Label config path as local/global by checking project root ownership."""
+    try:
+        path.resolve().relative_to(project_root.resolve())
+        return "local"
+    except Exception:
+        return "global"
+
+
 def claude_mcp_json_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
     """Claude MCP config JSON paths for auto-fix fallback.
 
@@ -1565,9 +1588,13 @@ def trae_scope_paths(scope: Literal["local", "global", "both"], project_root: Pa
     paths: list[Path] = []
     if scope in ("global", "both"):
         paths.append(Path.home() / ".trae" / "mcp.json")
+        ad = appdata_dir()
+        if ad is not None:
+            paths.append(ad / "Trae" / "mcp.json")
+            paths.append(ad / ".trae" / "mcp.json")
     if scope in ("local", "both"):
         paths.append(project_root / ".trae" / "mcp.json")
-    return paths
+    return _dedupe_paths(paths)
 
 
 def _load_json_obj(path: Path) -> dict[str, Any]:
@@ -1585,9 +1612,37 @@ def _load_json_obj(path: Path) -> dict[str, Any]:
     return {}
 
 
+def _load_json_obj_for_update(path: Path) -> dict[str, Any]:
+    """Load JSON for update and auto-backup invalid payload before overwriting."""
+    if not path.exists():
+        return {}
+
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except Exception:
+        return {}
+
+    stripped = raw.strip()
+    if not stripped:
+        return {}
+
+    try:
+        obj = json.loads(stripped)
+        if isinstance(obj, dict):
+            return obj
+        return {}
+    except Exception:
+        backup = path.with_name(f"{path.name}.corrupt-{int(time.time())}.bak")
+        try:
+            backup.write_text(raw, encoding="utf-8")
+        except Exception:
+            pass
+        return {}
+
+
 def _upsert_mcp_server_in_json(path: Path, server_name: str, config: dict[str, Any]) -> None:
     """Upsert MCP server entry in JSON object with mcpServers map."""
-    data = _load_json_obj(path)
+    data = _load_json_obj_for_update(path)
     servers = data.get("mcpServers")
     if not isinstance(servers, dict):
         servers = {}
@@ -1600,7 +1655,7 @@ def _upsert_mcp_server_in_json(path: Path, server_name: str, config: dict[str, A
 def _remove_mcp_server_in_json(path: Path, server_name: str) -> bool:
     if not path.exists():
         return False
-    data = _load_json_obj(path)
+    data = _load_json_obj_for_update(path)
     servers = data.get("mcpServers")
     if not isinstance(servers, dict) or server_name not in servers:
         return False
@@ -1776,12 +1831,12 @@ class CodexInstaller(ClientInstaller):
         block = build_codex_mcp_block(mcp_full_path)
         for cfg in codex_scope_paths(scope, self.project_root):
             upsert_managed_block(cfg, block, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
-            records.append({"client": self.name, "scope": path_scope_label(cfg, Path.home() / ".codex" / "config.toml"), "action": "install", "success": True, "detail": f"updated {cfg}"})
+            records.append({"client": self.name, "scope": path_scope_label_by_project(cfg, self.project_root), "action": "install", "success": True, "detail": f"updated {cfg}"})
 
         for md in codex_startup_md_paths(scope, self.project_root):
             md.parent.mkdir(parents=True, exist_ok=True)
             md.write_text(codex_startup_markdown(), encoding="utf-8")
-            records.append({"client": self.name, "scope": path_scope_label(md, Path.home() / ".codex" / "agentsoul-startup.md"), "action": "startup_fallback", "success": True, "detail": f"generated {md}"})
+            records.append({"client": self.name, "scope": path_scope_label_by_project(md, self.project_root), "action": "startup_fallback", "success": True, "detail": f"generated {md}"})
 
         for agents_md in codex_agents_md_paths(scope, self.project_root):
             upsert_managed_block(agents_md, codex_agents_markdown(), AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
@@ -1792,11 +1847,11 @@ class CodexInstaller(ClientInstaller):
         records: list[dict[str, Any]] = []
         for cfg in codex_scope_paths(scope, self.project_root):
             changed = remove_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
-            records.append({"client": self.name, "scope": path_scope_label(cfg, Path.home() / ".codex" / "config.toml"), "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
+            records.append({"client": self.name, "scope": path_scope_label_by_project(cfg, self.project_root), "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
         for md in codex_startup_md_paths(scope, self.project_root):
             if md.exists():
                 md.unlink()
-                records.append({"client": self.name, "scope": path_scope_label(md, Path.home() / ".codex" / "agentsoul-startup.md"), "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
+                records.append({"client": self.name, "scope": path_scope_label_by_project(md, self.project_root), "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
         for agents_md in codex_agents_md_paths(scope, self.project_root):
             changed = remove_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
             records.append({"client": self.name, "scope": "local", "action": "agents_md_remove", "success": True, "detail": f"{'removed' if changed else 'not found'} {agents_md}"})
@@ -1812,12 +1867,12 @@ class CodexInstaller(ClientInstaller):
     def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         for cfg in codex_scope_paths(scope, self.project_root):
-            sc = path_scope_label(cfg, Path.home() / ".codex" / "config.toml")
+            sc = path_scope_label_by_project(cfg, self.project_root)
             records.append({
                 "client": self.name,
                 "scope": sc,
                 "registered": has_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END),
-                "startup_fallback": (Path.home() / ".codex" / "agentsoul-startup.md").exists() if sc == "global" else (self.project_root / ".codex" / "agentsoul-startup.md").exists(),
+                "startup_fallback": (codex_home_dir() / "agentsoul-startup.md").exists() if sc == "global" else (self.project_root / ".codex" / "agentsoul-startup.md").exists(),
                 "detail": str(cfg),
             })
         for agents_md in codex_agents_md_paths(scope, self.project_root):
@@ -1848,7 +1903,7 @@ class TraeInstaller(ClientInstaller):
             _upsert_mcp_server_in_json(cfg, "agentsoul", server_cfg)
             records.append({
                 "client": self.name,
-                "scope": path_scope_label(cfg, Path.home() / ".trae" / "mcp.json"),
+                "scope": path_scope_label_by_project(cfg, self.project_root),
                 "action": "install",
                 "success": True,
                 "detail": f"updated {cfg}",
@@ -1861,7 +1916,7 @@ class TraeInstaller(ClientInstaller):
             changed = _remove_mcp_server_in_json(cfg, "agentsoul")
             records.append({
                 "client": self.name,
-                "scope": path_scope_label(cfg, Path.home() / ".trae" / "mcp.json"),
+                "scope": path_scope_label_by_project(cfg, self.project_root),
                 "action": "uninstall",
                 "success": True,
                 "detail": f"{'removed' if changed else 'not found'} {cfg}",
@@ -1873,7 +1928,7 @@ class TraeInstaller(ClientInstaller):
         for cfg in trae_scope_paths(scope, self.project_root):
             records.append({
                 "client": self.name,
-                "scope": path_scope_label(cfg, Path.home() / ".trae" / "mcp.json"),
+                "scope": path_scope_label_by_project(cfg, self.project_root),
                 "registered": _has_mcp_server_in_json(cfg, "agentsoul"),
                 "detail": str(cfg),
             })

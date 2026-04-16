@@ -104,6 +104,12 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertEqual(len(paths), 2)
         self.assertTrue(any(str(p).endswith(".codex/config.toml") for p in paths))
 
+    def test_codex_scope_paths_respect_codex_home_env(self):
+        root = Path("/tmp/project")
+        with mock.patch.dict("os.environ", {"CODEX_HOME": "/tmp/custom-codex-home"}, clear=False):
+            paths = install.codex_scope_paths("global", root)
+        self.assertEqual(paths, [Path("/tmp/custom-codex-home") / "config.toml"])
+
     def test_codex_startup_markdown_contains_required_calls(self):
         content = install.codex_startup_markdown()
         self.assertIn("mcp__agentsoul__get_persona_config()", content)
@@ -126,6 +132,12 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertEqual(len(paths), 2)
         self.assertTrue(any(str(p).endswith(".trae/mcp.json") for p in paths))
 
+    def test_trae_scope_paths_include_windows_appdata(self):
+        root = Path("/tmp/my-project")
+        with mock.patch.dict("os.environ", {"APPDATA": "C:/Users/test/AppData/Roaming"}, clear=False):
+            paths = install.trae_scope_paths("global", root)
+        self.assertTrue(any("AppData" in str(p) and "Trae" in str(p) for p in paths))
+
     def test_upsert_remove_mcp_server_json(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             cfg = Path(temp_dir) / "mcp.json"
@@ -136,6 +148,17 @@ class TestInstallMcpClients(unittest.TestCase):
             removed = install._remove_mcp_server_in_json(cfg, "agentsoul")
             self.assertTrue(removed)
             self.assertFalse(install._has_mcp_server_in_json(cfg, "agentsoul"))
+
+    def test_upsert_mcp_server_json_backs_up_invalid_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cfg = Path(temp_dir) / "mcp.json"
+            cfg.write_text('{"mcpServers":', encoding="utf-8")
+            install._upsert_mcp_server_in_json(
+                cfg, "agentsoul", {"command": "node", "args": ["/tmp/a.js"]}
+            )
+            backups = list(Path(temp_dir).glob("mcp.json.corrupt-*.bak"))
+            self.assertTrue(backups)
+            self.assertTrue(install._has_mcp_server_in_json(cfg, "agentsoul"))
 
     def test_find_project_by_name_uses_discovery(self):
         fake_projects = [Path("/tmp/foo"), Path("/tmp/bar/app-one")]
