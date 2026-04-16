@@ -1398,6 +1398,22 @@ def run_cli_command_with_fallback(commands: list[list[str]]) -> tuple[bool, str]
     return (False, last_output)
 
 
+def path_scope_label(path: Path, global_path: Path) -> Literal["global", "local"]:
+    """Return scope label by exact canonical path match."""
+    try:
+        return "global" if path.resolve() == global_path.resolve() else "local"
+    except Exception:
+        return "global" if path == global_path else "local"
+
+
+def has_claude_user_mcp_server(server_name: str) -> bool:
+    """Check user-level Claude MCP server from ~/.claude.json."""
+    cfg = Path.home() / ".claude.json"
+    data = _load_json_obj(cfg)
+    servers = data.get("mcpServers")
+    return isinstance(servers, dict) and server_name in servers
+
+
 def trae_scope_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
     """Get Trae MCP config paths for selected scope."""
     paths: list[Path] = []
@@ -1548,10 +1564,14 @@ class ClaudeInstaller(ClientInstaller):
     def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         if scope in ("global", "both"):
+            # Some Claude CLI versions don't support scope on `mcp get`.
             ok, msg = run_cli_command_with_fallback([
                 ["claude", "mcp", "get", "agentsoul", "-s", "user"],
                 ["claude", "mcp", "get", "--scope", "user", "agentsoul"],
             ])
+            if not ok:
+                ok = has_claude_user_mcp_server("agentsoul")
+                msg = str(Path.home() / ".claude.json")
             settings = load_settings(Path.home() / ".claude" / "settings.json")
             records.append({"client": self.name, "scope": "global", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
         if scope in ("local", "both"):
@@ -1582,12 +1602,12 @@ class CodexInstaller(ClientInstaller):
         block = build_codex_mcp_block(mcp_full_path)
         for cfg in codex_scope_paths(scope, self.project_root):
             upsert_managed_block(cfg, block, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
-            records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "install", "success": True, "detail": f"updated {cfg}"})
+            records.append({"client": self.name, "scope": path_scope_label(cfg, Path.home() / ".codex" / "config.toml"), "action": "install", "success": True, "detail": f"updated {cfg}"})
 
         for md in codex_startup_md_paths(scope, self.project_root):
             md.parent.mkdir(parents=True, exist_ok=True)
             md.write_text(codex_startup_markdown(), encoding="utf-8")
-            records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback", "success": True, "detail": f"generated {md}"})
+            records.append({"client": self.name, "scope": path_scope_label(md, Path.home() / ".codex" / "agentsoul-startup.md"), "action": "startup_fallback", "success": True, "detail": f"generated {md}"})
 
         for agents_md in codex_agents_md_paths(scope, self.project_root):
             upsert_managed_block(agents_md, codex_agents_markdown(), AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
@@ -1598,11 +1618,11 @@ class CodexInstaller(ClientInstaller):
         records: list[dict[str, Any]] = []
         for cfg in codex_scope_paths(scope, self.project_root):
             changed = remove_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
-            records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
+            records.append({"client": self.name, "scope": path_scope_label(cfg, Path.home() / ".codex" / "config.toml"), "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
         for md in codex_startup_md_paths(scope, self.project_root):
             if md.exists():
                 md.unlink()
-                records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
+                records.append({"client": self.name, "scope": path_scope_label(md, Path.home() / ".codex" / "agentsoul-startup.md"), "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
         for agents_md in codex_agents_md_paths(scope, self.project_root):
             changed = remove_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
             records.append({"client": self.name, "scope": "local", "action": "agents_md_remove", "success": True, "detail": f"{'removed' if changed else 'not found'} {agents_md}"})
@@ -1618,7 +1638,7 @@ class CodexInstaller(ClientInstaller):
     def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
         records: list[dict[str, Any]] = []
         for cfg in codex_scope_paths(scope, self.project_root):
-            sc = "global" if str(cfg).startswith(str(Path.home())) else "local"
+            sc = path_scope_label(cfg, Path.home() / ".codex" / "config.toml")
             records.append({
                 "client": self.name,
                 "scope": sc,
@@ -1654,7 +1674,7 @@ class TraeInstaller(ClientInstaller):
             _upsert_mcp_server_in_json(cfg, "agentsoul", server_cfg)
             records.append({
                 "client": self.name,
-                "scope": "global" if str(cfg).startswith(str(Path.home())) else "local",
+                "scope": path_scope_label(cfg, Path.home() / ".trae" / "mcp.json"),
                 "action": "install",
                 "success": True,
                 "detail": f"updated {cfg}",
@@ -1667,7 +1687,7 @@ class TraeInstaller(ClientInstaller):
             changed = _remove_mcp_server_in_json(cfg, "agentsoul")
             records.append({
                 "client": self.name,
-                "scope": "global" if str(cfg).startswith(str(Path.home())) else "local",
+                "scope": path_scope_label(cfg, Path.home() / ".trae" / "mcp.json"),
                 "action": "uninstall",
                 "success": True,
                 "detail": f"{'removed' if changed else 'not found'} {cfg}",
@@ -1679,7 +1699,7 @@ class TraeInstaller(ClientInstaller):
         for cfg in trae_scope_paths(scope, self.project_root):
             records.append({
                 "client": self.name,
-                "scope": "global" if str(cfg).startswith(str(Path.home())) else "local",
+                "scope": path_scope_label(cfg, Path.home() / ".trae" / "mcp.json"),
                 "registered": _has_mcp_server_in_json(cfg, "agentsoul"),
                 "detail": str(cfg),
             })

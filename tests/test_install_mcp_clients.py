@@ -143,6 +143,13 @@ class TestInstallMcpClients(unittest.TestCase):
             self.assertEqual(install.find_project_by_name("foo"), Path("/tmp/foo"))
             self.assertEqual(install.find_project_by_name("app-one"), Path("/tmp/bar/app-one"))
 
+    def test_path_scope_label_exact_match(self):
+        home = Path.home()
+        global_cfg = home / ".codex" / "config.toml"
+        local_cfg = home / "Downloads" / "project" / "x" / ".codex" / "config.toml"
+        self.assertEqual(install.path_scope_label(global_cfg, global_cfg), "global")
+        self.assertEqual(install.path_scope_label(local_cfg, global_cfg), "local")
+
     def test_codex_installer_install_and_uninstall_local(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -174,6 +181,21 @@ class TestInstallMcpClients(unittest.TestCase):
             installer.install("local", Path("/tmp/mcp_server/dist/index.js"), "{}")
             status_after = installer.status("local")
             self.assertTrue(any(r.get("registered", False) for r in status_after))
+
+    def test_claude_status_global_fallback_to_user_config(self):
+        installer = install.ClaudeInstaller(Path("/tmp/test-project"))
+        with mock.patch.object(
+            install,
+            "run_cli_command_with_fallback",
+            return_value=(False, "unknown option --scope"),
+        ), mock.patch.object(
+            install, "has_claude_user_mcp_server", return_value=True
+        ), mock.patch.object(
+            install, "load_settings", return_value={}
+        ):
+            records = installer.status("global")
+            self.assertEqual(len(records), 1)
+            self.assertTrue(records[0].get("registered"))
 
 
 if __name__ == "__main__":
