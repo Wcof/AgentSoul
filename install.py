@@ -832,9 +832,9 @@ def show_menu():
     print("╚══════════════════════════════════════════════════════════════════╝\n")
     print("请选择操作：\n")
     print("1. 生成人格包（通用，支持所有工具）")
-    print("2. MCP 服务（Claude/Codex 客户端安装管理）")
+    print("2. MCP 服务（Claude/Codex/Trae 客户端安装管理）")
     print("3. OpenClaw 人格插件（深度集成）")
-    print("4. 卸载 Claude CLI 中的 AgentSoul MCP（强制自动清理）")
+    print("4. 卸载 AgentSoul MCP（Claude/Codex/Trae）")
     print("0. 退出\n")
 
     while True:
@@ -1594,6 +1594,48 @@ class CodexInstaller(ClientInstaller):
             records.append({"client": self.name, "scope": "local", "action": "agents_md", "success": True, "detail": f"updated {agents_md}"})
         return records
 
+    def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for cfg in codex_scope_paths(scope, self.project_root):
+            changed = remove_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
+            records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
+        for md in codex_startup_md_paths(scope, self.project_root):
+            if md.exists():
+                md.unlink()
+                records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
+        for agents_md in codex_agents_md_paths(scope, self.project_root):
+            changed = remove_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
+            records.append({"client": self.name, "scope": "local", "action": "agents_md_remove", "success": True, "detail": f"{'removed' if changed else 'not found'} {agents_md}"})
+        local_dir = self.project_root / ".codex"
+        if local_dir.exists():
+            try:
+                if not any(local_dir.iterdir()):
+                    local_dir.rmdir()
+            except Exception:
+                pass
+        return records
+
+    def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        for cfg in codex_scope_paths(scope, self.project_root):
+            sc = "global" if str(cfg).startswith(str(Path.home())) else "local"
+            records.append({
+                "client": self.name,
+                "scope": sc,
+                "registered": has_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END),
+                "startup_fallback": (Path.home() / ".codex" / "agentsoul-startup.md").exists() if sc == "global" else (self.project_root / ".codex" / "agentsoul-startup.md").exists(),
+                "detail": str(cfg),
+            })
+        for agents_md in codex_agents_md_paths(scope, self.project_root):
+            records.append({
+                "client": self.name,
+                "scope": "local",
+                "action": "agents_md_status",
+                "registered": has_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END),
+                "detail": str(agents_md),
+            })
+        return records
+
 
 class TraeInstaller(ClientInstaller):
     """Trae MCP installer using managed JSON mcpServers config."""
@@ -1640,48 +1682,6 @@ class TraeInstaller(ClientInstaller):
                 "scope": "global" if str(cfg).startswith(str(Path.home())) else "local",
                 "registered": _has_mcp_server_in_json(cfg, "agentsoul"),
                 "detail": str(cfg),
-            })
-        return records
-
-    def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
-        records: list[dict[str, Any]] = []
-        for cfg in codex_scope_paths(scope, self.project_root):
-            changed = remove_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END)
-            records.append({"client": self.name, "scope": "global" if str(cfg).startswith(str(Path.home())) else "local", "action": "uninstall", "success": True, "detail": f"{'removed' if changed else 'not found'} {cfg}"})
-        for md in codex_startup_md_paths(scope, self.project_root):
-            if md.exists():
-                md.unlink()
-                records.append({"client": self.name, "scope": "global" if str(md).startswith(str(Path.home())) else "local", "action": "startup_fallback_remove", "success": True, "detail": f"removed {md}"})
-        for agents_md in codex_agents_md_paths(scope, self.project_root):
-            changed = remove_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END)
-            records.append({"client": self.name, "scope": "local", "action": "agents_md_remove", "success": True, "detail": f"{'removed' if changed else 'not found'} {agents_md}"})
-        local_dir = self.project_root / ".codex"
-        if local_dir.exists():
-            try:
-                if not any(local_dir.iterdir()):
-                    local_dir.rmdir()
-            except Exception:
-                pass
-        return records
-
-    def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
-        records: list[dict[str, Any]] = []
-        for cfg in codex_scope_paths(scope, self.project_root):
-            sc = "global" if str(cfg).startswith(str(Path.home())) else "local"
-            records.append({
-                "client": self.name,
-                "scope": sc,
-                "registered": has_managed_block(cfg, AGENTSOUL_BLOCK_BEGIN, AGENTSOUL_BLOCK_END),
-                "startup_fallback": (Path.home() / ".codex" / "agentsoul-startup.md").exists() if sc == "global" else (self.project_root / ".codex" / "agentsoul-startup.md").exists(),
-                "detail": str(cfg),
-            })
-        for agents_md in codex_agents_md_paths(scope, self.project_root):
-            records.append({
-                "client": self.name,
-                "scope": "local",
-                "action": "agents_md_status",
-                "registered": has_managed_block(agents_md, AGENTSOUL_AGENTS_BEGIN, AGENTSOUL_AGENTS_END),
-                "detail": str(agents_md),
             })
         return records
 
@@ -2209,7 +2209,9 @@ def main():
             return
         install_openclaw(scope)
     elif choice == "4":
-        uninstall_mcp()
+        target_project = ask_project_root(PROJECT_ROOT)
+        log(f"本地卸载目标项目：{target_project}", "OK")
+        uninstall_mcp(target_project)
 
 
 def get_install_tracker_path() -> Path:

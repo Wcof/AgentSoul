@@ -143,6 +143,38 @@ class TestInstallMcpClients(unittest.TestCase):
             self.assertEqual(install.find_project_by_name("foo"), Path("/tmp/foo"))
             self.assertEqual(install.find_project_by_name("app-one"), Path("/tmp/bar/app-one"))
 
+    def test_codex_installer_install_and_uninstall_local(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            installer = install.CodexInstaller(root)
+            with mock.patch.object(installer, "detect", return_value=True):
+                records = installer.install("local", Path("/tmp/mcp_server/dist/index.js"), "{}")
+                self.assertTrue(any(r.get("action") == "install" for r in records))
+                self.assertTrue((root / ".codex" / "config.toml").exists())
+                self.assertTrue((root / ".codex" / "agentsoul-startup.md").exists())
+                self.assertTrue((root / "AGENTS.md").exists())
+
+                status_records = installer.status("local")
+                self.assertTrue(any(r.get("registered") for r in status_records))
+
+                uninstall_records = installer.uninstall("local")
+                self.assertTrue(any(r.get("action") == "uninstall" for r in uninstall_records))
+                self.assertFalse((root / ".codex" / "agentsoul-startup.md").exists())
+
+    def test_trae_status_does_not_depend_on_codex_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            installer = install.TraeInstaller(root)
+            # Create codex files only; trae should still report unregistered.
+            (root / ".codex").mkdir(parents=True, exist_ok=True)
+            (root / ".codex" / "config.toml").write_text("dummy", encoding="utf-8")
+            status_before = installer.status("local")
+            self.assertTrue(all(not r.get("registered", False) for r in status_before))
+
+            installer.install("local", Path("/tmp/mcp_server/dist/index.js"), "{}")
+            status_after = installer.status("local")
+            self.assertTrue(any(r.get("registered", False) for r in status_after))
+
 
 if __name__ == "__main__":
     unittest.main()
