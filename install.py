@@ -2038,15 +2038,15 @@ def manage_mcp_clients(mcp_full_path: Path, json_config: str, project_root: Path
         if choice == "1":
             render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
         elif choice == "2":
-            render_action_summary("Claude 卸载结果", claude.uninstall(scope))
+            uninstall_selected_clients(scope, "claude", selected_project)
         elif choice == "3":
             render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
         elif choice == "4":
-            render_action_summary("Codex 卸载结果", codex.uninstall(scope))
+            uninstall_selected_clients(scope, "codex", selected_project)
         elif choice == "5":
             render_action_summary("Trae 安装结果", trae.install(scope, mcp_full_path, json_config))
         elif choice == "6":
-            render_action_summary("Trae 卸载结果", trae.uninstall(scope))
+            uninstall_selected_clients(scope, "trae", selected_project)
         elif choice == "7":
             render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
             render_action_summary("Codex 安装结果", codex.install(scope, mcp_full_path, json_config))
@@ -2066,13 +2066,19 @@ def uninstall_mcp(
 ) -> bool:
     """Uninstall AgentSoul MCP from selected clients."""
     log("卸载 AgentSoul MCP...", "STEP")
-    uninstall_selected_clients(scope, target, project_root)
-    status_ok = status_selected_clients(scope, target, project_root)
-    ok = all(not rec.get("registered", False) for rec in status_ok if "registered" in rec)
+    uninstall_records = uninstall_selected_clients(scope, target, project_root)
+    status_records = status_selected_clients(scope, target, project_root)
+
+    uninstall_ok = all(rec.get("success", True) for rec in uninstall_records)
+    status_ok = all(not rec.get("registered", False) for rec in status_records if "registered" in rec)
+    ok = uninstall_ok and status_ok
     if ok:
         log("✅ MCP 卸载完成", "OK")
     else:
-        log("⚠️  卸载完成但存在失败项，请查看上方详情", "WARN")
+        if not uninstall_ok:
+            log("⚠️  检测到卸载命令失败项，请查看上方详情", "WARN")
+        if not status_ok:
+            log("⚠️  卸载后仍检测到残留注册项，请查看上方详情", "WARN")
     return ok
 
 

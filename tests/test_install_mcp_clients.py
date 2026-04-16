@@ -224,6 +224,28 @@ class TestInstallMcpClients(unittest.TestCase):
             mocked_uninstall.assert_called_once_with("global", "trae", Path("/tmp/project"))
             mocked_status.assert_called_once_with("global", "trae", Path("/tmp/project"))
 
+    def test_uninstall_mcp_fails_when_uninstall_action_fails(self):
+        with mock.patch.object(
+            install,
+            "uninstall_selected_clients",
+            return_value=[{"success": False, "client": "Claude CLI"}],
+        ), mock.patch.object(
+            install, "status_selected_clients", return_value=[{"registered": False}]
+        ):
+            ok = install.uninstall_mcp(Path("/tmp/project"), "both", "all")
+            self.assertFalse(ok)
+
+    def test_uninstall_mcp_fails_when_registered_still_exists(self):
+        with mock.patch.object(
+            install,
+            "uninstall_selected_clients",
+            return_value=[{"success": True, "client": "Codex CLI"}],
+        ), mock.patch.object(
+            install, "status_selected_clients", return_value=[{"registered": True}]
+        ):
+            ok = install.uninstall_mcp(Path("/tmp/project"), "both", "all")
+            self.assertFalse(ok)
+
 
 if __name__ == "__main__":
     unittest.main()
