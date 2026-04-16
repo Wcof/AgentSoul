@@ -150,6 +150,14 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertEqual(install.path_scope_label(global_cfg, global_cfg), "global")
         self.assertEqual(install.path_scope_label(local_cfg, global_cfg), "local")
 
+    def test_ask_install_mode_default_quick(self):
+        with mock.patch("builtins.input", return_value=""):
+            self.assertEqual(install.ask_install_mode("quick"), "quick")
+
+    def test_ask_install_mode_select_global(self):
+        with mock.patch("builtins.input", return_value="3"):
+            self.assertEqual(install.ask_install_mode("quick"), "global")
+
     def test_codex_installer_install_and_uninstall_local(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

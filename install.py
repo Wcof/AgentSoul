@@ -948,6 +948,22 @@ def ask_client_target(default: Literal["all", "claude", "codex", "trae"] = "all"
         print("❌ 无效选项，请重新输入")
 
 
+def ask_install_mode(default: Literal["quick", "project", "global", "custom"] = "quick") -> Literal["quick", "project", "global", "custom"]:
+    """Prompt MCP installation mode."""
+    options = {"1": "quick", "2": "project", "3": "global", "4": "custom"}
+    default_key = {"quick": "1", "project": "2", "global": "3", "custom": "4"}[default]
+    print("\n请选择安装模式：")
+    print("1. 快速模式（推荐）：Claude/Codex/Trae + 本地/全局")
+    print("2. 项目模式：仅项目级（会选择项目）")
+    print("3. 全局模式：仅全局")
+    print("4. 自定义模式：手动选择作用域和客户端")
+    while True:
+        choice = input(f"请输入选项 [1-4，默认 {default_key}]: ").strip() or default_key
+        if choice in options:
+            return options[choice]  # type: ignore[return-value]
+        print("❌ 无效选项，请重新输入")
+
+
 def install_selected_clients(
     mcp_full_path: Path,
     json_config: str,
@@ -970,6 +986,7 @@ def install_selected_clients(
 def install_mcp(
     run_after: bool = True,
     log_path: str | None = None,
+    install_mode: Literal["quick", "project", "global", "custom"] | None = None,
     client_scope: Literal["local", "global", "both"] | None = None,
     client_target: Literal["all", "claude", "codex", "trae"] | None = None,
     project_selector: str | None = None,
@@ -1074,7 +1091,25 @@ def install_mcp(
     print(f"claude mcp add-json --scope user agentsoul '{json_config}'\n")
 
     # Install client registration right away during MCP setup.
-    resolved_scope = client_scope if client_scope is not None else ask_scope("both")
+    selected_mode = install_mode
+    if selected_mode is None and client_scope is None and client_target is None and project_selector is None:
+        selected_mode = ask_install_mode("quick")
+    elif selected_mode is None:
+        selected_mode = "custom"
+
+    if selected_mode == "quick":
+        resolved_scope: Literal["local", "global", "both"] = "both"
+        resolved_target: Literal["all", "claude", "codex", "trae"] = "all"
+    elif selected_mode == "project":
+        resolved_scope = "local"
+        resolved_target = "all"
+    elif selected_mode == "global":
+        resolved_scope = "global"
+        resolved_target = "all"
+    else:
+        resolved_scope = client_scope if client_scope is not None else ask_scope("both")
+        resolved_target = client_target if client_target is not None else ask_client_target("all")
+
     selected_project_root = PROJECT_ROOT.resolve()
     if resolved_scope in ("local", "both"):
         if project_selector:
@@ -1084,10 +1119,9 @@ def install_mcp(
             else:
                 selected_project_root = found
                 log(f"本地作用域目标项目：{selected_project_root}", "OK")
-        elif client_scope is None:
+        elif selected_mode in ("project", "custom") and client_scope is None:
             selected_project_root = ask_project_root(PROJECT_ROOT)
             log(f"本地作用域目标项目：{selected_project_root}", "OK")
-    resolved_target = client_target if client_target is not None else ask_client_target("all")
     install_selected_clients(
         mcp_full_path,
         json_config,
@@ -2125,6 +2159,8 @@ def main():
   python3 install.py --persona --name "小明" # 自定义 Agent 名称生成
   python3 install.py --mcp                   # 安装并启动 MCP 服务
   python3 install.py --mcp --no-run         # 仅安装 MCP，不启动
+  python3 install.py --mcp --install-mode quick  # 快速模式：三端 + 本地/全局
+  python3 install.py --mcp --install-mode project  # 项目模式：仅项目级并选择项目
   python3 install.py --mcp --client-scope both --client-target all  # 安装到 Claude/Codex/Trae 的项目级+全局
   python3 install.py --mcp --client-scope local --project my-app     # 指定项目名执行本地安装
   python3 install.py --openclaw             # 安装 OpenClaw 人格插件
@@ -2143,6 +2179,12 @@ def main():
     parser.add_argument("--mcp", action="store_true", help="安装并启动 MCP 服务")
     parser.add_argument("--no-run", action="store_true", help="仅安装，不启动 MCP")
     parser.add_argument("--log", type=str, help="MCP 日志输出路径")
+    parser.add_argument(
+        "--install-mode",
+        type=str,
+        choices=["quick", "project", "global", "custom"],
+        help="MCP 安装模式（quick/project/global/custom），仅用于 --mcp",
+    )
     parser.add_argument(
         "--client-scope",
         type=str,
@@ -2178,6 +2220,7 @@ def main():
         install_mcp(
             run_after=not args.no_run,
             log_path=args.log,
+            install_mode=args.install_mode,
             client_scope=args.client_scope,
             client_target=args.client_target,
             project_selector=args.project,

@@ -129,6 +129,12 @@ python3 install.py --mcp
 # 仅安装不启动
 python3 install.py --mcp --no-run
 
+# 快速模式（推荐）：三端 + 本地/全局
+python3 install.py --mcp --install-mode quick
+
+# 项目模式：仅项目级并选择项目
+python3 install.py --mcp --install-mode project
+
 # 安装时直接选择客户端作用域（项目级/全局/同时）
 python3 install.py --mcp --client-scope both --client-target all
 
