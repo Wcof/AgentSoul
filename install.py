@@ -1489,6 +1489,69 @@ def path_scope_label(path: Path, global_path: Path) -> Literal["global", "local"
         return "global" if path == global_path else "local"
 
 
+def _dedupe_paths(paths: list[Path]) -> list[Path]:
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for p in paths:
+        try:
+            rp = p.resolve()
+        except Exception:
+            rp = p
+        if rp in seen:
+            continue
+        seen.add(rp)
+        out.append(p)
+    return out
+
+
+def appdata_dir() -> Path | None:
+    """Return APPDATA dir on Windows, otherwise None."""
+    value = os.environ.get("APPDATA")
+    if value:
+        return Path(value)
+    return None
+
+
+def claude_mcp_json_paths(scope: Literal["local", "global", "both"], project_root: Path = PROJECT_ROOT) -> list[Path]:
+    """Claude MCP config JSON paths for auto-fix fallback.
+
+    Global:
+      - ~/.claude.json
+      - %APPDATA%/Claude/claude.json (Windows fallback)
+    Local:
+      - <project>/.mcp.json
+    """
+    paths: list[Path] = []
+    if scope in ("global", "both"):
+        paths.append(Path.home() / ".claude.json")
+        ad = appdata_dir()
+        if ad is not None:
+            paths.append(ad / "Claude" / "claude.json")
+    if scope in ("local", "both"):
+        paths.append(project_root / ".mcp.json")
+    return _dedupe_paths(paths)
+
+
+def upsert_claude_mcp_json(scope: Literal["local", "global", "both"], project_root: Path, config: dict[str, Any]) -> list[Path]:
+    updated: list[Path] = []
+    for p in claude_mcp_json_paths(scope, project_root):
+        _upsert_mcp_server_in_json(p, "agentsoul", config)
+        updated.append(p)
+    return updated
+
+
+def remove_claude_mcp_json(scope: Literal["local", "global", "both"], project_root: Path) -> list[tuple[Path, bool]]:
+    removed: list[tuple[Path, bool]] = []
+    for p in claude_mcp_json_paths(scope, project_root):
+        changed = _remove_mcp_server_in_json(p, "agentsoul")
+        removed.append((p, changed))
+    return removed
+
+
+def has_claude_mcp_json(scope: Literal["local", "global", "both"], project_root: Path) -> bool:
+    return any(_has_mcp_server_in_json(p, "agentsoul") for p in claude_mcp_json_paths(scope, project_root))
+
+
 def has_claude_user_mcp_server(server_name: str) -> bool:
     """Check user-level Claude MCP server from ~/.claude.json."""
     cfg = Path.home() / ".claude.json"
@@ -1588,6 +1651,7 @@ class ClaudeInstaller(ClientInstaller):
             return records
 
         hook_prompt = get_agentsoul_hook_prompt()
+        server_cfg = {"command": "node", "args": [str(mcp_full_path)]}
         if scope in ("global", "both"):
             ok, msg = run_cli_command_with_fallback([
                 ["claude", "mcp", "add-json", "--scope", "user", "agentsoul", json_config],
@@ -1598,7 +1662,12 @@ class ClaudeInstaller(ClientInstaller):
             changed = ensure_agentsoul_hook(settings, hook_prompt)
             if changed:
                 save_settings(settings_path, settings)
-            records.append({"client": self.name, "scope": "global", "action": "install", "success": ok, "detail": msg or "registered"})
+            upserted = upsert_claude_mcp_json("global", self.project_root, server_cfg)
+            effective_ok = ok or has_claude_mcp_json("global", self.project_root)
+            detail = msg or "registered"
+            if not ok and upserted:
+                detail = f"{detail} | auto-fixed via {', '.join(str(p) for p in upserted)}"
+            records.append({"client": self.name, "scope": "global", "action": "install", "success": effective_ok, "detail": detail})
 
         if scope in ("local", "both"):
             ok, msg = run_cli_command_with_fallback([
@@ -1610,7 +1679,12 @@ class ClaudeInstaller(ClientInstaller):
             changed = ensure_agentsoul_hook(settings, hook_prompt)
             if changed:
                 save_settings(settings_path, settings)
-            records.append({"client": self.name, "scope": "local", "action": "install", "success": ok, "detail": msg or "registered"})
+            upserted = upsert_claude_mcp_json("local", self.project_root, server_cfg)
+            effective_ok = ok or has_claude_mcp_json("local", self.project_root)
+            detail = msg or "registered"
+            if not ok and upserted:
+                detail = f"{detail} | auto-fixed via {', '.join(str(p) for p in upserted)}"
+            records.append({"client": self.name, "scope": "local", "action": "install", "success": effective_ok, "detail": detail})
         return records
 
     def uninstall(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
@@ -1625,7 +1699,13 @@ class ClaudeInstaller(ClientInstaller):
                 ["claude", "mcp", "remove", "agentsoul", "-s", "user"],
             ])
             removed, remaining = remove_agentsoul_hook_file(Path.home() / ".claude" / "settings.json", force=True)
-            records.append({"client": self.name, "scope": "global", "action": "uninstall", "success": ok and remaining == 0, "removed_hooks": removed, "remaining_hooks": remaining, "detail": msg or "removed"})
+            removed_cfg = remove_claude_mcp_json("global", self.project_root)
+            still_registered = has_claude_mcp_json("global", self.project_root)
+            effective_ok = (ok or any(changed for _, changed in removed_cfg)) and remaining == 0 and not still_registered
+            detail = msg or "removed"
+            if removed_cfg:
+                detail = f"{detail} | config_checked={', '.join(str(p) for p, _ in removed_cfg)}"
+            records.append({"client": self.name, "scope": "global", "action": "uninstall", "success": effective_ok, "removed_hooks": removed, "remaining_hooks": remaining, "detail": detail})
 
         if scope in ("local", "both"):
             ok, msg = run_cli_command_with_fallback([
@@ -1634,6 +1714,8 @@ class ClaudeInstaller(ClientInstaller):
             ])
             local_settings = self.project_root / ".claude" / "settings.json"
             removed, remaining = remove_agentsoul_hook_file(local_settings, force=True)
+            removed_cfg = remove_claude_mcp_json("local", self.project_root)
+            still_registered = has_claude_mcp_json("local", self.project_root)
             local_claude_dir = self.project_root / ".claude"
             if local_claude_dir.exists():
                 try:
@@ -1641,7 +1723,11 @@ class ClaudeInstaller(ClientInstaller):
                         local_claude_dir.rmdir()
                 except Exception:
                     pass
-            records.append({"client": self.name, "scope": "local", "action": "uninstall", "success": ok and remaining == 0, "removed_hooks": removed, "remaining_hooks": remaining, "detail": msg or "removed"})
+            effective_ok = (ok or any(changed for _, changed in removed_cfg)) and remaining == 0 and not still_registered
+            detail = msg or "removed"
+            if removed_cfg:
+                detail = f"{detail} | config_checked={', '.join(str(p) for p, _ in removed_cfg)}"
+            records.append({"client": self.name, "scope": "local", "action": "uninstall", "success": effective_ok, "removed_hooks": removed, "remaining_hooks": remaining, "detail": detail})
         return records
 
     def status(self, scope: Literal["local", "global", "both"]) -> list[dict[str, Any]]:
@@ -1652,9 +1738,12 @@ class ClaudeInstaller(ClientInstaller):
                 ["claude", "mcp", "get", "agentsoul", "-s", "user"],
                 ["claude", "mcp", "get", "--scope", "user", "agentsoul"],
             ])
+            file_ok = has_claude_user_mcp_server("agentsoul") or has_claude_mcp_json("global", self.project_root)
             if not ok:
-                ok = has_claude_user_mcp_server("agentsoul")
+                ok = file_ok
                 msg = str(Path.home() / ".claude.json")
+            else:
+                ok = ok or file_ok
             settings = load_settings(Path.home() / ".claude" / "settings.json")
             records.append({"client": self.name, "scope": "global", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
         if scope in ("local", "both"):
@@ -1662,6 +1751,8 @@ class ClaudeInstaller(ClientInstaller):
                 ["claude", "mcp", "get", "agentsoul", "-s", "local"],
                 ["claude", "mcp", "get", "agentsoul"],
             ])
+            file_ok = has_claude_mcp_json("local", self.project_root)
+            ok = ok or file_ok
             settings = load_settings(self.project_root / ".claude" / "settings.json")
             records.append({"client": self.name, "scope": "local", "registered": ok, "hook_count": count_remaining_agentsoul_hooks(settings), "detail": msg})
         return records

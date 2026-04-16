@@ -161,6 +161,11 @@ python3 install.py --uninstall --client-scope global --client-target trae
 
 当作用域选择“项目级”或“同时”时，安装器会先扫描候选项目（依据 `AGENTS.md` / `AGENT.md` / `CLAUDE.md` / `TRAE.md`）并让你选择项目名称。
 
+安装/卸载自修复机制：
+- 当 CLI 命令报错时，安装器会自动检查并修复相关配置文件（例如 Claude 的 `~/.claude.json` / 项目 `.mcp.json`）。
+- 卸载阶段会执行“命令结果 + 配置残留”双重校验，避免显示成功但仍有残留注册。
+- 路径与配置逻辑同时兼容 macOS 与 Windows（含 Windows `APPDATA` 候选路径）。
+
 自动生成文档位置：
 - [`docs/tutorials/05-mcp-client-install.md`](docs/tutorials/05-mcp-client-install.md)
 

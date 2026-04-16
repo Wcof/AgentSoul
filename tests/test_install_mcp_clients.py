@@ -150,6 +150,17 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertEqual(install.path_scope_label(global_cfg, global_cfg), "global")
         self.assertEqual(install.path_scope_label(local_cfg, global_cfg), "local")
 
+    def test_claude_mcp_json_paths_include_project_local(self):
+        root = Path("/tmp/my-project")
+        paths = install.claude_mcp_json_paths("local", root)
+        self.assertIn(root / ".mcp.json", paths)
+
+    def test_claude_mcp_json_paths_include_windows_appdata(self):
+        root = Path("/tmp/my-project")
+        with mock.patch.dict("os.environ", {"APPDATA": "C:/Users/test/AppData/Roaming"}, clear=False):
+            paths = install.claude_mcp_json_paths("global", root)
+        self.assertTrue(any("AppData" in str(p) and "Claude" in str(p) for p in paths))
+
     def test_ask_install_mode_default_quick(self):
         with mock.patch("builtins.input", return_value=""):
             self.assertEqual(install.ask_install_mode("quick"), "quick")
@@ -208,6 +219,22 @@ class TestInstallMcpClients(unittest.TestCase):
             records = installer.status("global")
             self.assertEqual(len(records), 1)
             self.assertTrue(records[0].get("registered"))
+
+    def test_claude_uninstall_auto_fix_config_when_cli_fails(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            installer = install.ClaudeInstaller(root)
+            local_cfg = root / ".mcp.json"
+            install._upsert_mcp_server_in_json(local_cfg, "agentsoul", {"command": "node", "args": ["/tmp/a.js"]})
+
+            with mock.patch.object(installer, "detect", return_value=True), mock.patch.object(
+                install,
+                "run_cli_command_with_fallback",
+                return_value=(False, "cli failed"),
+            ):
+                records = installer.uninstall("local")
+                self.assertTrue(records[0]["success"])
+                self.assertFalse(install._has_mcp_server_in_json(local_cfg, "agentsoul"))
 
     def test_uninstall_mcp_respects_scope_and_target(self):
         with mock.patch.object(
