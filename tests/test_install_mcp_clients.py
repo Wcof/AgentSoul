@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 import argparse
@@ -338,6 +340,76 @@ class TestInstallMcpClients(unittest.TestCase):
         with mock.patch.object(install, "get_mcp_dist_index", return_value=Path("/tmp/not-exists/index.js")):
             rc = install.handle_mcp_subcommand(args)
             self.assertEqual(rc, 1)
+
+    def test_discover_project_metadata_filters_noise_and_prefers_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo = root / "real-project"
+            repo.mkdir()
+            (repo / ".git").mkdir()
+            (repo / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+            (repo / "README.md").write_text("# demo\n", encoding="utf-8")
+            nested = repo / "docs" / "child"
+            nested.mkdir(parents=True)
+            (nested / "AGENTS.md").write_text("child\n", encoding="utf-8")
+            noisy = root / ".backup" / "template"
+            noisy.mkdir(parents=True)
+            (noisy / "AGENTS.md").write_text("ignore\n", encoding="utf-8")
+
+            metas = install._discover_project_metadata(max_depth=4, max_results=20, roots=[root])
+            paths = [item["path"] for item in metas]
+
+            self.assertIn(str(repo.resolve()), paths)
+            self.assertNotIn(str(nested.resolve()), paths)
+            self.assertNotIn(str(noisy.resolve()), paths)
+
+    def test_summarize_component_status_uses_stable_shape(self):
+        records = [
+            {"client": "Claude CLI", "scope": "local", "registered": True, "detail": "/tmp/.mcp.json"},
+            {"client": "Codex CLI", "scope": "global", "registered": False, "detail": "/tmp/config.toml"},
+        ]
+        components = install.summarize_component_status(records)
+        self.assertTrue(all(set(["component", "scope", "status", "checks", "recommended_fix"]).issubset(item.keys()) for item in components))
+        self.assertEqual(components[0]["component"], "Claude")
+
+    def test_summarize_component_checks_uses_runtime_component(self):
+        checks = [
+            {"id": "node", "client": "system", "scope": "global", "status": "ok", "detail": "v20"},
+            {"id": "registration", "client": "Trae", "scope": "local", "status": "warn", "detail": "/tmp/.trae/mcp.json"},
+        ]
+        components = install.summarize_component_checks(checks)
+        names = {item["component"] for item in components}
+        self.assertIn("Runtime", names)
+        self.assertIn("Trae", names)
+
+    def test_cli_help_contracts(self):
+        commands = [
+            [sys.executable, "install.py", "--help"],
+            [sys.executable, "install.py", "mcp", "--help"],
+            [sys.executable, "install.py", "mcp", "install", "--help"],
+        ]
+        for command in commands:
+            result = subprocess.run(
+                command,
+                cwd=install.PROJECT_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("usage:", result.stdout.lower())
+
+    def test_workflow_smoke_contract(self):
+        tests_yml = (install.PROJECT_ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+        health_yml = (install.PROJECT_ROOT / ".github" / "workflows" / "health-check.yml").read_text(encoding="utf-8")
+        companionship_yml = (install.PROJECT_ROOT / ".github" / "workflows" / "companionship-check.yml").read_text(encoding="utf-8")
+
+        self.assertIn("actions/checkout@v5", tests_yml)
+        self.assertIn("actions/setup-python@v6", tests_yml)
+        self.assertIn("fail-fast: false", tests_yml)
+        self.assertLess(tests_yml.index("Build MCP server"), tests_yml.index("Test with pytest"))
+        self.assertIn("python src/health_check.py --summary-json > health-summary.json", health_yml)
+        self.assertIn("python src/companionship_checker.py --summary-json > companionship-summary.json", companionship_yml)
 
 
 if __name__ == "__main__":

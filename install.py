@@ -38,6 +38,8 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).parent
 PROJECT_MARKER_FILES = ("AGENTS.md", "AGENT.md", "CLAUDE.md", "TRAE.md")
+PROJECT_ROOT_FILES = ("pyproject.toml", "package.json", "README.md", "README.rst", "README", "setup.py")
+PROJECT_ROOT_DIR_MARKERS = ("config",)
 
 try:
     from common import get_default_pad_state, initialize_identity, log
@@ -70,6 +72,13 @@ NOISY_PROJECT_DIR_NAMES = {
     "system",
     "__pycache__",
     "node_modules",
+}
+DISCOVERY_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".codex", ".claude"}
+CLIENT_COMPONENT_NAMES = {
+    "Claude CLI": "Claude",
+    "Codex CLI": "Codex",
+    "Trae": "Trae",
+    "system": "Runtime",
 }
 
 
@@ -313,6 +322,51 @@ def select_from_list(prompt_key: str, allowed_values: list[str], default: str, l
             print(f"❌ {PROMPTS[lang]['invalid_number']}")
 
 
+def prompt_binary_choice(
+    question: str,
+    default_yes: bool = True,
+    yes_label: str = "是",
+    no_label: str = "否",
+    input_prompt: str | None = None,
+    invalid_message: str = "❌ 无效选项，请输入 1 或 2",
+) -> bool:
+    """Prompt numeric binary choice with optional legacy y/n compatibility."""
+    print(question)
+    print(f"1. {yes_label}")
+    print(f"2. {no_label}")
+    default_key = "1" if default_yes else "2"
+    prompt_text = input_prompt or f"请输入选项 [1-2，默认 {default_key}]: "
+
+    while True:
+        choice = input(prompt_text).strip().lower()
+        if not choice:
+            choice = default_key
+        if choice == "1":
+            return True
+        if choice == "2":
+            return False
+        if choice in ("y", "yes"):
+            return True
+        if choice in ("n", "no"):
+            return False
+        print(invalid_message)
+
+
+def prompt_numeric_choice(
+    prompt_text: str,
+    valid_choices: list[str],
+    default: str | None = None,
+    invalid_message: str = "❌ 无效选项，请输入范围内的数字",
+) -> str:
+    """Prompt numeric menu choice with optional default value."""
+    valid_set = set(valid_choices)
+    while True:
+        raw = input(prompt_text).strip()
+        choice = raw or (default or "")
+        if choice in valid_set:
+            return choice
+        print(invalid_message)
+
 
 # Bilingual prompts for interactive configuration wizard
 PROMPTS = {
@@ -321,7 +375,7 @@ PROMPTS = {
         'language_option_zh': '1. 中文',
         'language_option_en': '2. English',
         'invalid_language': '❌ 无效选项，请输入 1 或 2',
-        'invalid_choice': '❌ 无效选项，请输入 y 或 n',
+        'invalid_choice': '❌ 无效选项，请输入 1 或 2',
         'invalid_selection': '请输入范围内的数字',
         'invalid_number': '请输入有效的数字',
         'invalid_timezone': '无效时区格式，请使用 Region/City 格式（例如: Asia/Shanghai）',
@@ -355,7 +409,7 @@ PROMPTS = {
         'summary_master_nicknames': '你的昵称: {nicknames}',
         'summary_timezone': '时区: {tz}',
         'summary_labels': '标签/爱好: {labels}',
-        'confirm_write': '确认写入配置文件？[Y/n]: ',
+        'confirm_write': '确认写入配置文件？',
         'confirm_no': '已取消，没有写入任何内容',
         'writing': '正在写入配置...',
         'config_written': '配置已写入: {path}',
@@ -363,14 +417,14 @@ PROMPTS = {
         'soul_initialized': '已初始化默认 PAD 情感状态向量',
         'updating_identity': '更新身份档案...',
         'complete': '✅ 交互式配置完成！',
-        'use_interactive_wizard': '是否使用交互式配置向导填写所有配置项？[Y/n]: ',
+        'use_interactive_wizard': '是否使用交互式配置向导填写所有配置项？',
     },
     'en': {
         'select_language': '请选择语言 / Select language:',
         'language_option_zh': '1. 中文',
         'language_option_en': '2. English',
         'invalid_language': '❌ Invalid selection, please enter 1 or 2',
-        'invalid_choice': '❌ Invalid option, please enter y or n',
+        'invalid_choice': '❌ Invalid option, please enter 1 or 2',
         'invalid_selection': 'Please enter a number within range',
         'invalid_number': 'Please enter a valid number',
         'invalid_timezone': 'Invalid timezone format, please use Region/City format (e.g. Asia/Shanghai)',
@@ -404,7 +458,7 @@ PROMPTS = {
         'summary_master_nicknames': 'Your nicknames: {nicknames}',
         'summary_timezone': 'Timezone: {tz}',
         'summary_labels': 'Labels/interests: {labels}',
-        'confirm_write': 'Confirm and write to configuration file? [Y/n]: ',
+        'confirm_write': 'Confirm and write to configuration file?',
         'confirm_no': 'Cancelled, no changes written',
         'writing': 'Writing configuration...',
         'config_written': 'Configuration written to: {path}',
@@ -412,7 +466,7 @@ PROMPTS = {
         'soul_initialized': 'Default PAD emotional state initialized',
         'updating_identity': 'Updating identity profiles',
         'complete': '✅ Interactive configuration complete!',
-        'use_interactive_wizard': 'Use interactive configuration wizard to fill all fields? [Y/n]: ',
+        'use_interactive_wizard': 'Use interactive configuration wizard to fill all fields?',
     }
 }
 
@@ -481,17 +535,13 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     print(f"  {PROMPTS['zh']['language_option_zh']}")
     print(f"  {PROMPTS['zh']['language_option_en']}")
 
-    while True:
-        choice = input("Please enter choice [1/2]: ").strip()
-        if choice == '1':
-            lang = 'zh'
-            break
-        elif choice == '2':
-            lang = 'en'
-            break
-        else:
-            # Use Chinese for error messages before language is selected
-            print(PROMPTS['zh']['invalid_language'])
+    choice = prompt_numeric_choice(
+        "请输入选项 [1-2，默认 1]: ",
+        valid_choices=["1", "2"],
+        default="1",
+        invalid_message=PROMPTS['zh']['invalid_language'],
+    )
+    lang = "zh" if choice == "1" else "en"
 
     def p(key: str) -> str:
         return PROMPTS[lang][key]
@@ -561,16 +611,14 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     print()
 
     # Step 5: Confirm
-    while True:
-        answer = input(p('confirm_write')).strip().lower()
-        if answer in ['', 'y', 'yes']:
-            do_write = True
-            break
-        elif answer in ['n', 'no']:
-            do_write = False
-            break
-        else:
-            print("❌ " + p('invalid_choice'))
+    do_write = prompt_binary_choice(
+        p('confirm_write'),
+        default_yes=True,
+        yes_label="确认" if lang == "zh" else "Confirm",
+        no_label="取消" if lang == "zh" else "Cancel",
+        input_prompt=("请选择 [1-2，默认 1]: " if lang == "zh" else "Choose [1-2, default 1]: "),
+        invalid_message=("❌ " + p('invalid_choice')),
+    )
 
     if not do_write:
         print()
@@ -672,16 +720,15 @@ def generate_persona_package(name: str | None = None) -> None:
         persona_path = PROJECT_ROOT / "config" / "persona.yaml"
         if persona_path.exists():
             log(f"配置文件已存在: {persona_path}", "WARN")
-            while True:
-                confirm = input("是否覆盖现有配置？[y/N]: ").strip().lower()
-                if confirm in ["y", "yes"]:
-                    break
-                elif confirm in ["n", "no", ""]:
-                    log("跳过覆盖，使用现有配置中的名称", "INFO")
-                    name = None
-                    break
-                else:
-                    print("❌ 无效选项，请输入 y 或 n")
+            overwrite = prompt_binary_choice(
+                "是否覆盖现有配置？",
+                default_yes=False,
+                yes_label="覆盖",
+                no_label="保留现有配置",
+            )
+            if not overwrite:
+                log("跳过覆盖，使用现有配置中的名称", "INFO")
+                name = None
 
         if name is not None:
             tracker = get_rollback_tracker()
@@ -811,14 +858,16 @@ Trae 会自动加载项目根目录的规则文件，并支持 MCP。AgentSoul M
             return True
         log(f"文件 {file_path} 已存在", "WARN")
         tracker.track_modified_file(file_path)
-        while True:
-            confirm = input("是否覆盖？[y/N]: ").strip().lower()
-            if confirm in ["y", "yes"]:
-                return True
-            elif confirm in ["n", "no", ""]:
-                log(f"跳过 {file_path}", "INFO")
-                return False
-            print("❌ 无效选项，请输入 y 或 n")
+        confirm = prompt_binary_choice(
+            "是否覆盖？",
+            default_yes=False,
+            yes_label="覆盖",
+            no_label="跳过",
+        )
+        if confirm:
+            return True
+        log(f"跳过 {file_path}", "INFO")
+        return False
 
     persona_file = PROJECT_ROOT / "agent-persona.md"
     if confirm_overwrite(persona_file):
@@ -844,19 +893,19 @@ Trae 会自动加载项目根目录的规则文件，并支持 MCP。AgentSoul M
     # 询问是否打开配置文件编辑 Agent 和 Master 信息
     persona_config_path = PROJECT_ROOT / "config" / "persona.yaml"
     if persona_config_path.exists():
-        while True:
-            answer = input("是否现在打开配置文件编辑 Agent 和 Master 信息？[Y/n]: ").strip().lower()
-            if answer in ["", "y", "yes"]:
-                if open_file_in_editor(persona_config_path):
-                    log(f"已在默认编辑器中打开 {persona_config_path}", "OK")
-                else:
-                    log(f"无法自动打开，请手动编辑: {persona_config_path}", "WARN")
-                break
-            elif answer in ["n", "no"]:
-                log(f"配置文件位置: {persona_config_path}，你可以稍后编辑", "INFO")
-                break
+        open_now = prompt_binary_choice(
+            "是否现在打开配置文件编辑 Agent 和 Master 信息？",
+            default_yes=True,
+            yes_label="打开",
+            no_label="稍后手动编辑",
+        )
+        if open_now:
+            if open_file_in_editor(persona_config_path):
+                log(f"已在默认编辑器中打开 {persona_config_path}", "OK")
             else:
-                print("❌ 无效选项，请输入 y 或 n")
+                log(f"无法自动打开，请手动编辑: {persona_config_path}", "WARN")
+        else:
+            log(f"配置文件位置: {persona_config_path}，你可以稍后编辑", "INFO")
 
 
 def show_menu():
@@ -870,11 +919,11 @@ def show_menu():
     print("4. 卸载 AgentSoul MCP（Claude/Codex/Trae）")
     print("0. 退出\n")
 
-    while True:
-        choice = input("请输入选项 [0-4]: ").strip()
-        if choice in ["0", "1", "2", "3", "4"]:
-            return choice
-        print("❌ 无效选项，请重新输入")
+    return prompt_numeric_choice(
+        "请输入选项 [0-4]: ",
+        valid_choices=["0", "1", "2", "3", "4"],
+        invalid_message="❌ 无效选项，请输入 0-4",
+    )
 
 
 def confirm_install(scope: str) -> bool:
@@ -887,13 +936,12 @@ def confirm_install(scope: str) -> bool:
     else:
         print("   - 注意：重启后需要重新装载\n")
 
-    while True:
-        confirm = input("确认安装？[y/N]: ").strip().lower()
-        if confirm in ["y", "yes"]:
-            return True
-        elif confirm in ["n", "no", ""]:
-            return False
-        print("❌ 无效选项，请输入 y 或 n")
+    return prompt_binary_choice(
+        "确认安装？",
+        default_yes=False,
+        yes_label="确认安装",
+        no_label="取消",
+    )
 
 
 def get_openclaw_workspace() -> Path | None:
@@ -930,7 +978,12 @@ def get_openclaw_workspace() -> Path | None:
         else:
             path = Path(custom_path).expanduser()
 
-        if path.exists() or input(f"路径 {path} 不存在，是否创建？[y/N]: ").strip().lower() in ["y", "yes"]:
+        if path.exists() or prompt_binary_choice(
+            f"路径 {path} 不存在，是否创建？",
+            default_yes=False,
+            yes_label="创建",
+            no_label="重新输入路径",
+        ):
             return path
         print("❌ 请重新输入有效路径")
 
@@ -974,11 +1027,13 @@ def ask_client_target(default: Literal["all", "claude", "codex", "trae"] = "all"
     print("2. 仅 Claude")
     print("3. 仅 Codex")
     print("4. 仅 Trae")
-    while True:
-        choice = input(f"请输入选项 [1-4，默认 {default_key}]: ").strip() or default_key
-        if choice in options:
-            return options[choice]  # type: ignore[return-value]
-        print("❌ 无效选项，请重新输入")
+    choice = prompt_numeric_choice(
+        f"请输入选项 [1-4，默认 {default_key}]: ",
+        valid_choices=list(options.keys()),
+        default=default_key,
+        invalid_message="❌ 无效选项，请输入 1-4",
+    )
+    return options[choice]  # type: ignore[return-value]
 
 
 def ask_install_mode(default: Literal["quick", "project", "global", "custom"] = "quick") -> Literal["quick", "project", "global", "custom"]:
@@ -990,11 +1045,13 @@ def ask_install_mode(default: Literal["quick", "project", "global", "custom"] = 
     print("2. 项目模式：仅项目级（会选择项目）")
     print("3. 全局模式：仅全局")
     print("4. 自定义模式：手动选择作用域和客户端")
-    while True:
-        choice = input(f"请输入选项 [1-4，默认 {default_key}]: ").strip() or default_key
-        if choice in options:
-            return options[choice]  # type: ignore[return-value]
-        print("❌ 无效选项，请重新输入")
+    choice = prompt_numeric_choice(
+        f"请输入选项 [1-4，默认 {default_key}]: ",
+        valid_choices=list(options.keys()),
+        default=default_key,
+        invalid_message="❌ 无效选项，请输入 1-4",
+    )
+    return options[choice]  # type: ignore[return-value]
 
 
 def parse_clients_csv(clients: str | None) -> list[ClientKey]:
@@ -1034,16 +1091,76 @@ def clients_to_target(clients: list[ClientKey]) -> TargetKey:
 
 def discover_project_metadata(max_depth: int = 4, max_results: int = 80) -> list[dict[str, Any]]:
     """Discover candidate projects and marker files."""
-    roots = [
-        PROJECT_ROOT.parent,
-        Path.home() / "Downloads" / "project",
-        Path.home() / "Downloads",
-        Path.home() / "workspace",
-        Path.home() / "projects",
-    ]
+    return _discover_project_metadata(
+        max_depth=max_depth,
+        max_results=max_results,
+        roots=[
+            PROJECT_ROOT.parent,
+            Path.home() / "Downloads" / "project",
+            Path.home() / "Downloads",
+            Path.home() / "workspace",
+            Path.home() / "projects",
+        ],
+    )
+
+
+def _path_has_noisy_part(path: Path) -> bool:
+    for part in path.parts:
+        lowered = part.lower()
+        if lowered in NOISY_PROJECT_DIR_NAMES:
+            return True
+        if lowered.startswith(".") and lowered not in {".", ".."}:
+            return True
+    return False
+
+
+def _project_markers_from_dir(resolved: Path, dirs: list[str], files: list[str]) -> list[str]:
+    markers: list[str] = []
+    for marker in PROJECT_MARKER_FILES:
+        if marker in files:
+            markers.append(marker)
+    if ".git" in dirs or (resolved / ".git").exists():
+        markers.append(".git")
+    for marker in PROJECT_ROOT_FILES:
+        if marker in files:
+            markers.append(marker)
+    for marker in PROJECT_ROOT_DIR_MARKERS:
+        if marker in dirs or (resolved / marker).exists():
+            markers.append(f"{marker}/")
+    return markers
+
+
+def _project_confidence(resolved: Path, markers: list[str]) -> int:
+    score = 0
+    if ".git" in markers:
+        score += 45
+    if "pyproject.toml" in markers:
+        score += 25
+    if "package.json" in markers:
+        score += 25
+    if any(marker in markers for marker in ("README.md", "README.rst", "README")):
+        score += 10
+    if "config/" in markers:
+        score += 8
+    score += min(12, 3 * len([m for m in markers if m in PROJECT_MARKER_FILES]))
+    if resolved == PROJECT_ROOT.resolve():
+        score += 5
+    return min(score, 100)
+
+
+def _project_kind(markers: list[str]) -> str:
+    if any(marker in markers for marker in (".git", "pyproject.toml", "package.json")):
+        return "project-root"
+    return "workspace-config"
+
+
+def _discover_project_metadata(
+    max_depth: int,
+    max_results: int,
+    roots: list[Path],
+) -> list[dict[str, Any]]:
     seen_dirs: set[Path] = set()
     raw_results: list[dict[str, Any]] = []
-    skip_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__", ".codex", ".claude"}
 
     for root in roots:
         if not root.exists() or not root.is_dir():
@@ -1055,26 +1172,25 @@ def discover_project_metadata(max_depth: int = 4, max_results: int = 80) -> list
             if depth > max_depth:
                 dirs[:] = []
                 continue
-            dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".pytest")]
-            markers = sorted([marker for marker in PROJECT_MARKER_FILES if marker in files])
+            dirs[:] = [
+                d
+                for d in dirs
+                if d not in DISCOVERY_SKIP_DIRS and not d.startswith(".pytest") and d.lower() not in NOISY_PROJECT_DIR_NAMES
+            ]
+            resolved = current_path.resolve()
+            if _path_has_noisy_part(resolved):
+                continue
+            markers = sorted(set(_project_markers_from_dir(resolved, dirs, files)))
             if markers:
-                resolved = current_path.resolve()
-                if any(part.lower() in NOISY_PROJECT_DIR_NAMES for part in resolved.parts):
-                    continue
                 if resolved not in seen_dirs:
                     seen_dirs.add(resolved)
-                    confidence = 50
-                    if (resolved / ".git").exists():
-                        confidence += 30
-                    if any((resolved / p).exists() for p in ("pyproject.toml", "package.json", "README.md", "config")):
-                        confidence += 20
                     raw_results.append(
                         {
                             "name": resolved.name,
                             "path": str(resolved),
                             "markers": markers,
-                            "kind": "project",
-                            "confidence": min(confidence, 100),
+                            "kind": _project_kind(markers),
+                            "confidence": _project_confidence(resolved, markers),
                         }
                     )
                     if len(raw_results) >= max_results:
@@ -1086,8 +1202,8 @@ def discover_project_metadata(max_depth: int = 4, max_results: int = 80) -> list
             {
                 "name": default_project.name,
                 "path": str(default_project),
-                "markers": [],
-                "kind": "project",
+                "markers": ["current-project"],
+                "kind": "project-root",
                 "confidence": 90,
             }
         )
@@ -2247,11 +2363,13 @@ def ask_scope(default: Literal["local", "global", "both"] = "both") -> Literal["
     print("1. 项目本地")
     print("2. 用户全局")
     print("3. 同时（本地+全局）")
-    while True:
-        choice = input(f"请输入选项 [1-3，默认 {default_key}]: ").strip() or default_key
-        if choice in options:
-            return options[choice]  # type: ignore[return-value]
-        print("❌ 无效选项，请重新输入")
+    choice = prompt_numeric_choice(
+        f"请输入选项 [1-3，默认 {default_key}]: ",
+        valid_choices=list(options.keys()),
+        default=default_key,
+        invalid_message="❌ 无效选项，请输入 1-3",
+    )
+    return options[choice]  # type: ignore[return-value]
 
 
 def discover_project_candidates(max_depth: int = 4, max_results: int = 80) -> list[Path]:
@@ -2296,15 +2414,14 @@ def ask_project_root(default_root: Path = PROJECT_ROOT) -> Path:
             label += " (当前项目)"
         print(f"{idx}. {label} -> {p}")
     default_idx = 1
-    while True:
-        choice = input(f"请输入选项 [1-{len(ordered)}，默认 {default_idx}]: ").strip()
-        if choice == "":
-            return ordered[default_idx - 1]
-        if choice.isdigit():
-            idx = int(choice)
-            if 1 <= idx <= len(ordered):
-                return ordered[idx - 1]
-        print("❌ 无效选项，请重新输入")
+    valid_choices = [str(i) for i in range(1, len(ordered) + 1)]
+    choice = prompt_numeric_choice(
+        f"请输入选项 [1-{len(ordered)}，默认 {default_idx}]: ",
+        valid_choices=valid_choices,
+        default=str(default_idx),
+        invalid_message=f"❌ 无效选项，请输入 1-{len(ordered)}",
+    )
+    return ordered[int(choice) - 1]
 
 
 def generate_client_install_markdown(mcp_full_path: Path) -> Path:
@@ -2431,7 +2548,11 @@ def manage_mcp_clients(mcp_full_path: Path, json_config: str, project_root: Path
         print("9. 查看状态")
         print("10. 切换本地目标项目")
         print("0. 返回")
-        choice = input("请输入选项 [0-10]: ").strip()
+        choice = prompt_numeric_choice(
+            "请输入选项 [0-10]: ",
+            valid_choices=[str(i) for i in range(0, 11)],
+            invalid_message="❌ 无效选项，请输入 0-10",
+        )
         if choice == "0":
             return
         if choice == "10":
@@ -2460,7 +2581,7 @@ def manage_mcp_clients(mcp_full_path: Path, json_config: str, project_root: Path
         elif choice == "9":
             status_selected_clients(scope, "all", selected_project)
         else:
-            print("❌ 无效选项，请重新输入")
+            print("❌ 未实现的选项，请稍后重试")
 
 
 def uninstall_mcp(
@@ -2499,11 +2620,13 @@ def _json_is_corrupt(path: Path) -> bool:
 
 
 def _can_write_target(path: Path) -> bool:
-    probe = path if path.exists() else path.parent
+    probe = path if path.exists() and path.is_dir() else path.parent
     try:
         probe.mkdir(parents=True, exist_ok=True)
     except Exception:
         return False
+    if path.exists() and path.is_file():
+        return os.access(path, os.W_OK) or os.access(probe, os.W_OK)
     return os.access(probe, os.W_OK)
 
 
@@ -2520,41 +2643,59 @@ def _doctor_report_status(checks: list[dict[str, Any]]) -> int:
 def run_mcp_doctor(matrix: TargetMatrix, as_json: bool = False) -> int:
     checks: list[dict[str, Any]] = []
     ok, msg = run_cli_command(["node", "--version"])
-    checks.append({"id": "node", "status": "ok" if ok else "error", "detail": msg or "node not found"})
+    checks.append({"id": "node", "client": "system", "scope": "global", "status": "ok" if ok else "error", "detail": msg or "node not found"})
     ok, msg = run_cli_command(["npm", "--version"])
-    checks.append({"id": "npm", "status": "ok" if ok else "error", "detail": msg or "npm not found"})
+    checks.append({"id": "npm", "client": "system", "scope": "global", "status": "ok" if ok else "error", "detail": msg or "npm not found"})
 
     dist = get_mcp_dist_index()
-    checks.append({"id": "dist-index", "status": "ok" if dist.exists() else "warn", "detail": str(dist)})
-
-    path_checks: list[Path] = []
-    if "claude" in matrix.clients:
-        path_checks.extend(claude_mcp_json_paths(matrix.scope, matrix.project_root))
-    if "codex" in matrix.clients:
-        path_checks.extend(codex_scope_paths(matrix.scope, matrix.project_root))
-    if "trae" in matrix.clients:
-        path_checks.extend(trae_scope_paths(matrix.scope, matrix.project_root))
-    for p in _dedupe_paths(path_checks):
-        writable = _can_write_target(p)
-        checks.append({
-            "id": "path-writable",
-            "path": str(p),
-            "status": "ok" if writable else "warn",
-            "detail": f"writable={writable}",
-        })
+    checks.append({"id": "dist-index", "client": "system", "scope": "global", "status": "ok" if dist.exists() else "warn", "detail": str(dist)})
 
     if "claude" in matrix.clients:
         for p in claude_mcp_json_paths(matrix.scope, matrix.project_root):
+            scope = path_scope_label_by_project(p, matrix.project_root)
+            writable = _can_write_target(p)
+            checks.append({
+                "id": "path-writable",
+                "client": "Claude CLI",
+                "scope": scope,
+                "path": str(p),
+                "status": "ok" if writable else "warn",
+                "detail": f"writable={writable}",
+            })
             checks.append({
                 "id": "claude-json-corrupt",
+                "client": "Claude CLI",
+                "scope": scope,
                 "path": str(p),
                 "status": "warn" if _json_is_corrupt(p) else "ok",
                 "detail": "corrupt json" if _json_is_corrupt(p) else "valid",
             })
+    if "codex" in matrix.clients:
+        for p in codex_scope_paths(matrix.scope, matrix.project_root):
+            checks.append({
+                "id": "path-writable",
+                "client": "Codex CLI",
+                "scope": path_scope_label_by_project(p, matrix.project_root),
+                "path": str(p),
+                "status": "ok" if _can_write_target(p) else "warn",
+                "detail": f"writable={_can_write_target(p)}",
+            })
     if "trae" in matrix.clients:
         for p in trae_scope_paths(matrix.scope, matrix.project_root):
+            scope = path_scope_label_by_project(p, matrix.project_root)
+            writable = _can_write_target(p)
+            checks.append({
+                "id": "path-writable",
+                "client": "Trae",
+                "scope": scope,
+                "path": str(p),
+                "status": "ok" if writable else "warn",
+                "detail": f"writable={writable}",
+            })
             checks.append({
                 "id": "trae-json-corrupt",
+                "client": "Trae",
+                "scope": scope,
                 "path": str(p),
                 "status": "warn" if _json_is_corrupt(p) else "ok",
                 "detail": "corrupt json" if _json_is_corrupt(p) else "valid",
@@ -2657,14 +2798,32 @@ def print_project_list(as_json: bool = False) -> int:
     log("可选项目列表", "STEP")
     for item in metas:
         markers = ",".join(item.get("markers", [])) or "-"
-        log(f"{item['name']} | {item['path']} | markers={markers}", "INFO")
+        log(
+            f"{item['name']} | {item['path']} | kind={item.get('kind')} | confidence={item.get('confidence')} | markers={markers}",
+            "INFO",
+        )
     return 0
+
+
+def _component_name(raw: str | None) -> str:
+    return CLIENT_COMPONENT_NAMES.get(raw or "system", raw or "Runtime")
+
+
+def _recommended_fix(component: str, scope: str, status: str, repair_hint: bool = False) -> str:
+    if status == "ok":
+        return ""
+    if component == "Runtime":
+        return "运行 `python3 install.py mcp install --prepare-only` 重新准备运行时后再重试"
+    if repair_hint:
+        return f"运行 `python3 install.py mcp repair --scope {scope} --clients all` 自动修复后再执行 doctor"
+    client_key = component.lower()
+    return f"运行 `python3 install.py mcp install --scope {scope} --clients {client_key}` 重新注册"
 
 
 def summarize_component_status(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for rec in records:
-        component = rec.get("client", "unknown")
+        component = _component_name(rec.get("client"))
         scope = rec.get("scope", "unknown")
         grouped.setdefault((component, scope), []).append(rec)
 
@@ -2692,13 +2851,7 @@ def summarize_component_status(records: list[dict[str, Any]]) -> list[dict[str, 
                     for i in items
                 ],
                 "recommended_fix": (
-                    "运行 `python3 install.py mcp install --scope "
-                    + scope
-                    + " --clients "
-                    + component.split()[0].lower().replace("cli", "")
-                    + "` 重新注册"
-                    if status != "ok"
-                    else ""
+                    _recommended_fix(component, scope, status, repair_hint=False)
                 ),
             }
         )
@@ -2708,7 +2861,7 @@ def summarize_component_status(records: list[dict[str, Any]]) -> list[dict[str, 
 def summarize_component_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for item in checks:
-        component = str(item.get("client", "system"))
+        component = _component_name(str(item.get("client", "system")))
         scope = str(item.get("scope", "global"))
         grouped.setdefault((component, scope), []).append(item)
 
@@ -2727,13 +2880,7 @@ def summarize_component_checks(checks: list[dict[str, Any]]) -> list[dict[str, A
                 "scope": scope,
                 "status": status,
                 "checks": items,
-                "recommended_fix": (
-                    "运行 `python3 install.py mcp repair --scope "
-                    + scope
-                    + " --clients all` 自动修复后再执行 doctor"
-                    if status != "ok"
-                    else ""
-                ),
+                "recommended_fix": _recommended_fix(component, scope, status, repair_hint=True),
             }
         )
     return results
@@ -2760,22 +2907,17 @@ def check_and_initialize_configs(project_root: Path) -> None:
     else:
         # Build dynamic prompt based on what exists
         if has_master_config and has_soul_state:
-            prompt = "检测到已存在的灵魂状态和用户配置，是否要重新初始化？[y/N]: "
+            prompt = "检测到已存在的灵魂状态和用户配置，是否要重新初始化？"
         elif not has_soul_state:
-            prompt = "检测到已存在用户配置，但缺少灵魂状态，是否初始化灵魂状态？[y/N]: "
+            prompt = "检测到已存在用户配置，但缺少灵魂状态，是否初始化灵魂状态？"
         else:
-            prompt = "检测到已存在灵魂状态，但缺少用户配置，是否重新初始化？[y/N]: "
-
-        while True:
-            answer = input(prompt).strip().lower()
-            if answer in ["y", "yes"]:
-                do_initialize = True
-                break
-            elif answer in ["n", "no", ""]:
-                do_initialize = False
-                break
-            else:
-                print("❌ 无效选项，请输入 y 或 n")
+            prompt = "检测到已存在灵魂状态，但缺少用户配置，是否重新初始化？"
+        do_initialize = prompt_binary_choice(
+            prompt,
+            default_yes=False,
+            yes_label="重新初始化",
+            no_label="保留现有配置",
+        )
 
     if not do_initialize:
         if has_master_config and has_soul_state:
@@ -2787,17 +2929,15 @@ def check_and_initialize_configs(project_root: Path) -> None:
         return
 
     # Ask whether to use interactive configuration wizard
-    while True:
-        answer = input(PROMPTS['zh']['use_interactive_wizard']).strip().lower()
-        if answer in ["", "y", "yes"]:
-            # Run interactive wizard
-            run_interactive_config_wizard(project_root)
-            return
-        elif answer in ["n", "no"]:
-            # Use traditional method: create default and open editor
-            break
-        else:
-            print("❌ 无效选项，请输入 y 或 n")
+    use_wizard = prompt_binary_choice(
+        PROMPTS['zh']['use_interactive_wizard'],
+        default_yes=True,
+        yes_label="使用向导",
+        no_label="使用默认流程",
+    )
+    if use_wizard:
+        run_interactive_config_wizard(project_root)
+        return
 
     # Step 1: Initialize master configuration (traditional method)
     log("初始化用户配置 (master)...", "STEP")
@@ -2809,19 +2949,19 @@ def check_and_initialize_configs(project_root: Path) -> None:
     create_default_persona(persona_path)
 
     # Ask to open editor
-    while True:
-        answer = input("是否现在打开编辑器配置用户信息？[Y/n]: ").strip().lower()
-        if answer in ["", "y", "yes"]:
-            if open_file_in_editor(persona_path):
-                log(f"已在默认编辑器中打开 {persona_path}", "OK")
-            else:
-                log(f"无法自动打开，请手动编辑: {persona_path}", "WARN")
-            break
-        elif answer in ["n", "no"]:
-            log(f"配置文件位置: {persona_path}，你可以稍后编辑", "INFO")
-            break
+    open_editor = prompt_binary_choice(
+        "是否现在打开编辑器配置用户信息？",
+        default_yes=True,
+        yes_label="打开编辑器",
+        no_label="稍后手动编辑",
+    )
+    if open_editor:
+        if open_file_in_editor(persona_path):
+            log(f"已在默认编辑器中打开 {persona_path}", "OK")
         else:
-            print("❌ 无效选项，请输入 y 或 n")
+            log(f"无法自动打开，请手动编辑: {persona_path}", "WARN")
+    else:
+        log(f"配置文件位置: {persona_path}，你可以稍后编辑", "INFO")
 
     # Step 2: Initialize soul PAD state
     log("初始化灵魂 PAD 情感状态...", "STEP")
@@ -3140,16 +3280,20 @@ def main():
 
     if args.mcp:
         warn_legacy_mcp_notice()
-        check_and_initialize_configs(PROJECT_ROOT)
-        install_mcp(
-            run_after=not args.no_run,
-            log_path=args.log,
-            install_mode=args.install_mode,
-            client_scope=args.client_scope,
-            client_target=args.client_target,
-            project_selector=args.project,
-            enter_advanced_menu=False,
+        ns = argparse.Namespace(
+            mcp_command="install",
+            profile=args.install_mode or "quick",
+            scope=args.client_scope,
+            clients=(args.client_target or "all"),
+            project=args.project,
+            run=not args.no_run,
+            prepare_only=False,
+            register_only=False,
+            log=args.log,
         )
+        rc = handle_mcp_subcommand(ns)
+        if rc != 0:
+            sys.exit(rc)
         return
 
     if args.openclaw:
@@ -3390,15 +3534,15 @@ def list_and_perform_rollback() -> None:
     print(f"   - 将恢复 {modified_count} 个被修改文件到原始内容")
     print(f"   - 将删除 {len(record.get('created_dirs', []))} 个新建空目录\n")
 
-    while True:
-        confirm = input("确认执行回滚？[y/N]: ").strip().lower()
-        if confirm in ["y", "yes"]:
-            break
-        elif confirm in ["n", "no", ""]:
-            log("已取消回滚", "INFO")
-            return
-        else:
-            print("❌ 无效选项，请输入 y 或 n")
+    confirm = prompt_binary_choice(
+        "确认执行回滚？",
+        default_yes=False,
+        yes_label="确认回滚",
+        no_label="取消",
+    )
+    if not confirm:
+        log("已取消回滚", "INFO")
+        return
 
     # Perform rollback
     success = rollback_from_record(record)
@@ -3413,11 +3557,13 @@ def ask_session_scope() -> str:
     print("1. 当前 Session（仅本次会话，重启后需重新装载）")
     print("2. 全局 Session（永久生效，但切换新 Session 时需要身份唤醒）\n")
 
-    while True:
-        choice = input("请输入选项 [1-2]: ").strip()
-        if choice in ["1", "2"]:
-            return "current_session" if choice == "1" else "global_session"
-        print("❌ 无效选项，请重新输入")
+    choice = prompt_numeric_choice(
+        "请输入选项 [1-2，默认 1]: ",
+        valid_choices=["1", "2"],
+        default="1",
+        invalid_message="❌ 无效选项，请输入 1 或 2",
+    )
+    return "current_session" if choice == "1" else "global_session"
 
 
 if __name__ == "__main__":

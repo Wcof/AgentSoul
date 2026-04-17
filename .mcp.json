@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "agentsoul": {
+      "command": "node",
+      "args": [
+        "/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"
+      ]
+    }
+  }
+}

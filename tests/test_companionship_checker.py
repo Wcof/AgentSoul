@@ -67,8 +67,8 @@ class TestCompanionshipChecker(BaseTest):
         checker = CompanionshipChecker(self.project_root)
         report = checker.run_full_check()
         self.assertIsNotNone(report)
-        # Missing config, memory dirs etc. so score will be low
-        self.assertLess(report.overall_score, 70)
+        # Fresh repo should remain usable even before runtime directories are created.
+        self.assertGreaterEqual(report.overall_score, 70)
 
     def test_check_with_valid_config(self):
         """测试有有效配置文件时检测"""
@@ -126,14 +126,14 @@ class TestCompanionshipChecker(BaseTest):
         self.assertGreater(report.overall_score, 70)
 
     def test_check_memory_continuity_missing_dirs(self):
-        """测试记忆连续性检查 - 缺少目录会扣分但仍可能通过"""
+        """测试记忆连续性检查 - 全新仓库缺少目录时返回建议而不是失败"""
         checker = CompanionshipChecker(self.project_root)
         result = checker.check_memory_continuity()
         self.assertIsInstance(result, CheckResult)
-        # Required dirs are missing, score will be low but still a valid result
-        self.assertLess(result.score, 50)
-        self.assertFalse(result.passed)
-        self.assertGreater(len(result.issues), 0)
+        self.assertGreaterEqual(result.score, 80)
+        self.assertTrue(result.passed)
+        self.assertEqual(len(result.issues), 0)
+        self.assertTrue(any("自动创建" in item for item in result.recommendations))
 
     def test_check_personality_invalid_yaml(self):
         """测试人格一致性检查 - 无效YAML"""
@@ -178,10 +178,9 @@ class TestCompanionshipChecker(BaseTest):
         """测试状态恢复检查 - 缺少目录"""
         checker = CompanionshipChecker(self.project_root)
         result = checker.check_state_recovery()
-        # Directory missing will cause issues
-        self.assertGreater(len(result.issues), 0)
-        # But score might still be passing if only missing dir
-        self.assertGreater(result.score, 50)
+        self.assertEqual(len(result.issues), 0)
+        self.assertTrue(result.passed)
+        self.assertTrue(any("自动创建" in item for item in result.recommendations))
 
     def test_check_state_recovery_valid_state(self):
         """测试状态恢复检查 - 有效状态"""

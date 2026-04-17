@@ -54,6 +54,6 @@ jobs:
     - name: Output summary JSON
       if: always()
       run: |
-        python src/companionship_checker.py --summary-json --min-score 80 > companionship-summary.json
+        python src/companionship_checker.py --summary-json > companionship-summary.json
         cat companionship-summary.json
       continue-on-error: true

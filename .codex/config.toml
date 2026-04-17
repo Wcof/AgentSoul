@@ -1,0 +1,15 @@
+# AgentSoul project-local MCP config
+# This file is loaded when running Codex in this project.
+
+[mcp_servers.agentsoul]
+command = "node"
+args = ["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]
+
+[mcp_servers.agentsoul.tools.get_base_rules]
+approval_mode = "approve"
+
+[mcp_servers.agentsoul.tools.list_memory_topics]
+approval_mode = "approve"
+# BEGIN AGENTSOUL MCP
+# (duplicate removed, already defined above)
+# END AGENTSOUL MCP

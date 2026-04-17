@@ -10,7 +10,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
+!mcp_server/src/lib/
+!mcp_server/src/lib/**
 lib64/
 *.egg-info/
 .installed.cfg

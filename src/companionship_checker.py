@@ -99,6 +99,19 @@ class CompanionshipChecker:
         memory_storage = self.storage.memory
         base_dir = self.project_root / "data" / "memory"
 
+        # Fresh repositories do not commit runtime memory directories.
+        # Treat a completely empty tree as "not initialized yet" instead of broken.
+        if not base_dir.exists():
+            recommendations.append("记忆目录会在首次写入时自动创建")
+            return CheckResult(
+                name="记忆连续性",
+                description="Master Agent 能否可靠读写迁移回滚长期记忆",
+                score=85,
+                passed=True,
+                issues=issues,
+                recommendations=recommendations,
+            )
+
         # Check directory structure
         required_dirs = [
             ("day", "日记忆目录不存在"),
@@ -331,24 +344,26 @@ class CompanionshipChecker:
         state_path = self.project_root / "data" / "soul" / "soul_variable" / "state_vector.json"
         history_dir = self.project_root / "data" / "soul" / "versions"
 
-        # Check directory structure
+        # Fresh repositories do not commit runtime soul state directories.
         if not state_path.parent.exists():
-            issues.append("灵魂状态目录不存在")
-            score -= 25
+            recommendations.append("灵魂状态目录不存在，首次写入状态后会自动创建")
+        else:
+            # Try reading current state
+            try:
+                state = soul_state_storage.read_soul_state()
+                # Check required PAD fields
+                required_fields = ["pleasure", "arousal", "dominance"]
+                for field in required_fields:
+                    if field not in state:
+                        issues.append(f"灵魂状态缺少 {field} 字段")
+                        score -= 10
 
-        # Try reading current state
-        try:
-            state = soul_state_storage.read_soul_state()
-            # Check required PAD fields
-            required_fields = ["pleasure", "arousal", "dominance"]
-            for field in required_fields:
-                if field not in state:
-                    issues.append(f"灵魂状态缺少 {field} 字段")
-                    score -= 10
+            except Exception as e:
+                issues.append(f"读取灵魂状态失败: {e}")
+                score -= 30
 
-        except Exception as e:
-            issues.append(f"读取灵魂状态失败: {e}")
-            score -= 30
+        if not state_path.exists():
+            recommendations.append("灵魂状态文件会在首次 update_soul_state 后自动创建")
 
         # Check version history
         if not history_dir.exists():
