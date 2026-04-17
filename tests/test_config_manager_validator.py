@@ -289,7 +289,7 @@ class TestConfigValidator(BaseTest):
 
     def test_print_errors_no_errors_logs_ok(self):
         """测试 print_errors 无错误输出 OK"""
-        with patch('src.config_manager.validator.log') as mock_log:
+        with patch('agentsoul.config_manager.validator.log') as mock_log:
             self.validator.print_errors([])
             self.assertTrue(any("配置验证通过" in str(call) for call in mock_log.call_args_list))
 
@@ -300,7 +300,7 @@ class TestConfigValidator(BaseTest):
             ValidationError("f2", "error2", "error"),
             ValidationError("f3", "warn1", "warning"),
         ]
-        with patch('src.config_manager.validator.log') as mock_log:
+        with patch('agentsoul.config_manager.validator.log') as mock_log:
             self.validator.print_errors(errors)
             # Should log the count
             self.assertTrue(any("发现 2 个错误，1 个警告" in str(call) for call in mock_log.call_args_list))

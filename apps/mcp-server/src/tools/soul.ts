@@ -674,7 +674,9 @@ export async function handleGetHealthHistory(
   params: z.infer<typeof GetHealthHistorySchema>
 ): Promise<ToolResponse> {
   const limit = params.limit ?? 20;
-  const healthPath = path.join(PROJECT_ROOT, '.soul_health.md');
+  const modernPath = path.join(PROJECT_ROOT, 'docs', 'auto-upgrade', '.soul_health.md');
+  const legacyPath = path.join(PROJECT_ROOT, '.soul_health.md');
+  const healthPath = fs.existsSync(modernPath) ? modernPath : legacyPath;
 
   if (!fs.existsSync(healthPath)) {
     return {

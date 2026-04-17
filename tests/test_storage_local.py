@@ -469,8 +469,8 @@ class TestLocalSkillStorage(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.project_root = Path(self.temp_dir)
         # Create src directory with some rule files
-        self.src_dir = self.project_root / "src"
-        self.src_dir.mkdir()
+        self.src_dir = self.project_root / "src" / "agentsoul" / "templates"
+        self.src_dir.mkdir(parents=True, exist_ok=True)
         # Create a few rule files
         (self.src_dir / "SKILL.md").write_text("# SKILL\n")
         (self.src_dir / "soul_base.md").write_text("# soul_base\n")

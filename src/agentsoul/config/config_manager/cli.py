@@ -119,10 +119,10 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法:
-  python -m src.config_manager.cli list-templates
-  python -m src.config_manager.cli preview-template friendly
-  python -m src.config_manager.cli apply-template professional
-  python -m src.config_manager.cli validate-config
+  python -m agentsoul.config_manager.cli list-templates
+  python -m agentsoul.config_manager.cli preview-template friendly
+  python -m agentsoul.config_manager.cli apply-template professional
+  python -m agentsoul.config_manager.cli validate-config
         """
     )
 

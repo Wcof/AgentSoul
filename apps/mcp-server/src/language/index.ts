@@ -94,7 +94,7 @@ let cachedResources: LanguageResources | null = null;
  * @returns 语言文件的绝对路径
  */
 function getLanguageFilePath(language: string): string {
-  return path.join(PROJECT_ROOT, 'mcp_server', 'src', 'language', `${language}.yaml`);
+  return path.join(PROJECT_ROOT, 'apps', 'mcp-server', 'src', 'language', `${language}.yaml`);
 }
 
 /**

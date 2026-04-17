@@ -43,14 +43,14 @@ class TestCompanionshipChecker(BaseTest):
 
         # 创建基础目录结构
         (self.project_root / "config").mkdir()
-        (self.project_root / "var" / "data").mkdir()
-        (self.project_root / "src").mkdir()
+        (self.project_root / "var" / "data").mkdir(parents=True, exist_ok=True)
+        (self.project_root / "src" / "agentsoul" / "templates").mkdir(parents=True, exist_ok=True)
 
         # Create required src directory for skill check
-        (self.project_root / "src" / "SKILL.md").write_text("# SKILL\nCore rules\n")
-        (self.project_root / "src" / "soul_base.md").write_text("# soul_base\nSoul base rules\n")
-        (self.project_root / "src" / "memory_base.md").write_text("# memory_base\nMemory base rules\n")
-        (self.project_root / "src" / "secure_base.md").write_text("# secure_base\nSecurity rules\n")
+        (self.project_root / "src" / "agentsoul" / "templates" / "SKILL.md").write_text("# SKILL\nCore rules\n")
+        (self.project_root / "src" / "agentsoul" / "templates" / "soul_base.md").write_text("# soul_base\nSoul base rules\n")
+        (self.project_root / "src" / "agentsoul" / "templates" / "memory_base.md").write_text("# memory_base\nMemory base rules\n")
+        (self.project_root / "src" / "agentsoul" / "templates" / "secure_base.md").write_text("# secure_base\nSecurity rules\n")
 
     def tearDown(self):
         """清理临时目录"""

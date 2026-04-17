@@ -1,6 +1,6 @@
 """
 AgentSoul · 健康度图表导出
-导出 .soul_health.md 中的健康度历史为 SVG 图表
+导出健康度历史 md 中的记录为 SVG 图表
 """
 from __future__ import annotations
 
@@ -27,7 +27,10 @@ class HealthChartExporter:
 
     def __init__(self, health_file: Path | None = None):
         if health_file is None:
-            health_file = get_project_root() / ".soul_health.md"
+            project_root = get_project_root()
+            modern = project_root / "docs" / "auto-upgrade" / ".soul_health.md"
+            legacy = project_root / ".soul_health.md"
+            health_file = modern if modern.exists() else legacy
         self.health_file = health_file
 
     def parse_history(self) -> list[HealthRecord]:

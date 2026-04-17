@@ -194,7 +194,7 @@ class TestPriorityManager(BaseTest):
         """测试加载损坏索引用空"""
         self.manager.priority_index_file.write_text("not valid json")
 
-        with patch('src.memory_enhanced.priority.log') as mock_log:
+        with patch('agentsoul.memory_enhanced.priority.log') as mock_log:
             manager = PriorityManager(storage_path=self.data_dir)
             self.assertEqual(len(manager._priorities), 0)
             self.assertTrue(any("Failed to load priority index" in str(call) for call in mock_log.call_args_list))
@@ -350,7 +350,7 @@ class TestTagManager(BaseTest):
         """测试加载损坏索引用空"""
         self.manager.tags_index_file.write_text("not valid json")
 
-        with patch('src.memory_enhanced.tags.log') as mock_log:
+        with patch('agentsoul.memory_enhanced.tags.log') as mock_log:
             manager = TagManager(storage_path=self.data_dir)
             self.assertEqual(len(manager._tags_cache), 0)
             self.assertTrue(any("Failed to load tags index" in str(call) for call in mock_log.call_args_list))
@@ -508,7 +508,7 @@ class TestMemoryRetriever(BaseTest):
         (self.data_dir / "good.json").write_text('{"content": "good"}')
         (self.data_dir / "bad.json").write_text('not valid json')
 
-        with patch('src.memory_enhanced.retrieval.log') as mock_log:
+        with patch('agentsoul.memory_enhanced.retrieval.log') as mock_log:
             results = self.retriever.search("")
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0].memory_id, "good")

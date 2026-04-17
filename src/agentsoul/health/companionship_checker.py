@@ -276,7 +276,7 @@ class CompanionshipChecker:
         score = 100
 
         skill_storage = self.storage.skills
-        rules_dir = self.project_root / "src"
+        rules_dir = self.project_root / "src" / "agentsoul" / "templates"
 
         required_rules = [
             "SKILL",
@@ -634,8 +634,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--output", "-o",
-        help="输出报告文件路径 (默认: .companionship_report.md)",
-        default=".companionship_report.md"
+        help="输出报告文件路径 (默认: docs/auto-upgrade/.companionship_report.md)",
+        default=None
     )
     parser.add_argument(
         "--json", "-j",
@@ -672,11 +672,15 @@ def main() -> None:
     if not args.summary_json:
         checker.print_report(report)
 
-    output_path = Path(args.output)
-    if args.json:
-        checker.save_report_json(report, output_path)
-    else:
-        checker.save_report(report, output_path)
+    output_path: Path | None = Path(args.output) if args.output else None
+    if output_path is None and not args.summary_json:
+        output_path = Path("docs/auto-upgrade/.companionship_report.md")
+
+    if output_path is not None:
+        if args.json:
+            checker.save_report_json(report, output_path)
+        else:
+            checker.save_report(report, output_path)
 
     gate_passed, exit_code = calculate_gate_result(
         report.overall_score, args.min_score, base_success=True

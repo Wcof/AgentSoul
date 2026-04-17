@@ -34,7 +34,7 @@ jobs:
 
     - name: Run companionship continuity check
       run: |
-        python src/companionship_checker.py --summary-json --min-score 80
+        python3 -m agentsoul.health.companionship_checker --summary-json --min-score 80
       continue-on-error: false
 
     - name: Install mypy and ruff for static checking
@@ -54,6 +54,6 @@ jobs:
     - name: Output summary JSON
       if: always()
       run: |
-        python src/companionship_checker.py --summary-json > companionship-summary.json
+        python3 -m agentsoul.health.companionship_checker --summary-json > companionship-summary.json
         cat companionship-summary.json
       continue-on-error: true

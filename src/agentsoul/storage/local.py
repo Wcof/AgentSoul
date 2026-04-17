@@ -23,6 +23,7 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from agentsoul.common import get_project_root, log
+from agentsoul.runtime.paths import resolve_var_data_root
 from agentsoul.abstract import (
     BaseMemoryStorage,
     BasePersonaStorage,
@@ -126,9 +127,10 @@ class LocalSoulStateStorage(BaseSoulStateStorage):
 
     def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
-        self.state_path = self.project_root / "var" / "data" / "soul" / "soul_variable" / "state_vector.json"
+        data_root = resolve_var_data_root(self.project_root)
+        self.state_path = data_root / "soul" / "soul_variable" / "state_vector.json"
         # 版本历史存储在同目录
-        self.history_dir = self.project_root / "var" / "data" / "soul" / "versions"
+        self.history_dir = data_root / "soul" / "versions"
 
     def read_soul_state(self) -> dict[str, Any]:
         """读取灵魂状态"""
@@ -251,7 +253,7 @@ class LocalMemoryStorage(BaseMemoryStorage):
 
     def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
-        self.base_dir = self.project_root / "var" / "data" / "memory"
+        self.base_dir = resolve_var_data_root(self.project_root) / "memory"
 
     def _get_path(self, period: str, identifier: str) -> Path:
         """获取记忆文件路径"""
@@ -728,7 +730,7 @@ class LocalSkillStorage(BaseSkillStorage):
 
     def __init__(self, project_root: Path | None = None):
         self.project_root = project_root or get_project_root()
-        self.rules_dir = self.project_root / "src"
+        self.rules_dir = self.project_root / "src" / "agentsoul" / "templates"
 
     def read_base_rule(self, name: str) -> str | None:
         """读取基础规则，name 是文件名（不带 .md）"""

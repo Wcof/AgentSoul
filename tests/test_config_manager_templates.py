@@ -64,7 +64,7 @@ class TestTemplateManager(BaseTest):
 
     def test_init_default_templates_dir(self):
         """测试默认模板目录初始化"""
-        with patch('src.config_manager.templates.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.config_manager.templates.get_project_root', return_value=self.project_root):
             manager = TemplateManager()
             self.assertEqual(manager.templates_dir, self.project_root / "config" / "templates")
 
@@ -113,7 +113,7 @@ agent:
         (self.templates_dir / "invalid.yaml").write_text("invalid: yaml: :::")
 
         manager = TemplateManager(templates_dir=self.templates_dir)
-        with patch('src.config_manager.templates.log') as mock_log:
+        with patch('agentsoul.config_manager.templates.log') as mock_log:
             templates = manager.list_templates()
             # Only valid should be loaded
             self.assertEqual(len(templates), 1)
@@ -275,7 +275,7 @@ agent:
         manager = TemplateManager(templates_dir=self.templates_dir)
         yaml_path = self.templates_dir / "invalid.yaml"
         yaml_path.write_text("invalid: : yaml")
-        with patch('src.config_manager.templates.log') as mock_log:
+        with patch('agentsoul.config_manager.templates.log') as mock_log:
             template = manager._load_template(yaml_path)
             self.assertIsNone(template)
             self.assertTrue(any("Error loading template" in str(call) for call in mock_log.call_args_list))
@@ -306,7 +306,7 @@ class TestConvenienceFunctions(BaseTest):
 
     def test_get_template_convenience(self):
         """测试便利函数 get_template"""
-        with patch('src.config_manager.templates.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.config_manager.templates.get_project_root', return_value=self.project_root):
             template = get_template("friendly")
             self.assertIsNotNone(template)
             self.assertEqual(template.name, "friendly")
@@ -314,7 +314,7 @@ class TestConvenienceFunctions(BaseTest):
     def test_list_templates_convenience_updates_global(self):
         """测试便利函数 list_templates 更新全局变量"""
         import agentsoul.config.config_manager.templates as templates_module
-        with patch('src.config_manager.templates.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.config_manager.templates.get_project_root', return_value=self.project_root):
             # Clear global for test
             templates_module.PERSONA_TEMPLATES.clear()
 

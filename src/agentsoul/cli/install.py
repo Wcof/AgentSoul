@@ -1036,7 +1036,7 @@ def ask_client_target(default: Literal["all", "claude", "codex", "trae"] = "all"
     return options[choice]  # type: ignore[return-value]
 
 
-def ask_install_mode(default: Literal["quick", "project", "global", "custom"] = "quick") -> Literal["quick", "project", "global", "custom"]:
+def ask_install_mode(default: Literal["quick", "project", "global", "custom"] = "quick") -> Literal["quick", "project", "global", "custom"] | None:
     """Prompt MCP installation mode."""
     options = {"1": "quick", "2": "project", "3": "global", "4": "custom"}
     default_key = {"quick": "1", "project": "2", "global": "3", "custom": "4"}[default]
@@ -1045,12 +1045,15 @@ def ask_install_mode(default: Literal["quick", "project", "global", "custom"] = 
     print("2. 项目模式：仅项目级（会选择项目）")
     print("3. 全局模式：仅全局")
     print("4. 自定义模式：手动选择作用域和客户端")
+    print("0. 返回上一步")
     choice = prompt_numeric_choice(
-        f"请输入选项 [1-4，默认 {default_key}]: ",
-        valid_choices=list(options.keys()),
+        f"请输入选项 [0-4，默认 {default_key}]: ",
+        valid_choices=["0"] + list(options.keys()),
         default=default_key,
-        invalid_message="❌ 无效选项，请输入 1-4",
+        invalid_message="❌ 无效选项，请输入 0-4",
     )
+    if choice == "0":
+        return None
     return options[choice]  # type: ignore[return-value]
 
 
@@ -1235,7 +1238,12 @@ def resolve_project_selector(
         return default_project
     if selector is None or selector.strip() == "":
         if profile == "project":
-            return default_project if not strict else ask_project_root(default_project)
+            if not strict:
+                return default_project
+            selected = ask_project_root(default_project)
+            if selected is None:
+                raise ValueError("已取消项目选择")
+            return selected
         return default_project
 
     raw = selector.strip()
@@ -2355,7 +2363,7 @@ def render_action_summary(title: str, records: list[dict[str, Any]]) -> None:
         log(line, status)
 
 
-def ask_scope(default: Literal["local", "global", "both"] = "both") -> Literal["local", "global", "both"]:
+def ask_scope(default: Literal["local", "global", "both"] = "both") -> Literal["local", "global", "both"] | None:
     """Prompt scope selection for client install/uninstall."""
     options = {"1": "local", "2": "global", "3": "both"}
     default_key = "3" if default == "both" else ("1" if default == "local" else "2")
@@ -2363,12 +2371,15 @@ def ask_scope(default: Literal["local", "global", "both"] = "both") -> Literal["
     print("1. 项目本地")
     print("2. 用户全局")
     print("3. 同时（本地+全局）")
+    print("0. 返回上一步")
     choice = prompt_numeric_choice(
-        f"请输入选项 [1-3，默认 {default_key}]: ",
-        valid_choices=list(options.keys()),
+        f"请输入选项 [0-3，默认 {default_key}]: ",
+        valid_choices=["0"] + list(options.keys()),
         default=default_key,
-        invalid_message="❌ 无效选项，请输入 1-3",
+        invalid_message="❌ 无效选项，请输入 0-3",
     )
+    if choice == "0":
+        return None
     return options[choice]  # type: ignore[return-value]
 
 
@@ -2399,7 +2410,7 @@ def find_project_by_name(name: str) -> Path | None:
     return None
 
 
-def ask_project_root(default_root: Path = PROJECT_ROOT) -> Path:
+def ask_project_root(default_root: Path = PROJECT_ROOT) -> Path | None:
     """Prompt user to select project root for local-scope installs."""
     default_root = default_root.resolve()
     candidates = discover_project_candidates()
@@ -2413,14 +2424,17 @@ def ask_project_root(default_root: Path = PROJECT_ROOT) -> Path:
         if p == default_root:
             label += " (当前项目)"
         print(f"{idx}. {label} -> {p}")
+    print("0. 返回上一步")
     default_idx = 1
-    valid_choices = [str(i) for i in range(1, len(ordered) + 1)]
+    valid_choices = ["0"] + [str(i) for i in range(1, len(ordered) + 1)]
     choice = prompt_numeric_choice(
-        f"请输入选项 [1-{len(ordered)}，默认 {default_idx}]: ",
+        f"请输入选项 [0-{len(ordered)}，默认 {default_idx}]: ",
         valid_choices=valid_choices,
         default=str(default_idx),
-        invalid_message=f"❌ 无效选项，请输入 1-{len(ordered)}",
+        invalid_message=f"❌ 无效选项，请输入 0-{len(ordered)}",
     )
+    if choice == "0":
+        return None
     return ordered[int(choice) - 1]
 
 
@@ -2556,10 +2570,15 @@ def manage_mcp_clients(mcp_full_path: Path, json_config: str, project_root: Path
         if choice == "0":
             return
         if choice == "10":
-            selected_project = ask_project_root(selected_project)
+            selected = ask_project_root(selected_project)
+            if selected is None:
+                continue
+            selected_project = selected
             log(f"已切换本地目标项目：{selected_project}", "OK")
             continue
         scope = ask_scope("both")
+        if scope is None:
+            continue
         if choice == "1":
             render_action_summary("Claude 安装结果", claude.install(scope, mcp_full_path, json_config))
         elif choice == "2":
@@ -3338,49 +3357,68 @@ def main():
     # Interactive install mode requires configuration initialization.
     check_and_initialize_configs(PROJECT_ROOT)
 
-    choice = show_menu()
+    while True:
+        choice = show_menu()
 
-    if choice == "0":
-        log("已取消安装", "INFO")
-        return
-
-    if choice == "1":
-        generate_persona_package()
-    elif choice == "2":
-        profile = ask_install_mode("quick")
-        ns = argparse.Namespace(
-            mcp_command="install",
-            profile=profile,
-            scope=None,
-            clients=None,
-            project=None,
-            run=False,
-            prepare_only=False,
-            register_only=False,
-            log=None,
-        )
-        rc = handle_mcp_subcommand(ns)
-        if rc != 0:
-            sys.exit(rc)
-    elif choice == "3":
-        scope = ask_session_scope()
-        if not confirm_install(scope):
+        if choice == "0":
+            log("已取消安装", "INFO")
             return
-        install_openclaw(scope)
-    elif choice == "4":
-        uninstall_scope = ask_scope("both")
-        target_project = ask_project_root(PROJECT_ROOT) if uninstall_scope in ("local", "both") else None
-        if target_project is not None:
-            log(f"本地卸载目标项目：{target_project}", "OK")
-        ns = argparse.Namespace(
-            mcp_command="uninstall",
-            scope=uninstall_scope,
-            clients="all",
-            project=str(target_project) if target_project is not None else None,
-        )
-        rc = handle_mcp_subcommand(ns)
-        if rc != 0:
-            sys.exit(rc)
+
+        if choice == "1":
+            generate_persona_package()
+            continue
+
+        if choice == "2":
+            profile = ask_install_mode("quick")
+            if profile is None:
+                continue
+            ns = argparse.Namespace(
+                mcp_command="install",
+                profile=profile,
+                scope=None,
+                clients=None,
+                project=None,
+                run=False,
+                prepare_only=False,
+                register_only=False,
+                log=None,
+            )
+            rc = handle_mcp_subcommand(ns)
+            if rc != 0:
+                log("安装流程执行失败，请根据日志修复后重试", "WARN")
+            continue
+
+        if choice == "3":
+            scope = ask_session_scope()
+            if scope is None:
+                continue
+            if not confirm_install(scope):
+                continue
+            install_openclaw(scope)
+            continue
+
+        if choice == "4":
+            while True:
+                uninstall_scope = ask_scope("both")
+                if uninstall_scope is None:
+                    break
+                target_project = None
+                if uninstall_scope in ("local", "both"):
+                    selected = ask_project_root(PROJECT_ROOT)
+                    if selected is None:
+                        continue
+                    target_project = selected
+                    log(f"本地卸载目标项目：{target_project}", "OK")
+                ns = argparse.Namespace(
+                    mcp_command="uninstall",
+                    scope=uninstall_scope,
+                    clients="all",
+                    project=str(target_project) if target_project is not None else None,
+                )
+                rc = handle_mcp_subcommand(ns)
+                if rc != 0:
+                    log("卸载流程执行失败，请根据日志修复后重试", "WARN")
+                break
 
 
 def get_install_tracker_path() -> Path:
@@ -3507,9 +3545,30 @@ def list_and_perform_rollback() -> None:
         print(f"       - 新建文件: {created_count}, 修改文件: {modified_count}\n")
 
     while True:
-        choice = input(f"请选择要回滚的安装 [1-{len(history)}, 输入 0 取消]: ").strip()
+        choice = input(f"请选择要回滚的安装 [1-{len(history)}, 输入 all 全选清理, 0 取消]: ").strip().lower()
         if not choice:
             log("已取消回滚", "INFO")
+            return
+        if choice in {"all", "a"}:
+            confirm_all = prompt_binary_choice(
+                f"确认回滚全部 {len(history)} 条安装记录？",
+                default_yes=False,
+                yes_label="确认全部回滚",
+                no_label="取消",
+            )
+            if not confirm_all:
+                log("已取消回滚", "INFO")
+                return
+            success_count = 0
+            fail_count = 0
+            for ridx in range(len(history) - 1, -1, -1):
+                ok = rollback_from_record(history[ridx])
+                if ok:
+                    remove_record_from_history(ridx)
+                    success_count += 1
+                else:
+                    fail_count += 1
+            log(f"批量回滚完成：成功 {success_count} 条，失败 {fail_count} 条", "OK" if fail_count == 0 else "WARN")
             return
 
         try:
@@ -3552,17 +3611,20 @@ def list_and_perform_rollback() -> None:
         remove_record_from_history(idx)
 
 
-def ask_session_scope() -> str:
+def ask_session_scope() -> str | None:
     print("\n请选择装载范围：\n")
     print("1. 当前 Session（仅本次会话，重启后需重新装载）")
     print("2. 全局 Session（永久生效，但切换新 Session 时需要身份唤醒）\n")
+    print("0. 返回上一步\n")
 
     choice = prompt_numeric_choice(
-        "请输入选项 [1-2，默认 1]: ",
-        valid_choices=["1", "2"],
+        "请输入选项 [0-2，默认 1]: ",
+        valid_choices=["0", "1", "2"],
         default="1",
-        invalid_message="❌ 无效选项，请输入 1 或 2",
+        invalid_message="❌ 无效选项，请输入 0、1 或 2",
     )
+    if choice == "0":
+        return None
     return "current_session" if choice == "1" else "global_session"
 
 

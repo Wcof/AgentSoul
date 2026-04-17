@@ -170,11 +170,11 @@ AgentSoul data files exist in this workspace. Inject the following:
 
 1. Load persona configuration from `config/persona.yaml`
 2. Load behavior configuration from `config/behavior.yaml`
-3. Read the base rules from `src/` (SKILL.md, soul_base.md, memory_base.md, etc.)
-4. Load daily memory from `data/memory/daily/` for recent context
+3. Read the base rules from `src/agentsoul/templates/` (SKILL.md, soul_base.md, memory_base.md, etc.)
+4. Load daily memory from `var/data/memory/day/` for recent context
 5. Load any topic memory that matches the current discussion topic
 
-Use the OpenAI adapter from `src/adapters/openai.py` to help map the data.
+Use the OpenAI adapter from `src/agentsoul/adapters/openai.py` to help map the data.
 """.strip(),
 
         "gemini_code_assist": """
@@ -184,11 +184,11 @@ AgentSoul data files exist in this workspace. Inject the following:
 
 1. Load persona configuration from `config/persona.yaml`
 2. Load behavior configuration from `config/behavior.yaml`
-3. Read the base rules from `src/` (SKILL.md, soul_base.md, memory_base.md, etc.)
-4. Load daily memory from `data/memory/daily/` for recent context
+3. Read the base rules from `src/agentsoul/templates/` (SKILL.md, soul_base.md, memory_base.md, etc.)
+4. Load daily memory from `var/data/memory/day/` for recent context
 5. Load any topic memory that matches the current discussion topic
 
-Use the Gemini adapter from `src/adapters/gemini.py` to help map the data.
+Use the Gemini adapter from `src/agentsoul/adapters/gemini.py` to help map the data.
 """.strip(),
 
         "generic_local": """
@@ -196,7 +196,7 @@ Use the Gemini adapter from `src/adapters/gemini.py` to help map the data.
 
 Check if AgentSoul data files exist:
 - config/persona.yaml - contains persona configuration
-- data/ - contains memory and soul state
+- var/data/ - contains memory and soul state
 
 Load the appropriate files based on what's available.
 """.strip(),
@@ -600,10 +600,10 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
         # Find memory root directory
         # Common memory locations
         memory_candidates = [
-            "data/memory",
-            "../data/memory",
-            "./data/memory",
-            os.path.join(project_root, "data/memory"),
+            "var/data/memory",
+            "../var/data/memory",
+            "./var/data/memory",
+            os.path.join(project_root, "var/data/memory"),
         ]
 
         memory_root = None
@@ -614,7 +614,7 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
 
         if memory_root is None:
             print("❌ 错误：未找到记忆目录，请确认 AgentSoul 是否正确安装")
-            print("预期位置: data/memory/")
+            print("预期位置: var/data/memory/")
             sys.exit(1)
 
         # Scan all memory files
@@ -806,16 +806,16 @@ AgentSoul 已安装: {'是' if report['agentsoul_installed'] else '否'}
 Detect the current running environment and output available injection methods.
 
 Usage:
-  python -m src.entry_detect
-  python src/entry_detect.py
-  python -m src.entry_detect --help
-  python src/entry_detect.py --summary-json
-  python src/entry_detect.py --generate-template
-  python src/entry_detect.py --precheck
-  python src/entry_detect.py --write-starter
-  python src/entry_detect.py --parse-url-share <url>
-  python src/entry_detect.py --cleanup-memory
-  python src/entry_detect.py --cleanup-memory --summary-json
+  python -m agentsoul.entry_detect
+  python3 -m agentsoul.runtime.entry_detect
+  python -m agentsoul.entry_detect --help
+  python3 -m agentsoul.runtime.entry_detect --summary-json
+  python3 -m agentsoul.runtime.entry_detect --generate-template
+  python3 -m agentsoul.runtime.entry_detect --precheck
+  python3 -m agentsoul.runtime.entry_detect --write-starter
+  python3 -m agentsoul.runtime.entry_detect --parse-url-share <url>
+  python3 -m agentsoul.runtime.entry_detect --cleanup-memory
+  python3 -m agentsoul.runtime.entry_detect --cleanup-memory --summary-json
 
 Exit codes:
   0: Success

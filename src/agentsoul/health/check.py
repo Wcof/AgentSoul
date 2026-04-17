@@ -70,38 +70,37 @@ class HealthChecker:
         """检查目录结构是否完整"""
         issues = []
         required_dirs = [
-            ("data", False),
-            ("data/soul", False),
-            ("data/soul/soul_variable", False),
-            ("data/memory", False),
-            ("data/memory/day", False),
-            ("data/memory/week", False),
-            ("data/memory/month", False),
-            ("data/memory/year", False),
-            ("data/memory/topic", False),
-            ("data/memory/topic/archive", False),
-            ("data/entity-memory", False),
-            ("data/core-memory", False),
-            ("data/kv-cache", False),
-            ("config", False),
+            (self.data_root, "var/data", False),
+            (self.data_root / "soul", "var/data/soul", False),
+            (self.data_root / "soul" / "soul_variable", "var/data/soul/soul_variable", False),
+            (self.data_root / "memory", "var/data/memory", False),
+            (self.data_root / "memory" / "day", "var/data/memory/day", False),
+            (self.data_root / "memory" / "week", "var/data/memory/week", False),
+            (self.data_root / "memory" / "month", "var/data/memory/month", False),
+            (self.data_root / "memory" / "year", "var/data/memory/year", False),
+            (self.data_root / "memory" / "topic", "var/data/memory/topic", False),
+            (self.data_root / "memory" / "topic" / "archive", "var/data/memory/topic/archive", False),
+            (self.data_root / "entity-memory", "var/data/entity-memory", False),
+            (self.data_root / "core-memory", "var/data/core-memory", False),
+            (self.data_root / "kv-cache", "var/data/kv-cache", False),
+            (self.config_root, "config", False),
         ]
 
-        for dir_path, required in required_dirs:
-            full_path = self.project_root / dir_path
+        for full_path, label, required in required_dirs:
             if not full_path.exists():
                 if required:
                     issues.append(HealthIssue(
                         level="error",
                         category="directory",
-                        message=f"Missing required directory: {dir_path}",
+                        message=f"Missing required directory: {label}",
                         location=str(full_path),
-                        fix_suggestion=f"Run `mkdir -p {dir_path}` to create it"
+                        fix_suggestion=f"Run `mkdir -p {label}` to create it"
                     ))
                 else:
                     issues.append(HealthIssue(
                         level="info",
                         category="directory",
-                        message=f"Optional directory doesn't exist: {dir_path}",
+                        message=f"Optional directory doesn't exist: {label}",
                         location=str(full_path),
                         fix_suggestion="Will be created automatically on first write"
                     ))
@@ -111,9 +110,9 @@ class HealthChecker:
                     issues.append(HealthIssue(
                         level="error",
                         category="permission",
-                        message=f"Directory not writable: {dir_path}",
+                        message=f"Directory not writable: {label}",
                         location=str(full_path),
-                        fix_suggestion=f"Check permissions: chmod -R u+w {dir_path}"
+                        fix_suggestion=f"Check permissions: chmod -R u+w {label}"
                     ))
 
         return issues

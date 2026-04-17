@@ -176,7 +176,7 @@ class OpenClawInstaller:
         soul_content = """# AgentSoul - Soul 状态
 
 情感状态向量存储位于：
-`data/soul/soul_variable/state_vector.json`
+`var/data/soul/soul_variable/state_vector.json`
 
 格式：PAD 三维情感空间模型
 - pleasure (愉悦度): [-1, 1]
@@ -192,7 +192,7 @@ class OpenClawInstaller:
         Returns:
             缺失的文件名列表
         """
-        src_dir = self.agentsoul_root / "src"
+        src_dir = self.agentsoul_root / "src" / "agentsoul" / "templates"
         dest_dir = self.agent_path / "base_rules"
         dest_dir.mkdir(parents=True, exist_ok=True)
 

@@ -53,7 +53,7 @@ python3 -m pytest tests/test_health_check.py -v
 python3 scripts/scan_privacy.py
 
 # Build MCP server manually
-cd mcp_server && npm install && npm run build
+cd apps/mcp-server && npm install && npm run build
 
 # Type checking with mypy
 mypy src/
@@ -68,19 +68,19 @@ black src/
 ### Health Check CLI (for CI/automation)
 ```bash
 # Full health check with text output
-python3 src/health_check.py
+python3 -m agentsoul.health.check
 
 # Full health check with machine-readable JSON output (uses standard HealthSummary schema)
-python3 src/health_check.py --summary-json
+python3 -m agentsoul.health.check --summary-json
 
 # Health check with score gate - exits with non-zero if score < 70 (for CI)
-python3 src/health_check.py --min-score 70
+python3 -m agentsoul.health.check --min-score 70
 
 # Companionship continuity check (measures 5 core metrics)
-python3 src/companionship_checker.py
+python3 -m agentsoul.health.companionship_checker
 
 # Entry detection - detects current running environment
-python3 src/entry_detect.py
+python3 -m agentsoul.runtime.entry_detect
 ```
 
 ## Code Architecture

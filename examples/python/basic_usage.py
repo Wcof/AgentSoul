@@ -76,7 +76,7 @@ def example_apply_template():
     print()
     print("注意：此示例不会实际修改配置文件")
     print("要实际应用模板，请使用命令行工具：")
-    print("  python -m src.config_manager.cli apply-template professional")
+    print("  python -m agentsoul.config_manager.cli apply-template professional")
     print()
 
 

@@ -106,7 +106,7 @@ class TestHelperFunctions(BaseTest):
 class TestListTemplates(BaseTest):
     """测试 list_templates 命令"""
 
-    @patch('src.config_manager.cli.TemplateManager')
+    @patch('agentsoul.config_manager.cli.TemplateManager')
     def test_list_templates_with_templates(self, mock_manager_cls):
         """测试有模板时列出"""
         mock_manager = Mock()
@@ -125,14 +125,14 @@ class TestListTemplates(BaseTest):
             self.assertIn('template2', output)
             self.assertIn('second template', output)
 
-    @patch('src.config_manager.cli.TemplateManager')
+    @patch('agentsoul.config_manager.cli.TemplateManager')
     def test_list_templates_no_templates(self, mock_manager_cls):
         """测试没有模板时给出警告"""
         mock_manager = Mock()
         mock_manager.list_templates.return_value = []
         mock_manager_cls.return_value = mock_manager
 
-        with patch('src.config_manager.cli.log') as mock_log:
+        with patch('agentsoul.config_manager.cli.log') as mock_log:
             list_templates()
             mock_log.assert_called_with("没有找到配置模板", "WARN")
 
@@ -140,7 +140,7 @@ class TestListTemplates(BaseTest):
 class TestPreviewTemplate(BaseTest):
     """测试 preview_template 命令"""
 
-    @patch('src.config_manager.cli.TemplateManager')
+    @patch('agentsoul.config_manager.cli.TemplateManager')
     def test_preview_template_prints_preview(self, mock_manager_cls):
         """测试预览输出预览内容"""
         mock_manager = Mock()
@@ -156,7 +156,7 @@ class TestPreviewTemplate(BaseTest):
 class TestApplyTemplate(BaseTest):
     """测试 apply_template 命令"""
 
-    @patch('src.config_manager.cli.TemplateManager')
+    @patch('agentsoul.config_manager.cli.TemplateManager')
     @patch('sys.exit')
     def test_apply_template_success_exits_zero(self, mock_exit, mock_manager_cls):
         """测试应用成功退出 0"""
@@ -167,7 +167,7 @@ class TestApplyTemplate(BaseTest):
         apply_template("test-template", None, no_backup=False)
         mock_exit.assert_called_once_with(0)
 
-    @patch('src.config_manager.cli.TemplateManager')
+    @patch('agentsoul.config_manager.cli.TemplateManager')
     @patch('sys.exit')
     def test_apply_template_failure_exits_one(self, mock_exit, mock_manager_cls):
         """测试应用失败退出 1"""
@@ -178,8 +178,8 @@ class TestApplyTemplate(BaseTest):
         apply_template("test-template", None, no_backup=False)
         mock_exit.assert_called_once_with(1)
 
-    @patch('src.config_manager.cli.get_project_root')
-    @patch('src.config_manager.cli.TemplateManager')
+    @patch('agentsoul.config_manager.cli.get_project_root')
+    @patch('agentsoul.config_manager.cli.TemplateManager')
     def test_apply_template_uses_default_path(self, mock_manager_cls, mock_get_root):
         """测试使用默认目标路径"""
         mock_get_root.return_value = Path("/project")
@@ -198,7 +198,7 @@ class TestApplyTemplate(BaseTest):
         # backup enabled (not no_backup)
         self.assertTrue(call_args[1]['backup'])
 
-    @patch('src.config_manager.cli.TemplateManager')
+    @patch('agentsoul.config_manager.cli.TemplateManager')
     def test_apply_template_no_backup_disables_backup(self, mock_manager_cls):
         """测试 no_backup=True 禁用备份"""
         mock_manager = Mock()
@@ -215,9 +215,9 @@ class TestApplyTemplate(BaseTest):
 class TestValidateConfig(BaseTest):
     """测试 validate_config 命令"""
 
-    @patch('src.config_manager.cli.ConfigValidator')
-    @patch('src.config_manager.cli._check_file_exists')
-    @patch('src.config_manager.cli._load_config')
+    @patch('agentsoul.config_manager.cli.ConfigValidator')
+    @patch('agentsoul.config_manager.cli._check_file_exists')
+    @patch('agentsoul.config_manager.cli._load_config')
     def test_validate_config_valid_no_errors(self, mock_load, mock_check, mock_validator_cls):
         """测试配置有效没有错误"""
         mock_load.return_value = {'ai': {'name': 'Test'}, 'master': {'name': 'User'}}
@@ -231,9 +231,9 @@ class TestValidateConfig(BaseTest):
             # Valid config should not exit with error
             mock_exit.assert_not_called()
 
-    @patch('src.config_manager.cli.ConfigValidator')
-    @patch('src.config_manager.cli._check_file_exists')
-    @patch('src.config_manager.cli._load_config')
+    @patch('agentsoul.config_manager.cli.ConfigValidator')
+    @patch('agentsoul.config_manager.cli._check_file_exists')
+    @patch('agentsoul.config_manager.cli._load_config')
     def test_validate_config_invalid_exits_one(self, mock_load, mock_check, mock_validator_cls):
         """测试配置无效调用 sys.exit(1)"""
         mock_load.return_value = {'ai': {}}
@@ -246,14 +246,14 @@ class TestValidateConfig(BaseTest):
             validate_config("config/persona.yaml")
             mock_exit.assert_called_once_with(1)
 
-    @patch('src.config_manager.cli.get_project_root')
+    @patch('agentsoul.config_manager.cli.get_project_root')
     def test_validate_config_uses_default_path(self, mock_get_root):
         """测试使用默认配置路径"""
         mock_get_root.return_value = Path("/project")
         # Just check that it tries to check the default path
-        with patch('src.config_manager.cli._check_file_exists') as mock_check:
-            with patch('src.config_manager.cli._load_config'):
-                with patch('src.config_manager.cli.ConfigValidator'):
+        with patch('agentsoul.config_manager.cli._check_file_exists') as mock_check:
+            with patch('agentsoul.config_manager.cli._load_config'):
+                with patch('agentsoul.config_manager.cli.ConfigValidator'):
                     validate_config(None)
                     # Check called with the expected path
                     args = mock_check.call_args[0][0]
@@ -280,7 +280,7 @@ class TestExportConfig(BaseTest):
 
             output_path = Path(tmpdir) / "output.yaml"
 
-            with patch('src.config_manager.cli.get_project_root', return_value=project_root):
+            with patch('agentsoul.config_manager.cli.get_project_root', return_value=project_root):
                 with patch('sys.exit') as mock_exit:
                     export_config(str(output_path))
                     # Should exit normally (no call to exit)
@@ -301,12 +301,12 @@ class TestExportConfig(BaseTest):
             # Output to a non-existent directory that can't be created
             output_path = Path(tmpdir) / "nonexistent" / "output.yaml"
 
-            with patch('src.config_manager.cli.get_project_root', return_value=project_root):
+            with patch('agentsoul.config_manager.cli.get_project_root', return_value=project_root):
                 with patch('sys.exit') as mock_exit:
                     export_config(str(output_path))
                     mock_exit.assert_called_once_with(1)
 
-    @patch('src.config_manager.cli.get_project_root')
+    @patch('agentsoul.config_manager.cli.get_project_root')
     def test_export_config_uses_default_output(self, mock_get_root):
         """测试使用默认输出路径"""
         mock_get_root.return_value = Path("/project")
@@ -314,7 +314,7 @@ class TestExportConfig(BaseTest):
         source_path = Path("/project/config/persona.yaml")
         with tempfile.NamedTemporaryFile() as f:
             # We just check the resolved path, actual copy will fail but that's ok
-            with patch('src.config_manager.cli._check_file_exists'):
+            with patch('agentsoul.config_manager.cli._check_file_exists'):
                 with patch('shutil.copy2') as mock_copy:
                     mock_copy.side_effect = Exception("stop")
                     with patch('sys.exit'):
@@ -329,7 +329,7 @@ class TestMainArgParsing(BaseTest):
 
     def test_main_list_templates_calls_list_templates(self):
         """测试 list-templates 命令调用正确函数"""
-        with patch('src.config_manager.cli.list_templates') as mock_func:
+        with patch('agentsoul.config_manager.cli.list_templates') as mock_func:
             with patch('sys.argv', ['cli.py', 'list-templates']):
                 from agentsoul.config.config_manager.cli import main
                 main()
@@ -337,7 +337,7 @@ class TestMainArgParsing(BaseTest):
 
     def test_main_preview_template_calls_preview_template(self):
         """测试 preview-template 命令调用正确函数"""
-        with patch('src.config_manager.cli.preview_template') as mock_func:
+        with patch('agentsoul.config_manager.cli.preview_template') as mock_func:
             with patch('sys.argv', ['cli.py', 'preview-template', 'mytemplate']):
                 from agentsoul.config.config_manager.cli import main
                 main()
@@ -345,7 +345,7 @@ class TestMainArgParsing(BaseTest):
 
     def test_main_apply_template_calls_apply_template(self):
         """测试 apply-template 命令调用正确函数"""
-        with patch('src.config_manager.cli.apply_template') as mock_func:
+        with patch('agentsoul.config_manager.cli.apply_template') as mock_func:
             with patch('sys.argv', ['cli.py', 'apply-template', 'mytemplate', '--target', '/path', '--no-backup']):
                 from agentsoul.config.config_manager.cli import main
                 main()
@@ -357,7 +357,7 @@ class TestMainArgParsing(BaseTest):
 
     def test_main_validate_config_calls_validate_config(self):
         """测试 validate-config 命令调用正确函数"""
-        with patch('src.config_manager.cli.validate_config') as mock_func:
+        with patch('agentsoul.config_manager.cli.validate_config') as mock_func:
             with patch('sys.argv', ['cli.py', 'validate-config', '--path', '/path']):
                 from agentsoul.config.config_manager.cli import main
                 main()
@@ -365,7 +365,7 @@ class TestMainArgParsing(BaseTest):
 
     def test_main_export_config_calls_export_config(self):
         """测试 export-config 命令调用正确函数"""
-        with patch('src.config_manager.cli.export_config') as mock_func:
+        with patch('agentsoul.config_manager.cli.export_config') as mock_func:
             with patch('sys.argv', ['cli.py', 'export-config', '--output', '/path']):
                 from agentsoul.config.config_manager.cli import main
                 main()

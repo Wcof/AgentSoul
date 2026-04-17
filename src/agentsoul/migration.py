@@ -541,10 +541,10 @@ def main() -> None:
     """跨平台灵魂迁移 CLI 入口
 
     用法:
-        python -m src.migration export <output.zip>
-        python -m src.migration import import <archive.zip>
-        python -m src.migration migrate-local-to-mcp
-        python -m src.migration migrate-mcp-to-local
+        python -m agentsoul.migration export <output.zip>
+        python -m agentsoul.migration import import <archive.zip>
+        python -m agentsoul.migration migrate-local-to-mcp
+        python -m agentsoul.migration migrate-mcp-to-local
     """
     import argparse
 

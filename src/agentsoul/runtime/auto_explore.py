@@ -1,7 +1,7 @@
 """
 Automatic Exploration Orchestrator for AgentSoul
 
-Scans the current project state, reads update_plan.md, capability map, failure ledger,
+Scans the current project state, reads auto-upgrade plan/capability files, failure ledger,
 and automatically proposes the next exploration candidate that satisfies the
 Center Constraint (Master Agent不出圈).
 """
@@ -37,9 +37,16 @@ class AutoExplorer:
     def __init__(self, project_root: Path):
         self.project_root = project_root
 
+    def _resolve_upgrade_doc(self, filename: str) -> Path:
+        """Resolve auto-upgrade doc path (new location first, then legacy root)."""
+        modern = self.project_root / "docs" / "auto-upgrade" / filename
+        if modern.exists():
+            return modern
+        return self.project_root / filename
+
     def read_update_plan(self) -> tuple[list[str], bool]:
         """Read update_plan.md and extract empty candidate slots."""
-        plan_path = self.project_root / "update_plan.md"
+        plan_path = self._resolve_upgrade_doc("update_plan.md")
         if not plan_path.exists():
             return [], False
 
@@ -64,7 +71,7 @@ class AutoExplorer:
 
     def read_capability_map(self) -> tuple[list[str], list[str]]:
         """Read .capability_map.md and extract partially implemented / unimplemented."""
-        cap_path = self.project_root / ".capability_map.md"
+        cap_path = self._resolve_upgrade_doc(".capability_map.md")
         if not cap_path.exists():
             return [], []
 

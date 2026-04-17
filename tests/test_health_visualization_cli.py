@@ -29,7 +29,7 @@ class BaseTest(unittest.TestCase):
 class TestMainArgParsing(BaseTest):
     """测试 main 函数参数解析"""
 
-    @patch('src.health_visualization.cli.HealthChartExporter')
+    @patch('agentsoul.health_visualization.cli.HealthChartExporter')
     @patch('sys.argv', ['cli.py', '--output', 'output.svg', '--format', 'svg', '--width', '1000', '--height', '500'])
     def test_main_custom_args_svg(self, mock_exporter_cls):
         """测试自定义参数 SVG 格式"""
@@ -55,7 +55,7 @@ class TestMainArgParsing(BaseTest):
         self.assertEqual(call_args[0][1], 1000)
         self.assertEqual(call_args[0][2], 500)
 
-    @patch('src.health_visualization.cli.HealthChartExporter')
+    @patch('agentsoul.health_visualization.cli.HealthChartExporter')
     @patch('sys.argv', ['cli.py', '--output', 'data.json', '--format', 'json'])
     def test_main_custom_args_json(self, mock_exporter_cls):
         """测试自定义参数 JSON 格式"""
@@ -78,7 +78,7 @@ class TestMainArgParsing(BaseTest):
         call_args = mock_exporter.export_json.call_args
         self.assertEqual(call_args[0][0], Path('data.json'))
 
-    @patch('src.health_visualization.cli.HealthChartExporter')
+    @patch('agentsoul.health_visualization.cli.HealthChartExporter')
     @patch('sys.argv', ['cli.py'])
     def test_main_default_args(self, mock_exporter_cls):
         """测试默认参数"""
@@ -104,7 +104,7 @@ class TestMainArgParsing(BaseTest):
         self.assertEqual(call_args[0][1], 800)
         self.assertEqual(call_args[0][2], 400)
 
-    @patch('src.health_visualization.cli.HealthChartExporter')
+    @patch('agentsoul.health_visualization.cli.HealthChartExporter')
     @patch('sys.argv', ['cli.py', '-o', 'out.svg', '-f', 'svg', '-w', '1200', '-H', '600'])
     def test_main_short_options(self, mock_exporter_cls):
         """测试短选项"""
@@ -129,7 +129,7 @@ class TestMainArgParsing(BaseTest):
         self.assertEqual(call_args[0][1], 1200)
         self.assertEqual(call_args[0][2], 600)
 
-    @patch('src.health_visualization.cli.HealthChartExporter')
+    @patch('agentsoul.health_visualization.cli.HealthChartExporter')
     @patch('sys.argv', ['cli.py', '-f', 'json'])
     def test_main_json_format(self, mock_exporter_cls):
         """测试 JSON 格式"""

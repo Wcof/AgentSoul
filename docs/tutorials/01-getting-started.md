@@ -50,7 +50,7 @@ pip install -e ".[dev]"
 如果您需要使用 MCP 服务：
 
 ```bash
-cd mcp_server
+cd apps/mcp-server
 npm install
 npm run build
 ```
@@ -90,7 +90,7 @@ AgentSoul 提供了 4 个预设配置模板，让您快速上手。
 ### 列出可用模板
 
 ```bash
-python -m src.config_manager.cli list-templates
+python -m agentsoul.config_manager.cli list-templates
 ```
 
 您将看到：
@@ -113,7 +113,7 @@ python -m src.config_manager.cli list-templates
 在应用模板之前，您可以先预览：
 
 ```bash
-python -m src.config_manager.cli preview-template friendly
+python -m agentsoul.config_manager.cli preview-template friendly
 ```
 
 这将显示模板的完整配置内容。
@@ -123,7 +123,7 @@ python -m src.config_manager.cli preview-template friendly
 选择一个模板并应用：
 
 ```bash
-python -m src.config_manager.cli apply-template professional
+python -m agentsoul.config_manager.cli apply-template professional
 ```
 
 这将：
@@ -136,7 +136,7 @@ python -m src.config_manager.cli apply-template professional
 应用模板后，验证配置是否正确：
 
 ```bash
-python -m src.config_manager.cli validate-config
+python -m agentsoul.config_manager.cli validate-config
 ```
 
 如果一切正常，您将看到：
@@ -179,10 +179,10 @@ python3 -m unittest tests/test_agent_soul.py -v
 
 ```bash
 # 列出模板
-python -m src.config_manager.cli list-templates
+python -m agentsoul.config_manager.cli list-templates
 
 # 验证配置
-python -m src.config_manager.cli validate-config
+python -m agentsoul.config_manager.cli validate-config
 ```
 
 ### 测试 MCP 服务（可选）
@@ -190,7 +190,7 @@ python -m src.config_manager.cli validate-config
 如果您安装了 MCP 服务：
 
 ```bash
-cd mcp_server
+cd apps/mcp-server
 npm start
 ```
 
@@ -210,7 +210,7 @@ npm start
 A: 您可以重新运行安装脚本，或者应用 minimal 模板：
 
 ```bash
-python -m src.config_manager.cli apply-template minimal
+python -m agentsoul.config_manager.cli apply-template minimal
 ```
 
 ### Q: 配置文件在哪里？
@@ -224,7 +224,7 @@ A: 配置文件位于：
 A: 使用导出命令：
 
 ```bash
-python -m src.config_manager.cli export-config --output my_backup.yaml
+python -m agentsoul.config_manager.cli export-config --output my_backup.yaml
 ```
 
 ### Q: MCP 服务如何配置？

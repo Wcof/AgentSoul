@@ -82,7 +82,7 @@ class TestSnapshotManager(BaseTest):
     def test_init_default_project_root(self):
         """测试使用默认项目根目录"""
         from agentsoul.common import get_project_root
-        with patch('src.snapshot.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.snapshot.get_project_root', return_value=self.project_root):
             manager = SnapshotManager()
             self.assertEqual(manager.project_root, self.project_root)
 
@@ -122,18 +122,18 @@ class TestSnapshotManager(BaseTest):
 
         manager = SnapshotManager(self.project_root, max_snapshots=10)
 
-        with patch('src.snapshot.LocalPersonaStorage') as mock_persona_cls:
+        with patch('agentsoul.snapshot.LocalPersonaStorage') as mock_persona_cls:
             mock_persona = Mock()
             mock_persona.read_persona_config.return_value = {"ai": {"name": "Test"}}
             mock_persona.get_version.return_value = Mock(version="1.0.0")
             mock_persona_cls.return_value = mock_persona
 
-            with patch('src.snapshot.LocalSoulStateStorage') as mock_state_cls:
+            with patch('agentsoul.snapshot.LocalSoulStateStorage') as mock_state_cls:
                 mock_state = Mock()
                 mock_state.read_soul_state.return_value = {"pleasure": 0.5}
                 mock_state_cls.return_value = mock_state
 
-                with patch('src.snapshot.LocalMemoryStorage') as mock_memory_cls:
+                with patch('agentsoul.snapshot.LocalMemoryStorage') as mock_memory_cls:
                     mock_memory = Mock()
                     mock_memory.list_topics.return_value = [{"name": "topic1"}]
                     mock_memory_cls.return_value = mock_memory
@@ -250,18 +250,18 @@ class TestSnapshotManager(BaseTest):
         manager = SnapshotManager(self.project_root, max_snapshots=3)
 
         # We need to mock the internal calls to avoid actually reading from storage
-        with patch('src.snapshot.LocalPersonaStorage') as mock_persona_cls:
+        with patch('agentsoul.snapshot.LocalPersonaStorage') as mock_persona_cls:
             mock_persona = Mock()
             mock_persona.read_persona_config.return_value = {"ai": {"name": "Test"}}
             mock_persona.get_version.return_value = Mock(version="1.0.0")
             mock_persona_cls.return_value = mock_persona
 
-            with patch('src.snapshot.LocalSoulStateStorage') as mock_state_cls:
+            with patch('agentsoul.snapshot.LocalSoulStateStorage') as mock_state_cls:
                 mock_state = Mock()
                 mock_state.read_soul_state.return_value = {"pleasure": 0.5}
                 mock_state_cls.return_value = mock_state
 
-                with patch('src.snapshot.LocalMemoryStorage') as mock_memory_cls:
+                with patch('agentsoul.snapshot.LocalMemoryStorage') as mock_memory_cls:
                     mock_memory = Mock()
                     mock_memory.list_topics.return_value = []
                     mock_memory_cls.return_value = mock_memory
@@ -396,7 +396,7 @@ class TestSnapshotManager(BaseTest):
         # Ensure target directories exist
         (self.project_root / "config").mkdir(exist_ok=True)
 
-        with patch('src.snapshot.LocalSoulStateStorage') as mock_state_cls:
+        with patch('agentsoul.snapshot.LocalSoulStateStorage') as mock_state_cls:
             mock_state = Mock()
             mock_state.write_soul_state.return_value = True
             mock_state_cls.return_value = mock_state
@@ -430,14 +430,14 @@ class TestVersionRollback(BaseTest):
     def test_init_creates_manager(self):
         """测试初始化创建管理器"""
         from agentsoul.common import get_project_root
-        with patch('src.snapshot.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback(max_snapshots=20)
             self.assertIsNotNone(rb.manager)
 
     def test_create_before_change(self):
         """测试在修改前创建快照"""
         from agentsoul.common import get_project_root
-        with patch('src.snapshot.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback(max_snapshots=20)
 
             with patch.object(rb.manager, 'create_snapshot') as mock_create:
@@ -452,7 +452,7 @@ class TestVersionRollback(BaseTest):
     def test_rollback_to_calls_manager(self):
         """测试回滚调用管理器"""
         from agentsoul.common import get_project_root
-        with patch('src.snapshot.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback()
             with patch.object(rb.manager, 'rollback', return_value=True) as mock_rollback:
                 result = rb.rollback_to("test-id")
@@ -462,7 +462,7 @@ class TestVersionRollback(BaseTest):
     def test_list_available_calls_manager(self):
         """测试列出可用版本"""
         from agentsoul.common import get_project_root
-        with patch('src.snapshot.get_project_root', return_value=self.project_root):
+        with patch('agentsoul.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback()
             mock_snapshots = [
                 SoulSnapshot(

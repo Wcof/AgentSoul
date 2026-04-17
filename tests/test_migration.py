@@ -577,10 +577,10 @@ class TestMigration(BaseTest):
         import sys
         from unittest.mock import patch
 
-        with patch('sys.argv', ['src.migration', 'export', 'test.zip']):
+        with patch('sys.argv', ['agentsoul.migration', 'export', 'test.zip']):
             try:
                 # Just check it parses args, won't execute because we catch SystemExit
-                with patch('src.migration.export_archive') as mock_export:
+                with patch('agentsoul.migration.export_archive') as mock_export:
                     mock_export.return_value = Path('test.zip')
                     with patch('sys.exit') as mock_exit:
                         mock_exit.side_effect = SystemExit
@@ -599,9 +599,9 @@ class TestMigration(BaseTest):
         from unittest.mock import patch
         import sys
 
-        with patch('sys.argv', ['src.migration', 'import', 'test.zip', '--no-skip-existing']):
+        with patch('sys.argv', ['agentsoul.migration', 'import', 'test.zip', '--no-skip-existing']):
             try:
-                with patch('src.migration.import_archive') as mock_import:
+                with patch('agentsoul.migration.import_archive') as mock_import:
                     from agentsoul.migration import MigrationResult
                     mock_import.return_value = MigrationResult(
                         success=True, items_migrated=5, errors=[], message='ok'
@@ -626,9 +626,9 @@ class TestMigration(BaseTest):
         from unittest.mock import patch
         import sys
 
-        with patch('sys.argv', ['src.migration', 'migrate-local-to-mcp']):
+        with patch('sys.argv', ['agentsoul.migration', 'migrate-local-to-mcp']):
             try:
-                with patch('src.migration.LocalToMcpMigrator') as mock_ctor:
+                with patch('agentsoul.migration.LocalToMcpMigrator') as mock_ctor:
                     from agentsoul.migration import MigrationResult
                     mock_instance = mock_ctor.return_value
                     mock_instance.migrate_all.return_value = MigrationResult(
@@ -652,9 +652,9 @@ class TestMigration(BaseTest):
         from unittest.mock import patch
         import sys
 
-        with patch('sys.argv', ['src.migration', 'migrate-mcp-to-local']):
+        with patch('sys.argv', ['agentsoul.migration', 'migrate-mcp-to-local']):
             try:
-                with patch('src.migration.McpToLocalMigrator') as mock_ctor:
+                with patch('agentsoul.migration.McpToLocalMigrator') as mock_ctor:
                     from agentsoul.migration import MigrationResult
                     mock_instance = mock_ctor.return_value
                     mock_instance.migrate_all.return_value = MigrationResult(

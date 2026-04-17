@@ -13,7 +13,7 @@
 模板管理器，用于加载、预览和应用配置模板。
 
 ```python
-from src.config_manager.templates import TemplateManager
+from agentsoul.config_manager.templates import TemplateManager
 
 manager = TemplateManager()
 
@@ -36,7 +36,7 @@ success = manager.apply_template("professional")
 配置验证器，用于验证配置文件格式。
 
 ```python
-from src.config_manager.validator import ConfigValidator
+from agentsoul.config_manager.validator import ConfigValidator
 
 validator = ConfigValidator()
 
@@ -54,19 +54,19 @@ validator.print_errors(errors)
 
 ```bash
 # 列出所有模板
-python -m src.config_manager.cli list-templates
+python -m agentsoul.config_manager.cli list-templates
 
 # 预览模板
-python -m src.config_manager.cli preview-template friendly
+python -m agentsoul.config_manager.cli preview-template friendly
 
 # 应用模板
-python -m src.config_manager.cli apply-template professional
+python -m agentsoul.config_manager.cli apply-template professional
 
 # 验证配置
-python -m src.config_manager.cli validate-config
+python -m agentsoul.config_manager.cli validate-config
 
 # 导出配置
-python -m src.config_manager.cli export-config --output my_config.yaml
+python -m agentsoul.config_manager.cli export-config --output my_config.yaml
 ```
 
 ## MCP 工具
@@ -489,16 +489,16 @@ AgentSoul 提供 4 个预设配置模板：
 
 ```bash
 # 列出所有模板
-python -m src.config_manager.cli list-templates
+python -m agentsoul.config_manager.cli list-templates
 
 # 预览模板
-python -m src.config_manager.cli preview-template friendly
+python -m agentsoul.config_manager.cli preview-template friendly
 
 # 应用模板
-python -m src.config_manager.cli apply-template professional
+python -m agentsoul.config_manager.cli apply-template professional
 
 # 验证配置
-python -m src.config_manager.cli validate-config
+python -m agentsoul.config_manager.cli validate-config
 ```
 
 ## 配置验证
@@ -514,19 +514,19 @@ python -m src.config_manager.cli validate-config
 ## 数据目录结构
 
 ```
-data/
-├── identity/           # 身份档案
-│   ├── self/          # Agent 身份
-│   └── master/        # 用户身份
-├── soul/              # 灵魂状态
-│   └── soul_variable/ # 情感状态
-├── memory/            # 记忆数据
-│   ├── day/          # 每日记忆
-│   ├── week/         # 每周记忆
-│   ├── month/        # 每月记忆
-│   ├── year/         # 每年记忆
-│   └── topic/        # 主题记忆
-└── learning/          # 学习数据（新增）
+var/data/
+├── identity/              # 身份档案
+│   ├── self/              # Agent 身份
+│   └── master/            # 用户身份
+├── soul/                  # 灵魂状态
+│   └── soul_variable/     # 情感状态
+├── memory/                # 记忆数据
+│   ├── day/               # 每日记忆
+│   ├── week/              # 每周记忆
+│   ├── month/             # 每月记忆
+│   ├── year/              # 每年记忆
+│   └── topic/             # 主题记忆
+└── learning/              # 学习数据
     ├── interactions.jsonl # 交互记录
     └── preferences.json   # 用户偏好
 ```

@@ -331,11 +331,11 @@ class TestInstallScript(unittest.TestCase):
 
             initialize_identity(Path(test_dir), Path(test_dir), verbose=False)
 
-            self_dir = Path(test_dir) / "data" / "identity" / "self"
+            self_dir = Path(test_dir) / "var" / "data" / "identity" / "self"
             self.assertTrue((self_dir / "profile.md").exists())
             self.assertTrue((self_dir / "TestAgent.md").exists())
 
-            master_dir = Path(test_dir) / "data" / "identity" / "master"
+            master_dir = Path(test_dir) / "var" / "data" / "identity" / "master"
             self.assertTrue((master_dir / "profile.md").exists())
             self.assertTrue((master_dir / "TestMaster.md").exists())
 
@@ -372,17 +372,17 @@ class TestOpenClawInstaller(unittest.TestCase):
 
         expected_dirs = [
             installer.agent_path,
-            installer.agent_path / "data",
-            installer.agent_path / "data" / "identity",
-            installer.agent_path / "data" / "identity" / "self",
-            installer.agent_path / "data" / "identity" / "master",
-            installer.agent_path / "data" / "identity" / "others",
-            installer.agent_path / "data" / "soul",
-            installer.agent_path / "data" / "soul" / "soul_variable",
-            installer.agent_path / "data" / "memory",
-            installer.agent_path / "data" / "memory" / "day",
-            installer.agent_path / "data" / "memory" / "topic",
-            installer.agent_path / "data" / "memory" / "topic" / "archive",
+            installer.agent_path / "var" / "data",
+            installer.agent_path / "var" / "data" / "identity",
+            installer.agent_path / "var" / "data" / "identity" / "self",
+            installer.agent_path / "var" / "data" / "identity" / "master",
+            installer.agent_path / "var" / "data" / "identity" / "others",
+            installer.agent_path / "var" / "data" / "soul",
+            installer.agent_path / "var" / "data" / "soul" / "soul_variable",
+            installer.agent_path / "var" / "data" / "memory",
+            installer.agent_path / "var" / "data" / "memory" / "day",
+            installer.agent_path / "var" / "data" / "memory" / "topic",
+            installer.agent_path / "var" / "data" / "memory" / "topic" / "archive",
             installer.agent_path / "config",
         ]
 
@@ -403,7 +403,7 @@ class TestOpenClawInstaller(unittest.TestCase):
         installer._create_directory_structure("current_session")
         installer._create_default_soul_state()
 
-        state_path = installer.agent_path / "data" / "soul" / "soul_variable" / "state_vector.json"
+        state_path = installer.agent_path / "var" / "data" / "soul" / "soul_variable" / "state_vector.json"
         self.assertTrue(state_path.exists())
 
         import json

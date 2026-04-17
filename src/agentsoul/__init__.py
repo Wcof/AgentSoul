@@ -5,6 +5,8 @@ AgentSoul · 核心模块初始化
 """
 from __future__ import annotations
 
+import agentsoul.entry_detect as entry_detect
+
 from agentsoul.common import (
     __version__,
     get_project_root,
@@ -86,6 +88,7 @@ from agentsoul.storage.mcp_client import (
 )
 
 __all__ = [
+    "entry_detect",
     "log",
     "icons",
     "load_config",

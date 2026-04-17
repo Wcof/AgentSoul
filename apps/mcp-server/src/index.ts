@@ -18,7 +18,7 @@
  *   "mcpServers": {
  *     "agentsoul": {
  *       "command": "node",
- *       "args": ["/absolute/path/to/AgentSoul/mcp_server/dist/index.js"]
+ *       "args": ["/absolute/path/to/AgentSoul/apps/mcp-server/dist/index.js"]
  *     }
  *   }
  * }

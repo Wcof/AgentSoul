@@ -57,7 +57,7 @@ pip install -e ".[dev]"
 
 3. Set up MCP server:
 ```bash
-cd mcp_server
+cd apps/mcp-server
 npm install
 npm run build
 ```
@@ -126,7 +126,7 @@ Closes #123
 #### Pull Request Process
 
 1. Update the README.md or relevant documentation with details of changes.
-2. Update the CHANGELOG.md with a note of your changes.
+2. Update the `docs/project/CHANGELOG.md` with a note of your changes.
 3. Ensure the test suite passes.
 4. Submit your pull request with a clear description.
 
@@ -134,7 +134,7 @@ Closes #123
 
 If you have questions or need help, please:
 
-- Check the [README](README.md)
+- Check the [README](../../README.md)
 - Check existing [issues](https://github.com/yourusername/agentsoul/issues)
 - Open a new issue with the `question` label
 

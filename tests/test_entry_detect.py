@@ -83,7 +83,7 @@ class TestEntryDetection:
     def test_module_importable(self):
         """Test that the module can be imported."""
         import agentsoul.runtime.entry_detect
-        assert src.entry_detect is not None
+        assert agentsoul.entry_detect is not None
 
     def test_main_help_flag(self):
         """Test main function with --help flag exits with 0."""
@@ -93,7 +93,7 @@ class TestEntryDetection:
         try:
             sys.argv = ["entry_detect.py", "--help"]
             with pytest.raises(SystemExit) as excinfo:
-                src.entry_detect.main()
+                agentsoul.entry_detect.main()
             assert excinfo.value.code == 0
         finally:
             sys.argv = original_argv
@@ -106,7 +106,7 @@ class TestEntryDetection:
         try:
             sys.argv = ["entry_detect.py"]
             # Just check it doesn't crash - output goes to stdout
-            src.entry_detect.main()
+            agentsoul.entry_detect.main()
             # If we get here, it succeeded
             assert True
         finally:

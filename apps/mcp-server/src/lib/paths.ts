@@ -31,7 +31,7 @@ function findProjectRoot(): string {
     if (fs.existsSync(packagePath)) {
       try {
         const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
-        // Only match root package.json (agentsoul = root, agentsoul-mcp = mcp_server subpackage)
+        // Only match root package.json (agentsoul = root, agentsoul-mcp = apps/mcp-server subpackage)
         // agentsoul-mcp shouldn't be accepted as the root, continue searching upward
         if (pkg.name === 'agentsoul') {
           return currentDir;
@@ -53,7 +53,7 @@ function findProjectRoot(): string {
     return candidateRoot;
   }
 
-  // Fallback 2: try the parent of mcp_server from where we are (cwd might be AgentSoul/mcp_server)
+  // Fallback 2: try the parent of apps/mcp-server from where we are
   const cwdCandidateRoot = path.dirname(process.cwd());
   const cwdCandidateConfig = path.join(cwdCandidateRoot, 'config', 'persona.yaml');
   if (fs.existsSync(cwdCandidateConfig)) {

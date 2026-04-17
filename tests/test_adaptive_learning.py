@@ -182,7 +182,7 @@ class TestDataCollector(BaseTest):
             '{"session_id": "valid2", "timestamp": "' + datetime.now().isoformat() + '", "pad_before": {}, "pad_after": {}}\n'
         )
 
-        with patch('src.adaptive_learning.data_collector.log') as mock_log:
+        with patch('agentsoul.adaptive_learning.data_collector.log') as mock_log:
             records = self.collector.get_recent()
             self.assertEqual(len(records), 2)
             self.assertTrue(any("Failed to parse record" in str(call) for call in mock_log.call_args_list))
@@ -248,7 +248,7 @@ class TestPADAdjuster(BaseTest):
         """测试损坏的文件使用默认值"""
         self.adjuster.state_file.write_text("this is not valid json")
 
-        with patch('src.adaptive_learning.pad_adjuster.log') as mock_log:
+        with patch('agentsoul.adaptive_learning.pad_adjuster.log') as mock_log:
             adjuster = PADAdjuster(data_path=self.data_dir)
             state = adjuster.get_current_state()
             self.assertEqual(state.pleasure, 0.3)  # default
@@ -407,7 +407,7 @@ class TestPreferenceLearner(BaseTest):
         """测试加载损坏文件使用默认值"""
         self.learner.preferences_file.write_text("not valid json")
 
-        with patch('src.adaptive_learning.preference_learner.log') as mock_log:
+        with patch('agentsoul.adaptive_learning.preference_learner.log') as mock_log:
             learner = PreferenceLearner(data_path=self.data_dir)
             prefs = learner.get_preferences()
             self.assertEqual(prefs.preferred_tone, "neutral")

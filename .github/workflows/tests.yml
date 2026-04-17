@@ -30,7 +30,7 @@ jobs:
 
     - name: Build MCP server
       run: |
-        cd mcp_server
+        cd apps/mcp-server
         npm ci
         npm run build
 

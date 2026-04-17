@@ -266,11 +266,11 @@ class TestOpenAIAdapter(unittest.TestCase):
         from pathlib import Path
         temp_dir = tempfile.TemporaryDirectory()
         project_root = Path(temp_dir.name)
-        (project_root / "src").mkdir(parents=True)
+        (project_root / "src" / "agentsoul" / "templates").mkdir(parents=True)
 
         from agentsoul.storage.local import LocalSkillStorage
         adapter = OpenAIInjectionAdapter(skill_storage=LocalSkillStorage(project_root))
-        with open(project_root / "src" / "SKILL.md", "w", encoding="utf-8") as f:
+        with open(project_root / "src" / "agentsoul" / "templates" / "SKILL.md", "w", encoding="utf-8") as f:
             f.write("# SKILL rules content")
 
         prompt = adapter._build_base_rules()
@@ -286,7 +286,7 @@ class TestOpenAIAdapter(unittest.TestCase):
         from pathlib import Path
         temp_dir = tempfile.TemporaryDirectory()
         project_root = Path(temp_dir.name)
-        (project_root / "src").mkdir(parents=True)
+        (project_root / "src" / "agentsoul" / "templates").mkdir(parents=True)
 
         from agentsoul.storage.local import LocalSkillStorage
         adapter = OpenAIInjectionAdapter(skill_storage=LocalSkillStorage(project_root))

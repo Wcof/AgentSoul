@@ -104,6 +104,7 @@ def initialize_identity(agentsoul_root: Path, output_root: Path, verbose: bool =
 - **Name**: {ai_name}
 - **Nickname**: {ai.nickname or 'unset'}
 - **Role**: {ai.role}
+- **Personality**: {", ".join(ai.personality) if ai.personality else "unset"}
 """
     master_profile = f"""# Master Identity Profile
 

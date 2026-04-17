@@ -408,8 +408,8 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertIn("actions/setup-python@v6", tests_yml)
         self.assertIn("fail-fast: false", tests_yml)
         self.assertLess(tests_yml.index("Build MCP server"), tests_yml.index("Test with pytest"))
-        self.assertIn("python src/health_check.py --summary-json > health-summary.json", health_yml)
-        self.assertIn("python src/companionship_checker.py --summary-json > companionship-summary.json", companionship_yml)
+        self.assertIn("python3 -m agentsoul.health.check --summary-json > health-summary.json", health_yml)
+        self.assertIn("python3 -m agentsoul.health.companionship_checker --summary-json > companionship-summary.json", companionship_yml)
 
 
 if __name__ == "__main__":

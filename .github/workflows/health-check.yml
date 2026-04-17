@@ -34,7 +34,7 @@ jobs:
 
     - name: Run health check with score gate
       run: |
-        python src/health_check.py --summary-json --min-score 80
+        python3 -m agentsoul.health.check --summary-json --min-score 80
       continue-on-error: false
 
     - name: Install mypy and ruff for static checking
@@ -54,6 +54,6 @@ jobs:
     - name: Save summary for debugging
       if: always()
       run: |
-        python src/health_check.py --summary-json > health-summary.json
+        python3 -m agentsoul.health.check --summary-json > health-summary.json
         cat health-summary.json
       continue-on-error: true

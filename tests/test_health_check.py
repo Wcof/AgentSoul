@@ -43,7 +43,7 @@ class TestHealthCheck(BaseTest):
 
         # 创建基础目录结构
         (self.project_root / "config").mkdir()
-        (self.project_root / "var" / "data").mkdir()
+        (self.project_root / "var" / "data").mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):
         """清理临时目录"""
@@ -340,9 +340,9 @@ class TestHealthCheck(BaseTest):
         checker = HealthChecker(self.project_root)
         # Create ALL required subdirectories first before changing permissions
         required = [
-            "data/soul",
-            "data/soul/soul_variable",
-            "data/memory",
+            "var/data/soul",
+            "var/data/soul/soul_variable",
+            "var/data/memory",
         ]
         for d in required:
             (self.project_root / d).mkdir(parents=True, exist_ok=True)
