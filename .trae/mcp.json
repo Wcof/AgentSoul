@@ -3,7 +3,7 @@
     "agentsoul": {
       "command": "node",
       "args": [
-        "/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"
+        "/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"
       ]
     }
   }

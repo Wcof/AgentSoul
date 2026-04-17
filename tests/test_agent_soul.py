@@ -13,8 +13,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config_loader import ConfigLoader, create_default_persona
-from src.path_compat import PathResolver, convert_legacy_path
+from agentsoul.config.config_loader import ConfigLoader, create_default_persona
+from agentsoul.runtime.path_compat import PathResolver, convert_legacy_path
 
 
 class TestConfigLoader(unittest.TestCase):
@@ -303,15 +303,15 @@ class TestInstallScript(unittest.TestCase):
             self.assertNotIn("李小暖", content)
 
     def test__safe_file_stem(self):
-        from common import safe_file_stem
+        from agentsoul.common import safe_file_stem
         self.assertEqual(safe_file_stem("AgentName", "fallback"), "AgentName")
         self.assertEqual(safe_file_stem("", "fallback"), "fallback")
         self.assertEqual(safe_file_stem("Agent/Name", "fallback"), "AgentName")
         self.assertEqual(safe_file_stem("Agent\\Name", "fallback"), "AgentName")
 
     def test_initialize_identity_data(self):
-        from common import initialize_identity
-        from src.config_loader import create_default_persona
+        from agentsoul.common import initialize_identity
+        from agentsoul.config.config_loader import create_default_persona
 
         test_dir = tempfile.mkdtemp()
         try:
@@ -356,17 +356,17 @@ class TestOpenClawInstaller(unittest.TestCase):
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_init_creates_correct_paths(self):
-        from openclaw_server.src.openclaw_installer import OpenClawInstaller
+        from integrations.openclaw.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         self.assertEqual(installer.agent_path, Path(self.test_dir) / "agent")
 
     def test_is_installed_returns_false_when_not_installed(self):
-        from openclaw_server.src.openclaw_installer import OpenClawInstaller
+        from integrations.openclaw.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         self.assertFalse(installer.is_installed())
 
     def test_create_directory_structure(self):
-        from openclaw_server.src.openclaw_installer import OpenClawInstaller
+        from integrations.openclaw.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         installer._create_directory_structure("current_session")
 
@@ -390,7 +390,7 @@ class TestOpenClawInstaller(unittest.TestCase):
             self.assertTrue(directory.exists(), f"Directory should exist: {directory}")
 
     def test_copy_rule_files_reports_missing(self):
-        from openclaw_server.src.openclaw_installer import OpenClawInstaller
+        from integrations.openclaw.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(Path(self.test_dir), Path(self.test_dir) / "workspace")
 
         # With empty src dir, all files should be missing
@@ -398,7 +398,7 @@ class TestOpenClawInstaller(unittest.TestCase):
         self.assertEqual(len(missing), len(OpenClawInstaller.RULE_FILES))
 
     def test_create_default_soul_state_creates_file(self):
-        from openclaw_server.src.openclaw_installer import OpenClawInstaller
+        from integrations.openclaw.src.openclaw_installer import OpenClawInstaller
         installer = OpenClawInstaller(self.agentsoul_root, Path(self.test_dir))
         installer._create_directory_structure("current_session")
         installer._create_default_soul_state()
@@ -425,8 +425,8 @@ class TestAdaptiveLearning(unittest.TestCase):
         """Test that various emoji types are correctly counted."""
         from datetime import datetime
 
-        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
-        from src.adaptive_learning.preference_learner import PreferenceLearner
+        from agentsoul.learning.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from agentsoul.learning.adaptive_learning.preference_learner import PreferenceLearner
 
         learner = PreferenceLearner(data_path=Path(self.test_dir))
 
@@ -460,7 +460,7 @@ class TestAdaptiveLearning(unittest.TestCase):
         """Test that data collector correctly appends interaction records."""
         from datetime import datetime
 
-        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from agentsoul.learning.adaptive_learning.data_collector import DataCollector, InteractionRecord
 
         collector = DataCollector(data_path=Path(self.test_dir))
         session_id = collector.create_session()
@@ -483,7 +483,7 @@ class TestAdaptiveLearning(unittest.TestCase):
 
     def test_pad_adjuster_clamping(self):
         """Test that PAD adjuster correctly clamps values to [-1, 1] range."""
-        from src.adaptive_learning.pad_adjuster import PADAdjuster
+        from agentsoul.learning.adaptive_learning.pad_adjuster import PADAdjuster
 
         adjuster = PADAdjuster(data_path=Path(self.test_dir), learning_intensity=1.0)
 
@@ -509,7 +509,7 @@ class TestAdaptiveLearning(unittest.TestCase):
 
     def test_pad_adjuster_automatic_adjustment(self):
         """Test automatic arousal adjustment based on interaction length."""
-        from src.adaptive_learning.pad_adjuster import PADAdjuster
+        from agentsoul.learning.adaptive_learning.pad_adjuster import PADAdjuster
 
         adjuster = PADAdjuster(data_path=Path(self.test_dir), learning_intensity=1.0)
         initial_state = adjuster.get_current_state()
@@ -546,8 +546,8 @@ class TestAdaptiveLearning(unittest.TestCase):
         """Test basic preference learning functionality."""
         from datetime import datetime
 
-        from src.adaptive_learning.data_collector import DataCollector, InteractionRecord
-        from src.adaptive_learning.preference_learner import PreferenceLearner
+        from agentsoul.learning.adaptive_learning.data_collector import DataCollector, InteractionRecord
+        from agentsoul.learning.adaptive_learning.preference_learner import PreferenceLearner
 
         learner = PreferenceLearner(data_path=Path(self.test_dir))
         collector = DataCollector(data_path=Path(self.test_dir))
@@ -590,8 +590,8 @@ class TestAdaptiveLearning(unittest.TestCase):
         from datetime import datetime
         from pathlib import Path
 
-        from src.adaptive_learning.data_collector import InteractionRecord
-        from src.adaptive_learning.preference_learner import PreferenceLearner
+        from agentsoul.learning.adaptive_learning.data_collector import InteractionRecord
+        from agentsoul.learning.adaptive_learning.preference_learner import PreferenceLearner
 
         learner = PreferenceLearner(data_path=Path(self.test_dir))
 
@@ -649,7 +649,7 @@ class TestEnhancedMemory(unittest.TestCase):
 
     def test_tag_search_and_semantics(self):
         """Test tag search requires ALL tags to match (AND semantics)."""
-        from src.memory_enhanced.retrieval import MemoryRetriever
+        from agentsoul.memory.enhanced.retrieval import MemoryRetriever
 
         # Create test memories with different tag combinations
         self.create_test_memory("mem1", "First memory about project", ["project", "work"])
@@ -676,7 +676,7 @@ class TestEnhancedMemory(unittest.TestCase):
 
     def test_fuzzy_search_matches(self):
         """Test fuzzy search finds approximate matches."""
-        from src.memory_enhanced.retrieval import MemoryRetriever
+        from agentsoul.memory.enhanced.retrieval import MemoryRetriever
 
         # Exact match for both query words
         self.create_test_memory("exact", "Development roadmap discussion", [])
@@ -702,7 +702,7 @@ class TestEnhancedMemory(unittest.TestCase):
 
     def test_cache_works_and_invalidates(self):
         """Test that caching works and invalidation clears cache."""
-        from src.memory_enhanced.retrieval import MemoryRetriever
+        from agentsoul.memory.enhanced.retrieval import MemoryRetriever
 
         self.create_test_memory("first", "First content", [])
 
@@ -728,7 +728,7 @@ class TestEnhancedMemory(unittest.TestCase):
         """Test that search results are sorted by priority * relevance."""
         import json
 
-        from src.memory_enhanced.retrieval import MemoryRetriever
+        from agentsoul.memory.enhanced.retrieval import MemoryRetriever
 
         # Create two memories with same relevance but different priorities
         self.create_test_memory("high_prio", "Search result here", [])
@@ -755,7 +755,7 @@ class TestEnhancedMemory(unittest.TestCase):
 
     def test_empty_query_returns_all(self):
         """Test that empty query returns all matching memories sorted by priority/date."""
-        from src.memory_enhanced.retrieval import MemoryRetriever
+        from agentsoul.memory.enhanced.retrieval import MemoryRetriever
 
         # Create multiple memories
         self.create_test_memory("mem1", "Content one", ["tag1"])
@@ -793,14 +793,14 @@ class TestConfigManager(unittest.TestCase):
 
     def test_list_templates_when_empty(self):
         """Test listing templates when directory is empty."""
-        from src.config_manager.templates import TemplateManager
+        from agentsoul.config.config_manager.templates import TemplateManager
         manager = TemplateManager(templates_dir=self.templates_dir)
         templates = manager.list_templates()
         self.assertEqual(len(templates), 0)
 
     def test_list_templates_loads_all(self):
         """Test that all templates are loaded and sorted by name."""
-        from src.config_manager.templates import TemplateManager
+        from agentsoul.config.config_manager.templates import TemplateManager
         self.create_test_template("b", """agent:
   name: B
   role: Role B
@@ -818,7 +818,7 @@ class TestConfigManager(unittest.TestCase):
 
     def test_get_template_finds_correct_case_insensitive(self):
         """Test getting template by name is case insensitive."""
-        from src.config_manager.templates import TemplateManager
+        from agentsoul.config.config_manager.templates import TemplateManager
         self.create_test_template("Friendly", """agent:
   name: Friendly
   role: Friendly Assistant
@@ -834,7 +834,7 @@ class TestConfigManager(unittest.TestCase):
 
     def test_template_cache_works(self):
         """Test that caching works and refresh_cache invalidates."""
-        from src.config_manager.templates import TemplateManager
+        from agentsoul.config.config_manager.templates import TemplateManager
         self.create_test_template("test", """agent:
   name: Test
   role: Test Role
@@ -859,7 +859,7 @@ class TestConfigManager(unittest.TestCase):
 
     def test_validation_catches_invalid_types(self):
         """Test that ConfigValidator catches type errors."""
-        from src.config_manager.validator import ConfigValidator
+        from agentsoul.config.config_manager.validator import ConfigValidator
 
         validator = ConfigValidator()
         # Invalid: personality is not a list
@@ -876,7 +876,7 @@ class TestConfigManager(unittest.TestCase):
 
     def test_validation_accepts_valid_config(self):
         """Test that valid config passes validation."""
-        from src.config_manager.validator import ConfigValidator
+        from agentsoul.config.config_manager.validator import ConfigValidator
 
         validator = ConfigValidator()
         config = {
@@ -906,7 +906,7 @@ class TestConfigManager(unittest.TestCase):
 
     def test_validation_catches_invalid_tone(self):
         """Test validation catches invalid tone value."""
-        from src.config_manager.validator import ConfigValidator
+        from agentsoul.config.config_manager.validator import ConfigValidator
         validator = ConfigValidator()
         config = {
             "agent": {
@@ -921,7 +921,7 @@ class TestConfigManager(unittest.TestCase):
 
     def test_behavior_validation_checks_boolean(self):
         """Test behavior validation checks that boolean fields are actually bool."""
-        from src.config_manager.validator import ConfigValidator
+        from agentsoul.config.config_manager.validator import ConfigValidator
         validator = ConfigValidator()
         config = {
             "agent": {

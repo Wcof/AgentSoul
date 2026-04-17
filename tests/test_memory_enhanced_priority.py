@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import unittest
 
-from src.memory_enhanced.priority import (
+from agentsoul.memory.enhanced.priority import (
     PriorityLevel,
     MemoryPriority,
     PriorityManager,

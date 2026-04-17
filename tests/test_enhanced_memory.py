@@ -6,7 +6,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from src.memory_enhanced.tags import TagManager
+from agentsoul.memory.enhanced.tags import TagManager
 
 
 class TestEnhancedMemoryTags:

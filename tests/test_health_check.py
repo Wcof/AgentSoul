@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from src import (
+from agentsoul import (
     HealthChecker,
     HealthIssue,
     HealthReport,
@@ -43,7 +43,7 @@ class TestHealthCheck(BaseTest):
 
         # 创建基础目录结构
         (self.project_root / "config").mkdir()
-        (self.project_root / "data").mkdir()
+        (self.project_root / "var" / "data").mkdir()
 
     def tearDown(self):
         """清理临时目录"""
@@ -83,7 +83,7 @@ class TestHealthCheck(BaseTest):
             yaml.dump(persona_config, f)
 
         # 创建数据目录
-        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "soul" / "soul_variable").mkdir(parents=True)
 
         report = checker.run_check(include_memory_samples=False)
         self.assertIsNotNone(report)
@@ -100,7 +100,7 @@ class TestHealthCheck(BaseTest):
         checker = HealthChecker(self.project_root)
 
         # 创建目录和无效 JSON
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         with open(state_dir / "state_vector.json", "w", encoding="utf-8") as f:
             f.write("not a valid json {{{")
@@ -131,7 +131,7 @@ class TestHealthCheck(BaseTest):
         checker = HealthChecker(self.project_root)
 
         # 创建目录和无效状态文件
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state = {
             "pleasure": 2.5,  # Out of range
@@ -159,7 +159,7 @@ class TestHealthCheck(BaseTest):
         checker = HealthChecker(self.project_root)
 
         # 创建目录和有效状态文件
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state = {
             "version": "1.0.0",
@@ -198,7 +198,7 @@ class TestHealthCheck(BaseTest):
         with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
             yaml.dump(persona_config, f)
 
-        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "soul" / "soul_variable").mkdir(parents=True)
 
         report = checker.run_check(include_memory_samples=False)
         # Should be healthy (behavior.yaml is optional, warning only)
@@ -292,7 +292,7 @@ class TestHealthCheck(BaseTest):
         """测试归档一致性检查"""
         from datetime import datetime, timedelta
         checker = HealthChecker(self.project_root)
-        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir = self.project_root / "var" / "data" / "memory" / "day"
         day_dir.mkdir(parents=True)
 
         # Recent day - should not warn
@@ -305,7 +305,7 @@ class TestHealthCheck(BaseTest):
         """测试超期日记忆应该被归档但未归档会产生警告"""
         from datetime import datetime, timedelta
         checker = HealthChecker(self.project_root)
-        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir = self.project_root / "var" / "data" / "memory" / "day"
         day_dir.mkdir(parents=True)
 
         # 8 days old - should warn
@@ -318,7 +318,7 @@ class TestHealthCheck(BaseTest):
     def test_check_memory_files_empty_file(self):
         """测试空文件产生info提示"""
         checker = HealthChecker(self.project_root)
-        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir = self.project_root / "var" / "data" / "memory" / "day"
         day_dir.mkdir(parents=True)
         (day_dir / "2026-04-07.md").write_text("   \n   ")
 
@@ -347,7 +347,7 @@ class TestHealthCheck(BaseTest):
         for d in required:
             (self.project_root / d).mkdir(parents=True, exist_ok=True)
         # Make data/soul/soul_variable not writable (it already exists now)
-        test_dir = self.project_root / "data" / "soul" / "soul_variable"
+        test_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         os.chmod(test_dir, 0o444)
         issues = checker.check_directory_structure()
         error_issues = [i for i in issues if i.level == "error" and "Directory not writable" in i.message]
@@ -384,7 +384,7 @@ class TestHealthCheck(BaseTest):
     def test_check_soul_state_missing_required_field(self):
         """测试灵魂状态缺少必填字段产生错误"""
         checker = HealthChecker(self.project_root)
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state = {
             # Missing pleasure
@@ -401,7 +401,7 @@ class TestHealthCheck(BaseTest):
     def test_check_soul_state_no_version_info(self):
         """测试灵魂状态没有版本产生信息提示"""
         checker = HealthChecker(self.project_root)
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state = {
             "pleasure": 0.5,
@@ -418,7 +418,7 @@ class TestHealthCheck(BaseTest):
     def test_check_soul_state_missing_history(self):
         """测试灵魂状态缺少history字段产生警告"""
         checker = HealthChecker(self.project_root)
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state = {
             "pleasure": 0.5,
@@ -437,7 +437,7 @@ class TestHealthCheck(BaseTest):
     def test_check_soul_state_permission_error(self):
         """测试灵魂状态文件读取权限错误产生错误"""
         checker = HealthChecker(self.project_root)
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state_path = state_dir / "state_vector.json"
         with open(state_path, "w", encoding="utf-8") as f:
@@ -472,7 +472,7 @@ class TestHealthCheck(BaseTest):
         """测试超期周记忆应该归档到月但未归档产生警告"""
         from datetime import datetime
         checker = HealthChecker(self.project_root)
-        week_dir = self.project_root / "data" / "memory" / "week"
+        week_dir = self.project_root / "var" / "data" / "memory" / "week"
         week_dir.mkdir(parents=True)
 
         # Use a known old week that will definitely parse and be >30 days old
@@ -490,14 +490,14 @@ class TestHealthCheck(BaseTest):
         """测试超期月记忆应该归档到年但未归档产生警告"""
         from datetime import datetime
         checker = HealthChecker(self.project_root)
-        month_dir = self.project_root / "data" / "memory" / "month"
+        month_dir = self.project_root / "var" / "data" / "memory" / "month"
         month_dir.mkdir(parents=True)
 
         # Use a known old month that will definitely parse and be >365 days old
         # 2023-10 is from 2023, which is way > 365 days old as of April 2026
         (month_dir / "2023-10.md").write_text("content")
         # Ensure year directory exists so check completes normally
-        (self.project_root / "data" / "memory" / "year").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "memory" / "year").mkdir(parents=True)
         issues = checker.check_archival_consistency()
         warnings = [i for i in issues if "should be archived to yearly" in i.message]
         # On most dates this will trigger, but if test runs in the same calendar year it might not
@@ -509,7 +509,7 @@ class TestHealthCheck(BaseTest):
         """测试归档一致性检查跳过.gitkeep"""
         from datetime import datetime, timedelta
         checker = HealthChecker(self.project_root)
-        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir = self.project_root / "var" / "data" / "memory" / "day"
         day_dir.mkdir(parents=True)
         (day_dir / ".gitkeep").write_text("")
         issues = checker.check_archival_consistency()
@@ -525,7 +525,7 @@ class TestHealthCheck(BaseTest):
     def test_check_memory_files_failed_scan(self):
         """测试扫描记忆目录失败产生警告"""
         checker = HealthChecker(self.project_root)
-        day_dir = self.project_root / "data" / "memory" / "day"
+        day_dir = self.project_root / "var" / "data" / "memory" / "day"
         day_dir.mkdir(parents=True)
         # Need execute permission to list directory; removing execute causes PermissionError
         # 0o400 = read, no execute → cannot list
@@ -544,7 +544,7 @@ class TestHealthCheck(BaseTest):
     def test_check_memory_files_reports_archived_topics(self):
         """测试主题归档目录存在报告归档文件数量"""
         checker = HealthChecker(self.project_root)
-        topic_dir = self.project_root / "data" / "memory" / "topic" / "archive"
+        topic_dir = self.project_root / "var" / "data" / "memory" / "topic" / "archive"
         topic_dir.mkdir(parents=True)
         (topic_dir / "topic1.md").write_text("content")
         (topic_dir / "topic2.md").write_text("content")
@@ -556,7 +556,7 @@ class TestHealthCheck(BaseTest):
     def test_run_check_soul_version_read_failed(self):
         """测试读取灵魂版本失败返回None"""
         checker = HealthChecker(self.project_root)
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state_path = state_dir / "state_vector.json"
         with open(state_path, "w", encoding="utf-8") as f:
@@ -654,7 +654,7 @@ class TestHealthCheck(BaseTest):
         sys.exit = mock_exit
         sys.argv = ["health_check.py"]  # No arguments
         try:
-            from src.health_check import main
+            from agentsoul.health.check import main
             main()
             # Just check it runs without uncaught exception
         except SystemExit as e:
@@ -746,7 +746,7 @@ class TestHealthCheck(BaseTest):
         sys.exit = mock_exit
         sys.argv = ["health_check.py", "--output", str(self.project_root / "report.md")]
         try:
-            from src.health_check import main
+            from agentsoul.health.check import main
             main()
         except SystemExit:
             pass
@@ -784,11 +784,11 @@ class TestHealthCheck(BaseTest):
         }
         with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
             yaml.dump(persona_config, f)
-        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "soul" / "soul_variable").mkdir(parents=True)
 
         sys.argv = ["health_check.py", "--json"]
         try:
-            from src.health_check import main
+            from agentsoul.health.check import main
             main()
         except SystemExit:
             pass
@@ -831,7 +831,7 @@ class TestHealthCheck(BaseTest):
 
         sys.argv = ["health_check.py", "--json", "--output", str(self.project_root / "report.json")]
         try:
-            from src.health_check import main
+            from agentsoul.health.check import main
             main()
         except SystemExit:
             pass
@@ -876,7 +876,7 @@ class TestHealthCheck(BaseTest):
 
         sys.argv = ["health_check.py", "--project-root", str(self.project_root)]
         try:
-            from src.health_check import main
+            from agentsoul.health.check import main
             main()
         except SystemExit:
             pass

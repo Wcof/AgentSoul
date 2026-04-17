@@ -9,9 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.config_manager.templates import TemplateManager
-from src.config_manager.validator import ConfigValidator
-from common import log
+from agentsoul.config.config_manager.templates import TemplateManager
+from agentsoul.config.config_manager.validator import ConfigValidator
+from agentsoul.common import log
 
 
 def example_list_templates():
@@ -50,7 +50,7 @@ def example_validate_config():
     print("示例 3: 验证当前配置")
     print("=" * 60)
 
-    from src.config_loader import ConfigLoader
+    from agentsoul.config.config_loader import ConfigLoader
 
     loader = ConfigLoader()
     config = loader.to_legacy_format()

@@ -13,9 +13,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
 
-from src import InjectionConfig, OpenAIInjectionAdapter
-from src.abstract import UnifiedSoulStorage
-from src.storage.local import (
+from agentsoul import InjectionConfig, OpenAIInjectionAdapter
+from agentsoul.abstract import UnifiedSoulStorage
+from agentsoul.storage.local import (
     LocalMemoryStorage,
     LocalPersonaStorage,
     LocalSkillStorage,
@@ -169,9 +169,9 @@ class TestOpenAIAdapter(unittest.TestCase):
         from pathlib import Path
         temp_dir = tempfile.TemporaryDirectory()
         project_root = Path(temp_dir.name)
-        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+        (project_root / "var" / "data" / "memory" / "day").mkdir(parents=True)
 
-        from src.storage.local import LocalMemoryStorage
+        from agentsoul.storage.local import LocalMemoryStorage
 
         adapter = OpenAIInjectionAdapter(
             memory_storage=LocalMemoryStorage(project_root))
@@ -191,9 +191,9 @@ class TestOpenAIAdapter(unittest.TestCase):
         from pathlib import Path
         temp_dir = tempfile.TemporaryDirectory()
         project_root = Path(temp_dir.name)
-        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+        (project_root / "var" / "data" / "memory" / "day").mkdir(parents=True)
 
-        from src.storage.local import LocalMemoryStorage
+        from agentsoul.storage.local import LocalMemoryStorage
 
         adapter = OpenAIInjectionAdapter(
             memory_storage=LocalMemoryStorage(project_root))
@@ -227,7 +227,7 @@ class TestOpenAIAdapter(unittest.TestCase):
         with open(project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
             yaml.dump(persona_config, f)
 
-        from src.storage.local import LocalPersonaStorage
+        from agentsoul.storage.local import LocalPersonaStorage
         adapter = OpenAIInjectionAdapter(persona_storage=LocalPersonaStorage(project_root))
         prompt = adapter._build_persona_prompt()
 
@@ -246,12 +246,12 @@ class TestOpenAIAdapter(unittest.TestCase):
         from pathlib import Path
         temp_dir = tempfile.TemporaryDirectory()
         project_root = Path(temp_dir.name)
-        (project_root / "data" / "memory" / "day").mkdir(parents=True)
+        (project_root / "var" / "data" / "memory" / "day").mkdir(parents=True)
 
-        from src.storage.local import LocalMemoryStorage
+        from agentsoul.storage.local import LocalMemoryStorage
         adapter = OpenAIInjectionAdapter(memory_storage=LocalMemoryStorage(project_root))
         today = adapter._today
-        with open(project_root / "data" / "memory" / "day" / f"{today}.md", "w", encoding="utf-8") as f:
+        with open(project_root / "var" / "data" / "memory" / "day" / f"{today}.md", "w", encoding="utf-8") as f:
             f.write("# Today's memory content")
 
         prompt = adapter._build_recent_memory_prompt()
@@ -268,7 +268,7 @@ class TestOpenAIAdapter(unittest.TestCase):
         project_root = Path(temp_dir.name)
         (project_root / "src").mkdir(parents=True)
 
-        from src.storage.local import LocalSkillStorage
+        from agentsoul.storage.local import LocalSkillStorage
         adapter = OpenAIInjectionAdapter(skill_storage=LocalSkillStorage(project_root))
         with open(project_root / "src" / "SKILL.md", "w", encoding="utf-8") as f:
             f.write("# SKILL rules content")
@@ -288,7 +288,7 @@ class TestOpenAIAdapter(unittest.TestCase):
         project_root = Path(temp_dir.name)
         (project_root / "src").mkdir(parents=True)
 
-        from src.storage.local import LocalSkillStorage
+        from agentsoul.storage.local import LocalSkillStorage
         adapter = OpenAIInjectionAdapter(skill_storage=LocalSkillStorage(project_root))
         prompt = adapter._build_base_rules()
 

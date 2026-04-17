@@ -82,13 +82,13 @@ We use:
 Before submitting code:
 ```bash
 # Format Python code
-black src/ tests/ scripts/ openclaw_server/ common/
+black src/ tests/ scripts/ integrations/openclaw/ common/
 
 # Lint Python code
-ruff check src/ tests/ scripts/ openclaw_server/ common/
+ruff check src/ tests/ scripts/ integrations/openclaw/ common/
 
 # Type check Python code
-mypy src/ tests/ scripts/ openclaw_server/ common/
+mypy src/ tests/ scripts/ integrations/openclaw/ common/
 ```
 
 #### Commit Messages

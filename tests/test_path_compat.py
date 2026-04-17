@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import pytest
 
-from src.path_compat import PathMapping, ResolveResult, PathResolver, resolve_path, convert_legacy_path, is_legacy_path
+from agentsoul.runtime.path_compat import PathMapping, ResolveResult, PathResolver, resolve_path, convert_legacy_path, is_legacy_path
 
 
 class TestPathCompat:
@@ -211,7 +211,7 @@ class TestPathCompat:
 
         # main 不存在，但 __name__ == "__main__" 块在导入时不会执行
         # 我们直接复制代码来运行
-        from src.path_compat import PathResolver
+        from agentsoul.runtime.path_compat import PathResolver
         resolver = PathResolver()
 
         test_paths = [

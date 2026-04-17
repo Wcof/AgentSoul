@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 from pathlib import Path
 
-from src.health_visualization.cli import main
+from agentsoul.health.visualization.cli import main
 
 
 class BaseTest(unittest.TestCase):
@@ -156,13 +156,13 @@ class TestModuleImport(BaseTest):
 
     def test_module_importable(self):
         """测试模块可导入"""
-        from src.health_visualization import cli
+        from agentsoul.health.visualization import cli
         self.assertIsNotNone(cli)
         self.assertTrue(hasattr(cli, "main"))
 
     def test_HealthChartExporter_importable(self):
         """测试 HealthChartExporter 可导入"""
-        from src.health_visualization.health_chart import HealthChartExporter
+        from agentsoul.health.visualization.health_chart import HealthChartExporter
         exporter = HealthChartExporter()
         self.assertIsNotNone(exporter)
         self.assertTrue(hasattr(exporter, "export_svg"))

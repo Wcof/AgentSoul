@@ -20,13 +20,13 @@ from typing import cast
 import unittest
 import yaml
 
-from src.storage.local import (
+from agentsoul.storage.local import (
     LocalPersonaStorage,
     LocalSoulStateStorage,
     LocalMemoryStorage,
     LocalSkillStorage,
 )
-from src.abstract import (
+from agentsoul.abstract import (
     MemoryConflict,
     SoulVersion,
 )

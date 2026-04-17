@@ -18,7 +18,7 @@ from pathlib import Path
 import yaml
 import json
 
-from src import (
+from agentsoul import (
     CompanionshipChecker,
     CheckResult,
     OverallReport,
@@ -43,7 +43,7 @@ class TestCompanionshipChecker(BaseTest):
 
         # 创建基础目录结构
         (self.project_root / "config").mkdir()
-        (self.project_root / "data").mkdir()
+        (self.project_root / "var" / "data").mkdir()
         (self.project_root / "src").mkdir()
 
         # Create required src directory for skill check
@@ -97,12 +97,12 @@ class TestCompanionshipChecker(BaseTest):
             yaml.dump(persona_config, f)
 
         # 创建数据目录
-        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
-        (self.project_root / "data" / "memory" / "day").mkdir(parents=True)
-        (self.project_root / "data" / "memory" / "week").mkdir()
-        (self.project_root / "data" / "memory" / "month").mkdir()
-        (self.project_root / "data" / "memory" / "year").mkdir()
-        (self.project_root / "data" / "memory" / "topic").mkdir()
+        (self.project_root / "var" / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "memory" / "day").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "memory" / "week").mkdir()
+        (self.project_root / "var" / "data" / "memory" / "month").mkdir()
+        (self.project_root / "var" / "data" / "memory" / "year").mkdir()
+        (self.project_root / "var" / "data" / "memory" / "topic").mkdir()
 
         # Write initial soul state
         state = {
@@ -111,7 +111,7 @@ class TestCompanionshipChecker(BaseTest):
             "arousal": 0.2,
             "dominance": 0.3,
         }
-        with open(self.project_root / "data" / "soul" / "soul_variable" / "state_vector.json", "w") as f:
+        with open(self.project_root / "var" / "data" / "soul" / "soul_variable" / "state_vector.json", "w") as f:
             json.dump(state, f)
 
         report = checker.run_full_check()
@@ -185,7 +185,7 @@ class TestCompanionshipChecker(BaseTest):
     def test_check_state_recovery_valid_state(self):
         """测试状态恢复检查 - 有效状态"""
         checker = CompanionshipChecker(self.project_root)
-        state_dir = self.project_root / "data" / "soul" / "soul_variable"
+        state_dir = self.project_root / "var" / "data" / "soul" / "soul_variable"
         state_dir.mkdir(parents=True)
         state = {
             "pleasure": 0.3,
@@ -329,7 +329,7 @@ class TestCompanionshipChecker(BaseTest):
         sys.stdout = captured_output
         sys.exit = mock_exit
         try:
-            from src.companionship_checker import main
+            from agentsoul.health.companionship_checker import main
             # Set sys.argv with --json option
             sys.argv = ["companionship_checker.py", "--json", "--output", str(self.project_root / "output.json")]
             main()
@@ -367,7 +367,7 @@ class TestCompanionshipChecker(BaseTest):
         sys.stdout = captured_output
         sys.exit = mock_exit
         try:
-            from src.companionship_checker import main
+            from agentsoul.health.companionship_checker import main
             # Set sys.argv
             sys.argv = ["companionship_checker.py", "--output", str(self.project_root / "output.md")]
             main()
@@ -403,7 +403,7 @@ class TestCompanionshipChecker(BaseTest):
         sys.stdout = captured_output
         sys.exit = mock_exit
         try:
-            from src.companionship_checker import main
+            from agentsoul.health.companionship_checker import main
             # setUp 环境分数不会达到 100，确保触发失败门控
             sys.argv = [
                 "companionship_checker.py",
@@ -443,7 +443,7 @@ class TestCompanionshipChecker(BaseTest):
         sys.stdout = captured_output
         sys.exit = mock_exit
         try:
-            from src.companionship_checker import main
+            from agentsoul.health.companionship_checker import main
             sys.argv = [
                 "companionship_checker.py",
                 "--output",
@@ -480,7 +480,7 @@ class TestCompanionshipChecker(BaseTest):
         sys.stdout = captured_output
         sys.exit = mock_exit
         try:
-            from src.companionship_checker import main
+            from agentsoul.health.companionship_checker import main
             sys.argv = [
                 "companionship_checker.py",
                 "--summary-json",
@@ -524,7 +524,7 @@ class TestCompanionshipChecker(BaseTest):
         sys.stdout = captured_output
         sys.exit = mock_exit
         try:
-            from src.companionship_checker import main
+            from agentsoul.health.companionship_checker import main
             sys.argv = [
                 "companionship_checker.py",
                 "--summary-json",
@@ -555,9 +555,9 @@ class TestCompanionshipChecker(BaseTest):
         checker = CompanionshipChecker(self.project_root)
         # Create all required directories
         for dirname in ["day", "week", "month", "year", "topic"]:
-            (self.project_root / "data" / "memory" / dirname).mkdir(parents=True)
+            (self.project_root / "var" / "data" / "memory" / dirname).mkdir(parents=True)
         # Create an empty topic file
-        (self.project_root / "data" / "memory" / "topic" / "test-topic.md").write_text("")
+        (self.project_root / "var" / "data" / "memory" / "topic" / "test-topic.md").write_text("")
 
         result = checker.check_memory_continuity()
         self.assertIsInstance(result, CheckResult)
@@ -602,11 +602,11 @@ class TestCompanionshipChecker(BaseTest):
         }
         with open(self.project_root / "config" / "persona.yaml", "w", encoding="utf-8") as f:
             yaml.dump(persona_config, f)
-        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "soul" / "soul_variable").mkdir(parents=True)
         for dirname in ["day", "week", "month", "year", "topic"]:
-            (self.project_root / "data" / "memory" / dirname).mkdir(parents=True)
+            (self.project_root / "var" / "data" / "memory" / dirname).mkdir(parents=True)
         state = {"pleasure": 0.3, "arousal": 0.2, "dominance": 0.3}
-        with open(self.project_root / "data" / "soul" / "soul_variable" / "state_vector.json", "w") as f:
+        with open(self.project_root / "var" / "data" / "soul" / "soul_variable" / "state_vector.json", "w") as f:
             json.dump(state, f)
 
         report = checker.run_full_check()

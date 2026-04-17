@@ -29,7 +29,7 @@ class TestMemoryProtocolReadability(BaseTest):
     def test_protocol_exists_in_chinese_yaml(self):
         """测试协议内容已添加到中文语言文件"""
         project_root = Path(__file__).parent.parent
-        chinese_file = project_root / "mcp_server" / "src" / "language" / "chinese.yaml"
+        chinese_file = project_root / "apps" / "mcp-server" / "src" / "language" / "chinese.yaml"
 
         self.assertTrue(chinese_file.exists())
         content = chinese_file.read_text(encoding="utf-8")
@@ -45,7 +45,7 @@ class TestMemoryProtocolReadability(BaseTest):
     def test_protocol_exists_in_english_yaml(self):
         """测试协议内容已添加到英文语言文件"""
         project_root = Path(__file__).parent.parent
-        english_file = project_root / "mcp_server" / "src" / "language" / "english.yaml"
+        english_file = project_root / "apps" / "mcp-server" / "src" / "language" / "english.yaml"
 
         self.assertTrue(english_file.exists())
         content = english_file.read_text(encoding="utf-8")
@@ -56,7 +56,7 @@ class TestMemoryProtocolReadability(BaseTest):
     def test_all_new_tools_are_described(self):
         """测试所有新工具都有描述"""
         project_root = Path(__file__).parent.parent
-        chinese_file = project_root / "mcp_server" / "src" / "language" / "chinese.yaml"
+        chinese_file = project_root / "apps" / "mcp-server" / "src" / "language" / "chinese.yaml"
         content = chinese_file.read_text(encoding="utf-8")
 
         # 新添加的工具都应该有描述
@@ -75,7 +75,7 @@ class TestMemoryProtocolReadability(BaseTest):
     def test_mcp_index_includes_all_new_tools(self):
         """测试 MCP index 包含所有新工具"""
         project_root = Path(__file__).parent.parent
-        index_file = project_root / "mcp_server" / "src" / "index.ts"
+        index_file = project_root / "apps" / "mcp-server" / "src" / "index.ts"
 
         self.assertTrue(index_file.exists())
         content = index_file.read_text(encoding="utf-8")
@@ -103,8 +103,8 @@ class TestWALWriteAheadLog(BaseTest):
         self.project_root = Path(self.temp_dir.name)
 
         # 创建数据目录结构
-        (self.project_root / "data" / "wal").mkdir(parents=True)
-        self.wal_path = self.project_root / "data" / "wal" / "write_log.jsonl"
+        (self.project_root / "var" / "data" / "wal").mkdir(parents=True)
+        self.wal_path = self.project_root / "var" / "data" / "wal" / "write_log.jsonl"
 
     def tearDown(self):
         """清理临时目录"""
@@ -114,7 +114,7 @@ class TestWALWriteAheadLog(BaseTest):
         """测试WAL文件在写入时被创建"""
         # 我们不需要运行Node.js，只验证MCP服务器代码中包含WAL逻辑
         project_root = Path(__file__).parent.parent
-        utils_ts = project_root / "mcp_server" / "src" / "lib" / "utils.ts"
+        utils_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "utils.ts"
 
         self.assertTrue(utils_ts.exists())
         content = utils_ts.read_text(encoding="utf-8")
@@ -126,7 +126,7 @@ class TestWALWriteAheadLog(BaseTest):
     def test_wal_includes_required_fields(self):
         """测试WAL日志条目包含必需字段"""
         project_root = Path(__file__).parent.parent
-        storage_ts = project_root / "mcp_server" / "src" / "storage.ts"
+        storage_ts = project_root / "apps" / "mcp-server" / "src" / "storage.ts"
         content = storage_ts.read_text(encoding="utf-8")
 
         # 检查关键字段 - 检查logWAL方法定义包含这些字段结构
@@ -138,7 +138,7 @@ class TestWALWriteAheadLog(BaseTest):
     def test_all_write_operations_are_logged(self):
         """测试所有写操作都有WAL日志"""
         project_root = Path(__file__).parent.parent
-        storage_ts = project_root / "mcp_server" / "src" / "storage.ts"
+        storage_ts = project_root / "apps" / "mcp-server" / "src" / "storage.ts"
         content = storage_ts.read_text(encoding="utf-8")
 
         write_methods = [
@@ -156,7 +156,7 @@ class TestWALWriteAheadLog(BaseTest):
     def test_entity_memory_wal_logging(self):
         """测试实体记忆写入包含WAL日志"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         self.assertIn("logWAL", content)
@@ -165,7 +165,7 @@ class TestWALWriteAheadLog(BaseTest):
     def test_kv_cache_wal_logging(self):
         """测试KV缓存写入包含WAL日志"""
         project_root = Path(__file__).parent.parent
-        kv_cache_ts = project_root / "mcp_server" / "src" / "lib" / "kv-cache" / "index.ts"
+        kv_cache_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "kv-cache" / "index.ts"
         content = kv_cache_ts.read_text(encoding="utf-8")
 
         self.assertIn("logWAL", content)
@@ -173,7 +173,7 @@ class TestWALWriteAheadLog(BaseTest):
     def test_soul_board_wal_logging(self):
         """测试Soul Board写入包含WAL日志"""
         project_root = Path(__file__).parent.parent
-        soul_engine_ts = project_root / "mcp_server" / "src" / "lib" / "soul-engine.ts"
+        soul_engine_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "soul-engine.ts"
         content = soul_engine_ts.read_text(encoding="utf-8")
 
         self.assertIn("logWAL", content)
@@ -185,7 +185,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_class_exists_correct_interface(self):
         """测试VerbatimEvidence类存在且接口正确"""
         project_root = Path(__file__).parent.parent
-        verbatim_ts = project_root / "mcp_server" / "src" / "lib" / "verbatim-evidence.ts"
+        verbatim_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "verbatim-evidence.ts"
 
         self.assertTrue(verbatim_ts.exists())
         content = verbatim_ts.read_text(encoding="utf-8")
@@ -201,7 +201,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_interface_has_required_fields(self):
         """测试VerbatimFragment接口包含所有必需字段"""
         project_root = Path(__file__).parent.parent
-        verbatim_ts = project_root / "mcp_server" / "src" / "lib" / "verbatim-evidence.ts"
+        verbatim_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "verbatim-evidence.ts"
         content = verbatim_ts.read_text(encoding="utf-8")
 
         required_fields = [
@@ -215,7 +215,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_respects_security_levels(self):
         """测试Verbatim正确尊重安全级别"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         # 检查SEALED级别被处理
@@ -225,7 +225,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_search_filters_work(self):
         """测试Verbatim搜索支持所有过滤器"""
         project_root = Path(__file__).parent.parent
-        verbatim_ts = project_root / "mcp_server" / "src" / "lib" / "verbatim-evidence.ts"
+        verbatim_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "verbatim-evidence.ts"
         content = verbatim_ts.read_text(encoding="utf-8")
 
         # 检查所有过滤器参数
@@ -236,7 +236,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_uses_sharding(self):
         """测试Verbatim使用首字母分库避免太多文件在一个目录"""
         project_root = Path(__file__).parent.parent
-        verbatim_ts = project_root / "mcp_server" / "src" / "lib" / "verbatim-evidence.ts"
+        verbatim_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "verbatim-evidence.ts"
         content = verbatim_ts.read_text(encoding="utf-8")
 
         self.assertIn("subdir = id[0]", content)
@@ -245,7 +245,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_handles_path_traversal(self):
         """测试Verbatim正确处理路径遍历攻击防护"""
         project_root = Path(__file__).parent.parent
-        verbatim_ts = project_root / "mcp_server" / "src" / "lib" / "verbatim-evidence.ts"
+        verbatim_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "verbatim-evidence.ts"
         content = verbatim_ts.read_text(encoding="utf-8")
 
         self.assertIn("safePath", content)
@@ -254,7 +254,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_tool_handlers_are_exported(self):
         """测试Verbatim工具处理器都已导出"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         handlers = [
@@ -270,7 +270,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_schemas_are_exported(self):
         """测试Verbatim schema都已导出"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         schemas = [
@@ -286,7 +286,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_security_level_enum_is_correct(self):
         """测试安全级别枚举正确"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("'PUBLIC'", content)
@@ -297,7 +297,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_security_filtering_function_exists(self):
         """测试统一安全过滤函数 applySecurity 存在"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("function applySecurity", content)
@@ -307,7 +307,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_never_returns_sealed_text(self):
         """测试SEALED级别永远不返回明文"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("SEALED: never return text", content)
@@ -316,7 +316,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_protected_default_masked(self):
         """测试PROTECTED级别默认掩码，仅显式请求返回明文"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("includeProtectedText", content)
@@ -326,7 +326,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_get_has_include_protected_text_param(self):
         """测试verbatim_get 包含 include_protected_text 参数"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("include_protected_text: z.boolean().optional()", content)
@@ -334,7 +334,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_search_has_include_protected_text_param(self):
         """测试verbatim_search 包含 include_protected_text 参数"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("include_protected_text: z.boolean().optional()", content)
@@ -342,21 +342,21 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_get_has_can_view_protected_param(self):
         """测试verbatim_get 包含 can_view_protected 参数（双授权门）"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
         self.assertIn("can_view_protected: z.boolean().optional()", content)
 
     def test_verbatim_search_has_can_view_protected_param(self):
         """测试verbatim_search 包含 can_view_protected 参数（双授权门）"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
         self.assertIn("can_view_protected: z.boolean().optional()", content)
 
     def test_verbatim_protected_requires_double_authorization(self):
         """测试PROTECTED需要双授权：只有include_protected_text=true但can_view_protected=false仍然掩码"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
         # 双授权门逻辑存在
         self.assertIn("includeProtectedText && canViewProtected", content)
@@ -366,7 +366,7 @@ class TestVerbatimEvidenceLayer(BaseTest):
     def test_verbatim_apply_security_accepts_can_view_parameter(self):
         """测试applySecurity函数接受canViewProtected参数"""
         project_root = Path(__file__).parent.parent
-        verbatim_tool_ts = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
+        verbatim_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
         content = verbatim_tool_ts.read_text(encoding="utf-8")
         self.assertIn("canViewProtected: boolean = false", content)
         # 逻辑：只有两个都为true才返回明文
@@ -379,7 +379,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_entity_fact_interface_exists(self):
         """测试EntityFact接口存在且包含必需字段"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         self.assertIn("export interface EntityFact", content)
@@ -393,7 +393,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_entity_attributes_are_fact_array(self):
         """测试实体属性改为事实数组"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         self.assertIn("attributes: Record<string, EntityFact[]>", content)
@@ -401,7 +401,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_backward_compatibility_exists(self):
         """测试向后兼容性 - 旧的字符串属性自动转换"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         # 检查向后兼容代码存在 - 验证类型转换逻辑
@@ -416,7 +416,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_temporal_methods_exist(self):
         """测试时间相关方法存在"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         methods = [
@@ -432,7 +432,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_get_current_value_returns_active(self):
         """测试getCurrentValue只返回当前有效值"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         # 方法逻辑应该只返回valid_to为null (当前有效)的事实
@@ -441,7 +441,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_entity_fact_tool_handlers_exist(self):
         """测试实体事实工具处理器存在"""
         project_root = Path(__file__).parent.parent
-        entity_tool_ts = project_root / "mcp_server" / "src" / "tools" / "entity-memory.ts"
+        entity_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "entity-memory.ts"
         content = entity_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("handleEntityFactAdd", content)
@@ -450,7 +450,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_invalidate_method_counts_invalidated(self):
         """测试invalidate方法返回无效化的事实数量"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         self.assertIn("invalidateFacts", content)
@@ -460,7 +460,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_addFact_accepts_confidence_source_ref(self):
         """测试addFact接受confidence和sourceRef参数"""
         project_root = Path(__file__).parent.parent
-        entity_ts = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
+        entity_ts = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
         content = entity_ts.read_text(encoding="utf-8")
 
         self.assertIn("confidence: number = 1.0", content)
@@ -469,7 +469,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_entity_fact_confidence_boundary_validation(self):
         """测试entity_fact_add 对 confidence 有 0-1 边界校验"""
         project_root = Path(__file__).parent.parent
-        entity_tool_ts = project_root / "mcp_server" / "src" / "tools" / "entity-memory.ts"
+        entity_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "entity-memory.ts"
         content = entity_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("confidence: z.number().min(0).max(1).optional()", content)
@@ -477,7 +477,7 @@ class TestTemporalFactLayer(BaseTest):
     def test_entity_fact_nonempty_validation(self):
         """测试entity_fact 参数要求非空"""
         project_root = Path(__file__).parent.parent
-        entity_tool_ts = project_root / "mcp_server" / "src" / "tools" / "entity-memory.ts"
+        entity_tool_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "entity-memory.ts"
         content = entity_tool_ts.read_text(encoding="utf-8")
 
         self.assertIn("name: z.string().min(1)", content)
@@ -498,8 +498,8 @@ class TestLayerBoundaries(BaseTest):
         # Entity Fact = 事实层
         # Memory 层级结构本来就有摘要层
 
-        verbatim_loaded = project_root / "mcp_server" / "src" / "tools" / "verbatim-evidence.ts"
-        entity_fact_loaded = project_root / "mcp_server" / "src" / "tools" / "entity-memory.ts"
+        verbatim_loaded = project_root / "apps" / "mcp-server" / "src" / "tools" / "verbatim-evidence.ts"
+        entity_fact_loaded = project_root / "apps" / "mcp-server" / "src" / "tools" / "entity-memory.ts"
 
         self.assertTrue(verbatim_loaded.exists())
         self.assertTrue(entity_fact_loaded.exists())
@@ -513,9 +513,9 @@ class TestLayerBoundaries(BaseTest):
         project_root = Path(__file__).parent.parent
 
         # 每个功能都在独立文件
-        verbatim = project_root / "mcp_server" / "src" / "lib" / "verbatim-evidence.ts"
-        entity_memory = project_root / "mcp_server" / "src" / "lib" / "entity-memory.ts"
-        storage = project_root / "mcp_server" / "src" / "storage.ts"
+        verbatim = project_root / "apps" / "mcp-server" / "src" / "lib" / "verbatim-evidence.ts"
+        entity_memory = project_root / "apps" / "mcp-server" / "src" / "lib" / "entity-memory.ts"
+        storage = project_root / "apps" / "mcp-server" / "src" / "storage.ts"
 
         self.assertTrue(verbatim.exists())
         self.assertTrue(entity_memory.exists())
@@ -535,7 +535,7 @@ class TestBuildCompletes(BaseTest):
     def test_npm_build_succeeds(self):
         """测试npm build成功生成dist"""
         project_root = Path(__file__).parent.parent
-        dist_index = project_root / "mcp_server" / "dist" / "index.js"
+        dist_index = project_root / "apps" / "mcp-server" / "dist" / "index.js"
 
         # 检查构建产物存在
         self.assertTrue(
@@ -551,7 +551,7 @@ class TestBuildCompletes(BaseTest):
     def test_all_new_tools_are_exported_from_tools_index(self):
         """测试所有新工具都从tools索引导出"""
         project_root = Path(__file__).parent.parent
-        tools_index = project_root / "mcp_server" / "src" / "tools" / "index.ts"
+        tools_index = project_root / "apps" / "mcp-server" / "src" / "tools" / "index.ts"
         content = tools_index.read_text(encoding="utf-8")
 
         # 检查新模块都已导出
@@ -565,7 +565,7 @@ class TestBuildCompletes(BaseTest):
     def test_new_tools_are_categorized_correctly(self):
         """测试新增工具都有正确分类"""
         project_root = Path(__file__).parent.parent
-        soul_ts = project_root / "mcp_server" / "src" / "tools" / "soul.ts"
+        soul_ts = project_root / "apps" / "mcp-server" / "src" / "tools" / "soul.ts"
         content = soul_ts.read_text(encoding="utf-8")
 
         # 检查分类正确

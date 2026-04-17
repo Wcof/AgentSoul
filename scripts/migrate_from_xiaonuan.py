@@ -25,8 +25,8 @@ import yaml
 import sys
 sys.path.insert(0, str(PROJECT_ROOT := Path(__file__).parent.parent))
 
-from src.config_loader import ConfigLoader, create_default_persona
-from src.path_compat import PathResolver, convert_legacy_path
+from agentsoul.config.config_loader import ConfigLoader, create_default_persona
+from agentsoul.runtime.path_compat import PathResolver, convert_legacy_path
 
 DEFAULT_XIAONUAN_PATHS = [
     Path.home() / ".xiaonuan",

@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config_manager.templates import (
+from agentsoul.config.config_manager.templates import (
     ConfigTemplate,
     TemplateManager,
     get_template,
@@ -313,7 +313,7 @@ class TestConvenienceFunctions(BaseTest):
 
     def test_list_templates_convenience_updates_global(self):
         """测试便利函数 list_templates 更新全局变量"""
-        import src.config_manager.templates as templates_module
+        import agentsoul.config.config_manager.templates as templates_module
         with patch('src.config_manager.templates.get_project_root', return_value=self.project_root):
             # Clear global for test
             templates_module.PERSONA_TEMPLATES.clear()

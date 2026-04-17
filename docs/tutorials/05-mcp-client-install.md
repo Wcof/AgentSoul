@@ -4,8 +4,8 @@
 
 ### Claude CLI 安装
 ```bash
-claude mcp add-json agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]}'
-claude mcp add-json --scope user agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]}'
+claude mcp add-json agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]}'
+claude mcp add-json --scope user agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]}'
 ```
 
 ### Claude CLI 卸载
@@ -20,7 +20,7 @@ claude mcp remove --scope user agentsoul
 # BEGIN AGENTSOUL MCP
 [mcp_servers.agentsoul]
 command = "node"
-args = ["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]
+args = ["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]
 # END AGENTSOUL MCP
 ```
 
@@ -32,7 +32,7 @@ args = ["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]
 ```json
 {
   "mcpServers": {
-    "agentsoul": {"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]}
+    "agentsoul": {"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]}
   }
 }
 ```
@@ -52,8 +52,8 @@ args = ["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]
 
 ### Claude CLI install
 ```bash
-claude mcp add-json agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]}'
-claude mcp add-json --scope user agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]}'
+claude mcp add-json agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]}'
+claude mcp add-json --scope user agentsoul '{"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]}'
 ```
 
 ### Claude CLI uninstall
@@ -68,7 +68,7 @@ Write this block to `~/.codex/config.toml` (global) or `<project>/.codex/config.
 # BEGIN AGENTSOUL MCP
 [mcp_servers.agentsoul]
 command = "node"
-args = ["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]
+args = ["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]
 # END AGENTSOUL MCP
 ```
 
@@ -80,7 +80,7 @@ Write this JSON to `~/.trae/mcp.json` (global) or `<project>/.trae/mcp.json` (lo
 ```json
 {
   "mcpServers": {
-    "agentsoul": {"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/mcp_server/dist/index.js"]}
+    "agentsoul": {"command":"node","args":["/Users/ldh/Downloads/project/AgentSoul/apps/mcp-server/dist/index.js"]}
   }
 }
 ```

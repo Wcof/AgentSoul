@@ -6,7 +6,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from src.health_visualization import HealthChartExporter
+from agentsoul.health.visualization import HealthChartExporter
 
 
 class TestHealthVisualization:
@@ -99,6 +99,6 @@ class TestHealthVisualization:
     def test_cli_module_importable(self):
         """Test that CLI module can be imported"""
         # Just test import - main guarded by if __name__ == '__main__'
-        from src.health_visualization import cli
+        from agentsoul.health.visualization import cli
         assert cli is not None
         assert hasattr(cli, 'main')

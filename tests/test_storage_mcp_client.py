@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 from pathlib import Path
 
-from src.storage.mcp_client import (
+from agentsoul.storage.mcp_client import (
     McpRetryConfig,
     McpClientError,
     McpConnectionError,
@@ -185,7 +185,7 @@ class TestMcpPersonaStorage(BaseTest):
         """测试默认服务器命令构造正确路径"""
         storage = McpPersonaStorage()
         cmd = storage._default_server_command()
-        self.assertIn("mcp_server/dist/index.js", cmd)
+        self.assertIn("apps/mcp-server/dist/index.js", cmd)
         self.assertTrue(cmd.startswith("node "))
 
 
@@ -382,7 +382,7 @@ class TestMcpMemoryStorage(BaseTest):
 
     def test_resolve_conflict_merge_append(self):
         """测试合并追加解决方案"""
-        from src.abstract import MemoryConflict
+        from agentsoul.abstract import MemoryConflict
         conflict = MemoryConflict(
             topic="test",
             existing_content="existing",

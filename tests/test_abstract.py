@@ -14,13 +14,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 from datetime import datetime
 
-from src.abstract import (
+from agentsoul.abstract import (
     InjectionRollback,
     MemoryConflict,
     SoulVersion,
     UnifiedSoulStorage,
 )
-from src.storage.local import (
+from agentsoul.storage.local import (
     LocalMemoryStorage,
     LocalPersonaStorage,
     LocalSkillStorage,

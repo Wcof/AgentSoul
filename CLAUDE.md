@@ -107,7 +107,7 @@ AgentSoul/
 ├── .github/workflows/         # GitHub Actions CI examples
 │   ├── health-check.yml       # Example: health check CI gate
 │   └── companionship-check.yml # Example: companionship check CI gate
-├── mcp_server/                # MCP server implementation (TypeScript)
+├── apps/mcp-server/                # MCP server implementation (TypeScript)
 │   ├── src/
 │   │   ├── index.ts           # MCP service entry
 │   │   ├── tools/             # Individual tool implementations
@@ -123,10 +123,10 @@ AgentSoul/
 │   │   ├── lib/               # Core libraries
 │   │   │   └── kv-cache/      # 3-tier KV-Cache with Ebbinghaus GC
 │   │   └── language/          # Multi-language support (中文/英文)
-├── openclaw_server/           # OpenClaw integration
+├── integrations/openclaw/           # OpenClaw integration
 ├── scripts/                   # Utility scripts
 ├── tests/                     # Python unit tests
-├── web-ui/                    # Pure static Web UI for visualization
+├── apps/web/                    # Pure static Web UI for visualization
 └── install.py                 # Main installation script
 ```
 

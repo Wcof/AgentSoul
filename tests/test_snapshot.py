@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, Mock
 
-from src.snapshot import (
+from agentsoul.snapshot import (
     SoulSnapshot,
     SnapshotManager,
     VersionRollback,
@@ -66,7 +66,7 @@ class TestSnapshotManager(BaseTest):
         self.project_root = Path(self.temp_dir.name)
         # 创建必要的目录结构
         (self.project_root / "config").mkdir()
-        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "soul" / "soul_variable").mkdir(parents=True)
 
     def tearDown(self):
         """清理临时目录"""
@@ -81,7 +81,7 @@ class TestSnapshotManager(BaseTest):
 
     def test_init_default_project_root(self):
         """测试使用默认项目根目录"""
-        from common import get_project_root
+        from agentsoul.common import get_project_root
         with patch('src.snapshot.get_project_root', return_value=self.project_root):
             manager = SnapshotManager()
             self.assertEqual(manager.project_root, self.project_root)
@@ -117,7 +117,7 @@ class TestSnapshotManager(BaseTest):
         # Create minimal required files
         persona_path = self.project_root / "config" / "persona.yaml"
         persona_path.write_text("ai:\n  name: Test\n")
-        state_path = self.project_root / "data" / "soul" / "soul_variable" / "state_vector.json"
+        state_path = self.project_root / "var" / "data" / "soul" / "soul_variable" / "state_vector.json"
         state_path.write_text('{"pleasure": 0.5}\n')
 
         manager = SnapshotManager(self.project_root, max_snapshots=10)
@@ -422,21 +422,21 @@ class TestVersionRollback(BaseTest):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.project_root = Path(self.temp_dir.name)
         (self.project_root / "config").mkdir()
-        (self.project_root / "data" / "soul" / "soul_variable").mkdir(parents=True)
+        (self.project_root / "var" / "data" / "soul" / "soul_variable").mkdir(parents=True)
 
     def tearDown(self):
         self.temp_dir.cleanup()
 
     def test_init_creates_manager(self):
         """测试初始化创建管理器"""
-        from common import get_project_root
+        from agentsoul.common import get_project_root
         with patch('src.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback(max_snapshots=20)
             self.assertIsNotNone(rb.manager)
 
     def test_create_before_change(self):
         """测试在修改前创建快照"""
-        from common import get_project_root
+        from agentsoul.common import get_project_root
         with patch('src.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback(max_snapshots=20)
 
@@ -451,7 +451,7 @@ class TestVersionRollback(BaseTest):
 
     def test_rollback_to_calls_manager(self):
         """测试回滚调用管理器"""
-        from common import get_project_root
+        from agentsoul.common import get_project_root
         with patch('src.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback()
             with patch.object(rb.manager, 'rollback', return_value=True) as mock_rollback:
@@ -461,7 +461,7 @@ class TestVersionRollback(BaseTest):
 
     def test_list_available_calls_manager(self):
         """测试列出可用版本"""
-        from common import get_project_root
+        from agentsoul.common import get_project_root
         with patch('src.snapshot.get_project_root', return_value=self.project_root):
             rb = VersionRollback()
             mock_snapshots = [

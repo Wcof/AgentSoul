@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import unittest
 
-from src import McpClientError, McpConnectionError, McpRequestError, McpRetryConfig
+from agentsoul import McpClientError, McpConnectionError, McpRequestError, McpRetryConfig
 
 
 class TestMcpRetryConfig(unittest.TestCase):

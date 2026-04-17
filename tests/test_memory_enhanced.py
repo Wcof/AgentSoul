@@ -19,16 +19,16 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.memory_enhanced.priority import (
+from agentsoul.memory.enhanced.priority import (
     PriorityLevel,
     MemoryPriority,
     PriorityManager,
 )
-from src.memory_enhanced.tags import (
+from agentsoul.memory.enhanced.tags import (
     TagInfo,
     TagManager,
 )
-from src.memory_enhanced.retrieval import (
+from agentsoul.memory.enhanced.retrieval import (
     SearchResult,
     MemoryRetriever,
 )

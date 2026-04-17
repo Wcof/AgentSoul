@@ -328,7 +328,7 @@ const results = await agent.call('memory_enhanced.search_memory', {
 
 如果默认工具不能满足需求，您可以创建自定义工具：
 
-1. 在 `mcp_server/src/tools/` 目录创建新的工具文件
+1. 在 `apps/mcp-server/src/tools/` 目录创建新的工具文件
 2. 继承 `Tool` 基类并实现相应方法
 3. 在 `tools/index.ts` 中导出新工具
 4. 重启 MCP 服务器

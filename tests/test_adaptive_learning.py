@@ -19,15 +19,15 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.adaptive_learning.data_collector import (
+from agentsoul.learning.adaptive_learning.data_collector import (
     InteractionRecord,
     DataCollector,
 )
-from src.adaptive_learning.pad_adjuster import (
+from agentsoul.learning.adaptive_learning.pad_adjuster import (
     PADState,
     PADAdjuster,
 )
-from src.adaptive_learning.preference_learner import (
+from agentsoul.learning.adaptive_learning.preference_learner import (
     UserPreferences,
     PreferenceLearner,
     EMOJI_RANGES,

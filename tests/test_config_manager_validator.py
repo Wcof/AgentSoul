@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.config_manager.validator import (
+from agentsoul.config.config_manager.validator import (
     ValidationError,
     ConfigValidator,
 )

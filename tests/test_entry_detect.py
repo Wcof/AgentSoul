@@ -4,7 +4,7 @@ Tests for Entry Capability Detector
 """
 import os
 import pytest
-from src.entry_detect import (
+from agentsoul.runtime.entry_detect import (
     detect_environment,
     check_agentsoul_installed,
     get_injection_template,
@@ -82,12 +82,12 @@ class TestEntryDetection:
 
     def test_module_importable(self):
         """Test that the module can be imported."""
-        import src.entry_detect
+        import agentsoul.runtime.entry_detect
         assert src.entry_detect is not None
 
     def test_main_help_flag(self):
         """Test main function with --help flag exits with 0."""
-        import src.entry_detect
+        import agentsoul.runtime.entry_detect
         import sys
         original_argv = sys.argv
         try:
@@ -100,7 +100,7 @@ class TestEntryDetection:
 
     def test_main_no_args(self):
         """Test main function without arguments runs print_report."""
-        import src.entry_detect
+        import agentsoul.runtime.entry_detect
         import sys
         original_argv = sys.argv
         try:
@@ -119,7 +119,7 @@ class TestEnvironmentDetectionBranches:
     def test_detect_git_dir_env(self, monkeypatch):
         """Test detection when GIT_DIR is set (Claude Code)."""
         monkeypatch.setenv("GIT_DIR", ".git")
-        from src.entry_detect import detect_environment
+        from agentsoul.runtime.entry_detect import detect_environment
         cap = detect_environment()
         assert cap.environment == "claude_code"
         assert cap.has_mcp is True
@@ -129,7 +129,7 @@ class TestEnvironmentDetectionBranches:
     def test_detect_mcp_server_env(self, monkeypatch):
         """Test detection when MCP_SERVER_NAME is set."""
         monkeypatch.setenv("MCP_SERVER_NAME", "agentsoul")
-        from src.entry_detect import detect_environment
+        from agentsoul.runtime.entry_detect import detect_environment
         cap = detect_environment()
         assert cap.environment == "mcp_server"
         assert cap.has_mcp is True
@@ -141,7 +141,7 @@ class TestEnvironmentDetectionBranches:
         # Clear CODER
         if "CODER" in os.environ:
             monkeypatch.delenv("CODER")
-        from src.entry_detect import detect_environment
+        from agentsoul.runtime.entry_detect import detect_environment
         cap = detect_environment()
         assert cap.environment == "openai_codex"
         assert cap.has_mcp is False
@@ -150,7 +150,7 @@ class TestEnvironmentDetectionBranches:
     def test_detect_gemini_credentials_env(self, monkeypatch):
         """Test detection when GOOGLE_APPLICATION_CREDENTIALS is set."""
         monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/path/to/creds.json")
-        from src.entry_detect import detect_environment
+        from agentsoul.runtime.entry_detect import detect_environment
         cap = detect_environment()
         assert cap.environment == "gemini_code_assist"
         assert cap.has_mcp is False
@@ -159,7 +159,7 @@ class TestEnvironmentDetectionBranches:
     def test_detect_gemini_api_key_env(self, monkeypatch):
         """Test detection when GEMINI_API_KEY is set."""
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
-        from src.entry_detect import detect_environment
+        from agentsoul.runtime.entry_detect import detect_environment
         cap = detect_environment()
         assert cap.environment == "gemini_code_assist"
         assert cap.has_mcp is False
@@ -179,7 +179,7 @@ class TestEnvironmentDetectionBranches:
 
         monkeypatch.setattr(os, "listdir", mock_listdir)
 
-        from src.entry_detect import detect_environment
+        from agentsoul.runtime.entry_detect import detect_environment
         cap = detect_environment()
         assert cap.environment == "generic_local"
         assert cap.has_local_files is False
@@ -193,7 +193,7 @@ class TestEnvironmentDetectionBranches:
         original_cwd = os.getcwd()
         os.chdir(tmp_path)
         try:
-            from src.entry_detect import check_agentsoul_installed
+            from agentsoul.runtime.entry_detect import check_agentsoul_installed
             installed, config_path = check_agentsoul_installed()
             assert installed is False
             assert config_path is None
@@ -213,7 +213,7 @@ class TestEnvironmentDetectionBranches:
             raise PermissionError("Permission denied")
         monkeypatch.setattr(os, "listdir", mock_listdir)
 
-        from src.entry_detect import detect_environment
+        from agentsoul.runtime.entry_detect import detect_environment
         cap = detect_environment()
         assert cap.has_local_files is False
         assert cap.available_injection_methods == ["local-files"]

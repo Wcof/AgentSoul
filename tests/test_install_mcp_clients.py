@@ -108,7 +108,7 @@ class TestInstallMcpClients(unittest.TestCase):
             self.assertFalse(install.has_managed_block(cfg, install.AGENTSOUL_BLOCK_BEGIN, install.AGENTSOUL_BLOCK_END))
 
     def test_build_codex_mcp_block_contains_agentsoul(self):
-        block = install.build_codex_mcp_block(Path("/tmp/mcp_server/dist/index.js"))
+        block = install.build_codex_mcp_block(Path("/tmp/apps/mcp-server/dist/index.js"))
         self.assertIn("[mcp_servers.agentsoul]", block)
         self.assertIn('command = "node"', block)
         self.assertIn("dist/index.js", block)
@@ -118,7 +118,7 @@ class TestInstallMcpClients(unittest.TestCase):
             original_root = install.PROJECT_ROOT
             install.PROJECT_ROOT = Path(temp_dir)
             try:
-                guide = install.generate_client_install_markdown(Path("/tmp/mcp_server/dist/index.js"))
+                guide = install.generate_client_install_markdown(Path("/tmp/apps/mcp-server/dist/index.js"))
                 self.assertTrue(guide.exists())
                 content = guide.read_text(encoding="utf-8")
                 self.assertIn("Claude CLI", content)
@@ -230,7 +230,7 @@ class TestInstallMcpClients(unittest.TestCase):
             root = Path(temp_dir)
             installer = install.CodexInstaller(root)
             with mock.patch.object(installer, "detect", return_value=True):
-                records = installer.install("local", Path("/tmp/mcp_server/dist/index.js"), "{}")
+                records = installer.install("local", Path("/tmp/apps/mcp-server/dist/index.js"), "{}")
                 self.assertTrue(any(r.get("action") == "install" for r in records))
                 self.assertTrue((root / ".codex" / "config.toml").exists())
                 self.assertTrue((root / ".codex" / "agentsoul-startup.md").exists())
@@ -253,7 +253,7 @@ class TestInstallMcpClients(unittest.TestCase):
             status_before = installer.status("local")
             self.assertTrue(all(not r.get("registered", False) for r in status_before))
 
-            installer.install("local", Path("/tmp/mcp_server/dist/index.js"), "{}")
+            installer.install("local", Path("/tmp/apps/mcp-server/dist/index.js"), "{}")
             status_after = installer.status("local")
             self.assertTrue(any(r.get("registered", False) for r in status_after))
 

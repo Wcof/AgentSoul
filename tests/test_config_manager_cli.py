@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 from pathlib import Path
 
-from src.config_manager.cli import (
+from agentsoul.config.config_manager.cli import (
     _resolve_path,
     _check_file_exists,
     _load_config,
@@ -331,7 +331,7 @@ class TestMainArgParsing(BaseTest):
         """测试 list-templates 命令调用正确函数"""
         with patch('src.config_manager.cli.list_templates') as mock_func:
             with patch('sys.argv', ['cli.py', 'list-templates']):
-                from src.config_manager.cli import main
+                from agentsoul.config.config_manager.cli import main
                 main()
                 mock_func.assert_called_once()
 
@@ -339,7 +339,7 @@ class TestMainArgParsing(BaseTest):
         """测试 preview-template 命令调用正确函数"""
         with patch('src.config_manager.cli.preview_template') as mock_func:
             with patch('sys.argv', ['cli.py', 'preview-template', 'mytemplate']):
-                from src.config_manager.cli import main
+                from agentsoul.config.config_manager.cli import main
                 main()
                 mock_func.assert_called_once_with('mytemplate')
 
@@ -347,7 +347,7 @@ class TestMainArgParsing(BaseTest):
         """测试 apply-template 命令调用正确函数"""
         with patch('src.config_manager.cli.apply_template') as mock_func:
             with patch('sys.argv', ['cli.py', 'apply-template', 'mytemplate', '--target', '/path', '--no-backup']):
-                from src.config_manager.cli import main
+                from agentsoul.config.config_manager.cli import main
                 main()
                 mock_func.assert_called_once()
                 args = mock_func.call_args
@@ -359,7 +359,7 @@ class TestMainArgParsing(BaseTest):
         """测试 validate-config 命令调用正确函数"""
         with patch('src.config_manager.cli.validate_config') as mock_func:
             with patch('sys.argv', ['cli.py', 'validate-config', '--path', '/path']):
-                from src.config_manager.cli import main
+                from agentsoul.config.config_manager.cli import main
                 main()
                 mock_func.assert_called_once_with('/path')
 
@@ -367,7 +367,7 @@ class TestMainArgParsing(BaseTest):
         """测试 export-config 命令调用正确函数"""
         with patch('src.config_manager.cli.export_config') as mock_func:
             with patch('sys.argv', ['cli.py', 'export-config', '--output', '/path']):
-                from src.config_manager.cli import main
+                from agentsoul.config.config_manager.cli import main
                 main()
                 mock_func.assert_called_once_with('/path')
 
