@@ -639,5 +639,3 @@ class TestCompanionshipChecker(BaseTest):
             self.assertIn("严重问题", report.assessment)
 
 
-if __name__ == "__main__":
-    unittest.main()

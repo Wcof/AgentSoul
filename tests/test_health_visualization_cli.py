@@ -170,5 +170,3 @@ class TestModuleImport(BaseTest):
         self.assertTrue(hasattr(exporter, "get_summary"))
 
 
-if __name__ == "__main__":
-    unittest.main()

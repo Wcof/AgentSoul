@@ -27,6 +27,44 @@ from src.config_manager.validator import ConfigValidator, ValidationError
 
 
 @dataclass
+class ExpressionDNA:
+    """表达 DNA - 定义 Agent 的语言风格特征"""
+    sentence_length: str = "medium"  # short/medium/long
+    question_ratio: str = "moderate"  # low/moderate/high
+    analogy_density: str = "low"  # low/moderate/high
+    certainty_style: str = "calibrated"  # bold/calibrated/hedging
+    structure_preference: str = "concise"  # concise/balanced/detailed
+    taboo_phrases: list[str] = field(default_factory=list)
+    signature_moves: list[str] = field(default_factory=list)
+
+
+@dataclass
+class HonestBoundaries:
+    """诚实边界 - 定义 Agent 的知识边界声明策略"""
+    limitations: list[str] = field(default_factory=list)
+    blind_spots: list[str] = field(default_factory=list)
+    stale_info_policy: str = "verify_before_answer"
+    uncertainty_policy: str = "state_confidence_and_basis"
+
+
+@dataclass
+class InternalTension:
+    """内在张力 - 定义 Agent 内部的冲突与解决规则"""
+    name: str = ""
+    description: str = ""
+    resolution_rule: str = ""
+
+
+@dataclass
+class CapabilityProfile:
+    """能力画像 - 定义 Agent 的能力边界"""
+    strong_at: list[str] = field(default_factory=list)
+    weak_at: list[str] = field(default_factory=list)
+    must_use_tools_when: list[str] = field(default_factory=list)
+    must_refuse_when: list[str] = field(default_factory=list)
+
+
+@dataclass
 class AgentConfig:
     name: str = "Agent"
     nickname: str = ""
@@ -35,6 +73,10 @@ class AgentConfig:
     personality: list[str] = field(default_factory=list)
     core_values: list[str] = field(default_factory=list)
     interaction_style: dict[str, Any] = field(default_factory=dict)
+    expression_dna: ExpressionDNA = field(default_factory=ExpressionDNA)
+    honest_boundaries: HonestBoundaries = field(default_factory=HonestBoundaries)
+    internal_tensions: list[InternalTension] = field(default_factory=list)
+    capability_profile: CapabilityProfile = field(default_factory=CapabilityProfile)
 
 
 @dataclass
@@ -43,6 +85,24 @@ class MasterConfig:
     nickname: list[str] = field(default_factory=list)
     timezone: str = "Asia/Shanghai"
     labels: list[str] = field(default_factory=list)
+
+
+@dataclass
+class QualityGates:
+    """质量门控 - 定义 Agent 行为的质量检查点"""
+    persona_boundary_required: bool = True
+    expression_dna_required: bool = True
+    tool_protocol_required: bool = True
+
+
+@dataclass
+class AgenticProtocol:
+    """代理协议 - 定义 Agent 的行为协议"""
+    classify_before_answer: bool = True
+    research_when_freshness_matters: bool = True
+    memory_read_before_topic: bool = True
+    memory_write_after_topic: bool = True
+    confidence_required: bool = True
 
 
 @dataclass
@@ -57,6 +117,8 @@ class BehaviorConfig:
     forbidden_topics: list[str] = field(default_factory=list)
     allowed_topics: list[str] = field(default_factory=list)
     custom_settings: dict[str, Any] = field(default_factory=dict)
+    quality_gates: QualityGates = field(default_factory=QualityGates)
+    agentic_protocol: AgenticProtocol = field(default_factory=AgenticProtocol)
 
 
 @dataclass
@@ -121,6 +183,10 @@ class ConfigLoader(TTLCacheBase):
             personality=self._to_list(ai_data.get("personality", [])),
             core_values=self._to_list(ai_data.get("core_values", [])),
             interaction_style=ai_data.get("interaction_style", {}),
+            expression_dna=self._parse_expression_dna(ai_data.get("expression_dna", {})),
+            honest_boundaries=self._parse_honest_boundaries(ai_data.get("honest_boundaries", {})),
+            internal_tensions=self._parse_internal_tensions(ai_data.get("internal_tensions", [])),
+            capability_profile=self._parse_capability_profile(ai_data.get("capability_profile", {})),
         )
 
         master_config = MasterConfig(
@@ -158,6 +224,78 @@ class ConfigLoader(TTLCacheBase):
                 return [v.strip() for v in value.split(",") if v.strip()]
             return [value.strip()] if value.strip() else []
         return []
+
+    @staticmethod
+    def _parse_expression_dna(data: Any) -> ExpressionDNA:
+        if not isinstance(data, dict):
+            return ExpressionDNA()
+        return ExpressionDNA(
+            sentence_length=data.get("sentence_length", "medium"),
+            question_ratio=data.get("question_ratio", "moderate"),
+            analogy_density=data.get("analogy_density", "low"),
+            certainty_style=data.get("certainty_style", "calibrated"),
+            structure_preference=data.get("structure_preference", "concise"),
+            taboo_phrases=data.get("taboo_phrases", []),
+            signature_moves=data.get("signature_moves", []),
+        )
+
+    @staticmethod
+    def _parse_honest_boundaries(data: Any) -> HonestBoundaries:
+        if not isinstance(data, dict):
+            return HonestBoundaries()
+        return HonestBoundaries(
+            limitations=data.get("limitations", []),
+            blind_spots=data.get("blind_spots", []),
+            stale_info_policy=data.get("stale_info_policy", "verify_before_answer"),
+            uncertainty_policy=data.get("uncertainty_policy", "state_confidence_and_basis"),
+        )
+
+    @staticmethod
+    def _parse_internal_tensions(data: Any) -> list[InternalTension]:
+        if not isinstance(data, list):
+            return []
+        result = []
+        for item in data:
+            if isinstance(item, dict):
+                result.append(InternalTension(
+                    name=item.get("name", ""),
+                    description=item.get("description", ""),
+                    resolution_rule=item.get("resolution_rule", ""),
+                ))
+        return result
+
+    @staticmethod
+    def _parse_capability_profile(data: Any) -> CapabilityProfile:
+        if not isinstance(data, dict):
+            return CapabilityProfile()
+        return CapabilityProfile(
+            strong_at=data.get("strong_at", []),
+            weak_at=data.get("weak_at", []),
+            must_use_tools_when=data.get("must_use_tools_when", []),
+            must_refuse_when=data.get("must_refuse_when", []),
+        )
+
+    @staticmethod
+    def _parse_quality_gates(data: Any) -> QualityGates:
+        if not isinstance(data, dict):
+            return QualityGates()
+        return QualityGates(
+            persona_boundary_required=data.get("persona_boundary_required", True),
+            expression_dna_required=data.get("expression_dna_required", True),
+            tool_protocol_required=data.get("tool_protocol_required", True),
+        )
+
+    @staticmethod
+    def _parse_agentic_protocol(data: Any) -> AgenticProtocol:
+        if not isinstance(data, dict):
+            return AgenticProtocol()
+        return AgenticProtocol(
+            classify_before_answer=data.get("classify_before_answer", True),
+            research_when_freshness_matters=data.get("research_when_freshness_matters", True),
+            memory_read_before_topic=data.get("memory_read_before_topic", True),
+            memory_write_after_topic=data.get("memory_write_after_topic", True),
+            confidence_required=data.get("confidence_required", True),
+        )
 
     def get_agent_name(self, persona_path: Path | None = None) -> str:
         config = self.load_persona_config(persona_path)
@@ -226,15 +364,41 @@ class ConfigLoader(TTLCacheBase):
 
     def to_legacy_format(self, persona_path: Path | None = None) -> dict[str, Any]:
         config = self.load_persona_config(persona_path)
+        ai = config.ai
         return {
             "ai": {
-                "name": config.ai.name,
-                "nickname": config.ai.nickname,
-                "naming_mode": config.ai.naming_mode,
-                "role": config.ai.role,
-                "personality": config.ai.personality,
-                "core_values": config.ai.core_values,
-                "interaction_style": config.ai.interaction_style,
+                "name": ai.name,
+                "nickname": ai.nickname,
+                "naming_mode": ai.naming_mode,
+                "role": ai.role,
+                "personality": ai.personality,
+                "core_values": ai.core_values,
+                "interaction_style": ai.interaction_style,
+                "expression_dna": {
+                    "sentence_length": ai.expression_dna.sentence_length,
+                    "question_ratio": ai.expression_dna.question_ratio,
+                    "analogy_density": ai.expression_dna.analogy_density,
+                    "certainty_style": ai.expression_dna.certainty_style,
+                    "structure_preference": ai.expression_dna.structure_preference,
+                    "taboo_phrases": ai.expression_dna.taboo_phrases,
+                    "signature_moves": ai.expression_dna.signature_moves,
+                },
+                "honest_boundaries": {
+                    "limitations": ai.honest_boundaries.limitations,
+                    "blind_spots": ai.honest_boundaries.blind_spots,
+                    "stale_info_policy": ai.honest_boundaries.stale_info_policy,
+                    "uncertainty_policy": ai.honest_boundaries.uncertainty_policy,
+                },
+                "internal_tensions": [
+                    {"name": t.name, "description": t.description, "resolution_rule": t.resolution_rule}
+                    for t in ai.internal_tensions
+                ],
+                "capability_profile": {
+                    "strong_at": ai.capability_profile.strong_at,
+                    "weak_at": ai.capability_profile.weak_at,
+                    "must_use_tools_when": ai.capability_profile.must_use_tools_when,
+                    "must_refuse_when": ai.capability_profile.must_refuse_when,
+                },
             },
             "master": {
                 "name": config.master.name,
@@ -270,6 +434,8 @@ class ConfigLoader(TTLCacheBase):
             forbidden_topics=self._to_list(raw_config.get("forbidden_topics", [])),
             allowed_topics=self._to_list(raw_config.get("allowed_topics", [])),
             custom_settings=raw_config.get("custom_settings", {}),
+            quality_gates=self._parse_quality_gates(raw_config.get("quality_gates", {})),
+            agentic_protocol=self._parse_agentic_protocol(raw_config.get("agentic_protocol", {})),
         )
 
         self._behavior_cache = behavior

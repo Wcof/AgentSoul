@@ -232,6 +232,28 @@ import {
   handleListSubscriptions,
 } from './tools/subscription.js';
 
+import {
+  SemanticSearchSchema,
+  handleSemanticSearch,
+  CheckDeduplicationSchema,
+  handleCheckDeduplication,
+  SemanticStatsSchema,
+  handleSemanticStats,
+  IndexMemorySchema,
+  handleIndexMemory,
+  RebuildIndexSchema,
+  handleRebuildIndex,
+} from './tools/semantic.js';
+
+import {
+  MergeMemoriesSchema,
+  handleMergeMemories,
+  ExtractFactsSchema,
+  handleExtractFacts,
+  FactStatsSchema,
+  handleFactStats,
+} from './tools/fact_extractor.js';
+
 // 创建 MCP 服务器实例
 const server = new Server(
   {
@@ -366,6 +388,15 @@ const ALL_TOOLS: ToolMetadata[] = [
   { name: 'subscribe', fallbackDescription: 'Subscribe to soul events via webhook push. Get notified when memory is written, soul state changes, or topics are archived.', schema: SubscribeSchema },
   { name: 'unsubscribe', fallbackDescription: 'Cancel an existing subscription by ID.', schema: UnsubscribeSchema },
   { name: 'list_subscriptions', fallbackDescription: 'List all current subscriptions with their status.', schema: ListSubscriptionsSchema },
+  // Semantic Search tools
+  { name: 'semantic_search', fallbackDescription: 'Search memories using semantic similarity (vector embeddings). Supports natural language queries, tag filtering, priority filtering, and date range filtering. Returns results ranked by semantic relevance.', schema: SemanticSearchSchema },
+  { name: 'check_deduplication', fallbackDescription: 'Check if content is a duplicate of existing memories using semantic similarity. Returns whether duplicate exists, similar memory ID, and similarity score. Useful before creating new memories.', schema: CheckDeduplicationSchema },
+  { name: 'semantic_stats', fallbackDescription: 'Get semantic search statistics including embedding model, vector store info, and total indexed memories.', schema: SemanticStatsSchema },
+  { name: 'index_memory', fallbackDescription: 'Manually index a memory for semantic search. Call this after creating a memory to make it searchable via semantic_search.', schema: IndexMemorySchema },
+  { name: 'rebuild_index', fallbackDescription: 'Rebuild the semantic search index from all existing memories. Use this after initial setup or when embedding model changes.', schema: RebuildIndexSchema },
+  { name: 'merge_memories', fallbackDescription: 'Merge multiple memories into one. Supports concatenate, longest, and semantic_summary strategies. Removes source memories after merge.', schema: MergeMemoriesSchema },
+  { name: 'extract_facts', fallbackDescription: 'Extract structured facts from conversation text. Supports rule-based extraction (no API needed) and LLM-enhanced extraction. Returns facts with type, confidence, and verification flags.', schema: ExtractFactsSchema },
+  { name: 'fact_stats', fallbackDescription: 'Get statistics about extracted facts including counts by type and confidence level.', schema: FactStatsSchema },
   // Version management tools
   { name: 'get_persona_version', fallbackDescription: 'Get current persona version information including version number, timestamp and checksum.', schema: GetPersonaVersionSchema },
   { name: 'list_soul_versions', fallbackDescription: 'List all available soul state version snapshots for rollback.', schema: ListSoulVersionsSchema },
@@ -569,6 +600,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return handleUnsubscribe(UnsubscribeSchema.parse(args));
     case 'list_subscriptions':
       return handleListSubscriptions();
+
+    // Semantic Search tools
+    case 'semantic_search':
+      return handleSemanticSearch(SemanticSearchSchema.parse(args));
+    case 'check_deduplication':
+      return handleCheckDeduplication(CheckDeduplicationSchema.parse(args));
+    case 'semantic_stats':
+      return handleSemanticStats(SemanticStatsSchema.parse(args));
+    case 'index_memory':
+      return handleIndexMemory(IndexMemorySchema.parse(args));
+    case 'rebuild_index':
+      return handleRebuildIndex(RebuildIndexSchema.parse(args));
+
+    // Memory Merge & Fact Extraction tools
+    case 'merge_memories':
+      return handleMergeMemories(MergeMemoriesSchema.parse(args));
+    case 'extract_facts':
+      return handleExtractFacts(ExtractFactsSchema.parse(args));
+    case 'fact_stats':
+      return handleFactStats(FactStatsSchema.parse(args));
 
     // Version management tools
     case 'get_persona_version':

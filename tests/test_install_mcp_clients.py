@@ -340,5 +340,3 @@ class TestInstallMcpClients(unittest.TestCase):
             self.assertEqual(rc, 1)
 
 
-if __name__ == "__main__":
-    unittest.main()

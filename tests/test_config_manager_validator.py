@@ -353,5 +353,3 @@ class TestConfigValidator(BaseTest):
         self.assertFalse(self.validator.is_valid(config))
 
 
-if __name__ == "__main__":
-    unittest.main()

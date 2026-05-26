@@ -324,5 +324,3 @@ class TestConvenienceFunctions(BaseTest):
             self.assertEqual(templates_module.PERSONA_TEMPLATES[0], "friendly")
 
 
-if __name__ == "__main__":
-    unittest.main()

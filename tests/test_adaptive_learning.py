@@ -534,5 +534,3 @@ class TestPreferenceLearner(BaseTest):
         self.assertEqual(prefs.preferred_tone, "casual")
 
 
-if __name__ == "__main__":
-    unittest.main()

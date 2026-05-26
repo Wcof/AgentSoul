@@ -889,5 +889,3 @@ class TestHealthCheck(BaseTest):
         self.assertIn("AgentSoul 健康检测报告", output)
 
 
-if __name__ == "__main__":
-    unittest.main()

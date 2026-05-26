@@ -372,5 +372,3 @@ class TestMainArgParsing(BaseTest):
                 mock_func.assert_called_once_with('/path')
 
 
-if __name__ == "__main__":
-    unittest.main()

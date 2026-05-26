@@ -330,5 +330,3 @@ class TestPriorityManager(unittest.TestCase):
         self.assertEqual(json.loads(memory_file.read_text())["priority"], "high")
 
 
-if __name__ == "__main__":
-    unittest.main()

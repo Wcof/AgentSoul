@@ -935,5 +935,3 @@ class TestConfigManager(unittest.TestCase):
         self.assertTrue(any(e.field == "behavior.enabled" for e in errors))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)

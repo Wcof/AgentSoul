@@ -63,5 +63,3 @@ class TestMcpExceptions(unittest.TestCase):
         self.assertIsInstance(err, McpClientError)
 
 
-if __name__ == "__main__":
-    unittest.main()
