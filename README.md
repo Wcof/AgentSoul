@@ -2,7 +2,6 @@
 
 [![Tests](https://github.com/ldhuan/AgentSoul/actions/workflows/tests.yml/badge.svg)](https://github.com/ldhuan/AgentSoul/actions/workflows/tests.yml)
 ![Health](https://img.shields.io/badge/Health-100%2F100-brightgreen)
-![Version](https://img.shields.io/badge/Version-2.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -11,25 +10,17 @@
 
 **AgentSoul** 是一个开源的 AI Agent 人格框架，让你的 AI 助手拥有**持续记忆**、**情感体验**和**个性化人格**。
 
-> 🎉 **v2.0 重大更新**：新增桌面挂件伴侣、多维度技能管理、增量会话扫描、并发安全审批等核心特性！
-
 无论你使用 Claude Code、Cursor、Windsurf 还是 OpenClaw，AgentSoul 都能为你的 AI 助手注入持久化的灵魂：
 
-### 🧠 灵魂内核
 - 🤖 **可定制人格** - 定义 AI 的名字、角色、性格、交互风格
 - 👤 **用户画像** - 记录你的信息、偏好、时区，让 AI 更懂你
 - ❤️ **PAD 情感模型** - 三维情感空间（愉悦度/唤醒度/支配度）实现情感计算
 - 🧠 **分层记忆系统** - 按时间切片（日/周/月/年）+ 主题分类的持久化记忆
 - 🏷️ **增强记忆** - 支持优先级标记、标签分类、模糊搜索的智能记忆检索
-
-### 🆕 v2.0 新特性
-- 👾 **桌面挂件伴侣** - 矢量动画桌面编程萌宠（内置粘液怪与猫咪形象），与 API 流量及审批动作深度联动
-- ⚙️ **多维度技能管理** - 支持全局、软件关联、项目专用三维技能软链部署，具备项目级优先级去重覆盖
-- 🔄 **增量会话扫描** - 基于修改时间与字节偏移的秒级增量历史日志扫描，支持日志截断/轮转自适应恢复
-- 🔒 **并发安全拦截审批** - 多线程非阻塞 TCP IPC 通信，安全操作卡口超时 30 秒默认拒绝（Deny）
-- 🌐 **API 代理网关** - 统一代理入口，自动检测运行环境并适配
-
-### 🔌 集成与生态
+- 👾 **桌面挂件伴侣 (v2.0)** - 矢量动画桌面编程萌宠（内置粘液怪与猫咪形象），与 API 流量及审批动作深度联动
+- ⚙️ **多维度技能管理 (v2.0)** - 支持全局、软件关联、项目专用三维技能软链部署，具备项目级优先级去重覆盖
+- 🔄 **增量会话扫描 (v2.0)** - 基于修改时间与字节偏移的秒级增量历史日志扫描，支持日志截断/轮转自适应恢复
+- 🔒 **并发安全拦截审批 (v2.0)** - 多线程非阻塞 TCP IPC 通信，安全操作卡口超时 30 秒默认拒绝（Deny）
 - 📊 **可视化监控** - 纯静态 Web UI 查看健康度趋势和情感变化历史
 - 🔌 **MCP 原生支持** - 通过 Model Context Protocol 对外开放所有能力
 - 🎯 **OpenClaw 集成** - 一键深度集成到 OpenClaw 工作区
@@ -54,8 +45,6 @@
 
 ## ✨ 核心功能
 
-### 基础能力
-
 | 功能 | 说明 |
 |------|------|
 | **配置管理** | 类型安全的配置加载器 + 4 个预设人格模板 + 自动验证 |
@@ -78,17 +67,6 @@
 | **健康度可视化** | 健康度历史趋势 SVG 图表 + 纯静态 Web UI |
 | **安全协议** | 三级安全等级控制（PUBLIC/PROTECTED/SEALED），保护敏感信息 |
 | **MCP 服务** | 遵循 Model Context Protocol 标准，支持所有兼容客户端 |
-
-### 🆕 v2.0 新增能力
-
-| 功能 | 说明 |
-|------|------|
-| **桌面挂件伴侣** | 矢量动画萌宠（粘液怪/猫咪），API 流量联动 + 审批弹窗交互 |
-| **多维度技能管理** | 全局/软件关联/项目专用三维技能软链，优先级去重覆盖 |
-| **增量会话扫描** | 基于 st_mtime + 字节偏移的秒级增量扫描，日志截断/轮转自适应 |
-| **并发安全审批** | 多线程非阻塞 TCP IPC，30 秒超时默认 Deny |
-| **API 代理网关** | 统一代理入口，自动检测 Claude Code / Codex / Gemini 环境 |
-| **Soul Packages** | 可分享的人格包格式，内置 DevAssistant 开发助手模板 |
 
 ---
 
