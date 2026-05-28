@@ -320,5 +320,3 @@ class TestInjectionConfig(unittest.TestCase):
         self.assertEqual(config.system_prompt_position, "top")
 
 
-if __name__ == "__main__":
-    unittest.main()

@@ -476,5 +476,3 @@ class TestSendRequestReconnect(BaseTest):
             storage._send_request({})
 
 
-if __name__ == "__main__":
-    unittest.main()

@@ -369,5 +369,3 @@ class TestGeminiAdapter(BaseTest):
         self.assertIn("...", summary)
 
 
-if __name__ == "__main__":
-    unittest.main()

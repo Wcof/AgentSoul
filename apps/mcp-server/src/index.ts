@@ -50,6 +50,8 @@ import { z } from 'zod';
 import { PROJECT_ROOT } from './lib/paths.js';
 import { initLanguage, getLanguageResources, getToolDescription, getStartupMessage } from './language/index.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { notifyState } from './lib/ipc.js';
+
 
 /**
  * Cached tools array with language descriptions already resolved.
@@ -232,6 +234,68 @@ import {
   handleListSubscriptions,
 } from './tools/subscription.js';
 
+import {
+  SemanticSearchSchema,
+  handleSemanticSearch,
+  CheckDeduplicationSchema,
+  handleCheckDeduplication,
+  SemanticStatsSchema,
+  handleSemanticStats,
+  IndexMemorySchema,
+  handleIndexMemory,
+  RebuildIndexSchema,
+  handleRebuildIndex,
+} from './tools/semantic.js';
+
+import {
+  MergeMemoriesSchema,
+  handleMergeMemories,
+  ExtractFactsSchema,
+  handleExtractFacts,
+  FactStatsSchema,
+  handleFactStats,
+} from './tools/fact_extractor.js';
+
+import {
+  PadEngineSummarySchema,
+  handlePadEngineSummary,
+  PadApplyEventSchema,
+  handlePadApplyEvent,
+  PadDetectDriftSchema,
+  handlePadDetectDrift,
+  PadResetSchema,
+  handlePadReset,
+} from './tools/pad-engine.js';
+
+import {
+  ConsolidateDailyToWeeklySchema,
+  handleConsolidateDailyToWeekly,
+  ConsolidateWeeklyToMonthlySchema,
+  handleConsolidateWeeklyToMonthly,
+  ConsolidateMonthlyToYearlySchema,
+  handleConsolidateMonthlyToYearly,
+} from './tools/memory-consolidator.js';
+
+import {
+  PetGetStatusSchema,
+  handlePetGetStatus,
+  PetSwitchCompanionSchema,
+  handlePetSwitchCompanion,
+  PetInteractSchema,
+  handlePetInteract,
+  PetListSkillsSchema,
+  handlePetListSkills,
+  PetToggleSkillSchema,
+  handlePetToggleSkill,
+  PetListSessionsSchema,
+  handlePetListSessions,
+  PetGetTokenStatsSchema,
+  handlePetGetTokenStats,
+  PetRequestPermissionSchema,
+  handlePetRequestPermission,
+} from './tools/pet.js';
+
+
 // 创建 MCP 服务器实例
 const server = new Server(
   {
@@ -366,7 +430,35 @@ const ALL_TOOLS: ToolMetadata[] = [
   { name: 'subscribe', fallbackDescription: 'Subscribe to soul events via webhook push. Get notified when memory is written, soul state changes, or topics are archived.', schema: SubscribeSchema },
   { name: 'unsubscribe', fallbackDescription: 'Cancel an existing subscription by ID.', schema: UnsubscribeSchema },
   { name: 'list_subscriptions', fallbackDescription: 'List all current subscriptions with their status.', schema: ListSubscriptionsSchema },
+  // Semantic Search tools
+  { name: 'semantic_search', fallbackDescription: 'Search memories using semantic similarity (vector embeddings). Supports natural language queries, tag filtering, priority filtering, and date range filtering. Returns results ranked by semantic relevance.', schema: SemanticSearchSchema },
+  { name: 'check_deduplication', fallbackDescription: 'Check if content is a duplicate of existing memories using semantic similarity. Returns whether duplicate exists, similar memory ID, and similarity score. Useful before creating new memories.', schema: CheckDeduplicationSchema },
+  { name: 'semantic_stats', fallbackDescription: 'Get semantic search statistics including embedding model, vector store info, and total indexed memories.', schema: SemanticStatsSchema },
+  { name: 'index_memory', fallbackDescription: 'Manually index a memory for semantic search. Call this after creating a memory to make it searchable via semantic_search.', schema: IndexMemorySchema },
+  { name: 'rebuild_index', fallbackDescription: 'Rebuild the semantic search index from all existing memories. Use this after initial setup or when embedding model changes.', schema: RebuildIndexSchema },
+  { name: 'merge_memories', fallbackDescription: 'Merge multiple memories into one. Supports concatenate, longest, and semantic_summary strategies. Removes source memories after merge.', schema: MergeMemoriesSchema },
+  { name: 'extract_facts', fallbackDescription: 'Extract structured facts from conversation text. Supports rule-based extraction (no API needed) and LLM-enhanced extraction. Returns facts with type, confidence, and verification flags.', schema: ExtractFactsSchema },
+  { name: 'fact_stats', fallbackDescription: 'Get statistics about extracted facts including counts by type and confidence level.', schema: FactStatsSchema },
+  // PAD Engine tools
+  { name: 'pad_engine_summary', fallbackDescription: 'Get PAD Engine summary including current emotional state (P/A/D + energy), baseline values, drift detection, and learning statistics.', schema: PadEngineSummarySchema },
+  { name: 'pad_apply_event', fallbackDescription: 'Apply an emotional event perturbation to the PAD engine. Supports positive, negative, surprise, stress, relaxation, conflict, and neutral events with configurable intensity.', schema: PadApplyEventSchema },
+  { name: 'pad_detect_drift', fallbackDescription: 'Detect personality drift from baseline. Returns drift severity (none/mild/moderate/severe), per-dimension drift values, and recommendations.', schema: PadDetectDriftSchema },
+  { name: 'pad_reset', fallbackDescription: 'Reset PAD emotional state back to baseline values. Use when personality drift is severe and needs correction.', schema: PadResetSchema },
+  // Memory Consolidation tools
+  { name: 'consolidate_daily_to_weekly', fallbackDescription: 'Consolidate daily memories into a weekly summary. Automatically extracts key facts, emotions, and tags. Skips already-consolidated weeks unless forced.', schema: ConsolidateDailyToWeeklySchema },
+  { name: 'consolidate_weekly_to_monthly', fallbackDescription: 'Consolidate weekly summaries into a monthly summary. Falls back to daily memories if weekly summaries are missing. Extracts key facts and emotions.', schema: ConsolidateWeeklyToMonthlySchema },
+  { name: 'consolidate_monthly_to_yearly', fallbackDescription: 'Consolidate monthly summaries into a yearly summary. Provides the highest-level memory abstraction with key facts and emotional trends.', schema: ConsolidateMonthlyToYearlySchema },
+  // Pet tools
+  { name: 'pet_get_status', fallbackDescription: 'Get the active companion (pet) status including level, energy, hunger, and active skin.', schema: PetGetStatusSchema },
+  { name: 'pet_switch_companion', fallbackDescription: 'Switch to a different companion character (e.g. slime, cat, dog).', schema: PetSwitchCompanionSchema },
+  { name: 'pet_interact', fallbackDescription: 'Interact with the companion pet (feed, play, pet, sleep) to change energy, hunger, intimacy and level.', schema: PetInteractSchema },
+  { name: 'pet_list_skills', fallbackDescription: 'List all custom skills registered in the DB and their activation status.', schema: PetListSkillsSchema },
+  { name: 'pet_toggle_skill', fallbackDescription: 'Enable or disable a specific custom skill by name.', schema: PetToggleSkillSchema },
+  { name: 'pet_list_sessions', fallbackDescription: 'List cached terminal/editor sessions to resume or query.', schema: PetListSessionsSchema },
+  { name: 'pet_get_token_stats', fallbackDescription: 'Get API token usage statistics and cost analysis for the proxy gateway.', schema: PetGetTokenStatsSchema },
+  { name: 'pet_request_permission', fallbackDescription: 'Request user approval popup confirmation via the desktop pet GUI (returns true if approved).', schema: PetRequestPermissionSchema },
   // Version management tools
+
   { name: 'get_persona_version', fallbackDescription: 'Get current persona version information including version number, timestamp and checksum.', schema: GetPersonaVersionSchema },
   { name: 'list_soul_versions', fallbackDescription: 'List all available soul state version snapshots for rollback.', schema: ListSoulVersionsSchema },
   { name: 'rollback_soul', fallbackDescription: 'Rollback soul state (PAD emotion) to a specific previous version.', schema: RollbackSoulSchema },
@@ -408,8 +500,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  // 根据工具名称分发到对应的处理函数
-  switch (name) {
+  const isPetTool = name.startsWith('pet_');
+  if (!isPetTool) {
+    notifyState('thinking');
+  }
+
+  try {
+    const result = await (async () => {
+      // 根据工具名称分发到对应的处理函数
+      switch (name) {
+
     // Soul tools
     case 'get_persona_config':
       return handleGetPersonaConfig();
@@ -570,6 +670,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case 'list_subscriptions':
       return handleListSubscriptions();
 
+    // Semantic Search tools
+    case 'semantic_search':
+      return handleSemanticSearch(SemanticSearchSchema.parse(args));
+    case 'check_deduplication':
+      return handleCheckDeduplication(CheckDeduplicationSchema.parse(args));
+    case 'semantic_stats':
+      return handleSemanticStats(SemanticStatsSchema.parse(args));
+    case 'index_memory':
+      return handleIndexMemory(IndexMemorySchema.parse(args));
+    case 'rebuild_index':
+      return handleRebuildIndex(RebuildIndexSchema.parse(args));
+
+    // Memory Merge & Fact Extraction tools
+    case 'merge_memories':
+      return handleMergeMemories(MergeMemoriesSchema.parse(args));
+    case 'extract_facts':
+      return handleExtractFacts(ExtractFactsSchema.parse(args));
+    case 'fact_stats':
+      return handleFactStats(FactStatsSchema.parse(args));
+
+    // PAD Engine tools
+    case 'pad_engine_summary':
+      return handlePadEngineSummary();
+    case 'pad_apply_event':
+      return handlePadApplyEvent(PadApplyEventSchema.parse(args));
+    case 'pad_detect_drift':
+      return handlePadDetectDrift();
+    case 'pad_reset':
+      return handlePadReset();
+
+    // Memory Consolidation tools
+    case 'consolidate_daily_to_weekly':
+      return handleConsolidateDailyToWeekly(ConsolidateDailyToWeeklySchema.parse(args));
+    case 'consolidate_weekly_to_monthly':
+      return handleConsolidateWeeklyToMonthly(ConsolidateWeeklyToMonthlySchema.parse(args));
+    case 'consolidate_monthly_to_yearly':
+      return handleConsolidateMonthlyToYearly(ConsolidateMonthlyToYearlySchema.parse(args));
+
     // Version management tools
     case 'get_persona_version':
       return handleGetPersonaVersion();
@@ -578,8 +716,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case 'rollback_soul':
       return handleRollbackSoul(RollbackSoulSchema.parse(args));
 
+    // Pet tools
+    case 'pet_get_status':
+      return handlePetGetStatus();
+    case 'pet_switch_companion':
+      return handlePetSwitchCompanion(PetSwitchCompanionSchema.parse(args));
+    case 'pet_interact':
+      return handlePetInteract(PetInteractSchema.parse(args));
+    case 'pet_list_skills':
+      return handlePetListSkills();
+    case 'pet_toggle_skill':
+      return handlePetToggleSkill(PetToggleSkillSchema.parse(args));
+    case 'pet_list_sessions':
+      return handlePetListSessions(PetListSessionsSchema.parse(args));
+    case 'pet_get_token_stats':
+      return handlePetGetTokenStats(PetGetTokenStatsSchema.parse(args));
+    case 'pet_request_permission':
+      return handlePetRequestPermission(PetRequestPermissionSchema.parse(args));
+
+
     default:
       throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+      }
+    })();
+
+    if (!isPetTool) {
+      notifyState('idle');
+    }
+    return result;
+  } catch (error) {
+    if (!isPetTool) {
+      notifyState('error');
+      setTimeout(() => notifyState('idle'), 3000);
+    }
+    throw error;
   }
 });
 

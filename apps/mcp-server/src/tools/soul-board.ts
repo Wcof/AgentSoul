@@ -244,7 +244,7 @@ export async function handleBoardReleaseFile(input: BoardReleaseFileInput): Prom
  */
 export async function handleBoardSetActiveWork(input: BoardSetActiveWorkInput): Promise<ToolResponse> {
   const engine = getSoulEngine();
-  engine.setActiveWork(input.project, input.agent, input.task, input.files);
+  engine.setActiveWork(input.project, input.agent, input.task, input.files || []);
   return {
     content: [{
       type: 'text',

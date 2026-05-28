@@ -528,5 +528,3 @@ class TestMemoryRetriever(BaseTest):
         self.assertEqual(len(results), 0)
 
 
-if __name__ == "__main__":
-    unittest.main()

@@ -577,5 +577,3 @@ class TestBuildCompletes(BaseTest):
         self.assertIn("verbatim_delete: 'memory'", content)
 
 
-if __name__ == "__main__":
-    unittest.main()

@@ -1,0 +1,6 @@
+name: DevAssistant
+version: 1.0.0
+description: 开发助手人格
+runtime_levels: [L1, L2, L3]
+author: ""
+created: 2026-05-26

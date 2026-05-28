@@ -43,6 +43,14 @@ interface TagStatOutput {
 }
 
 /**
+ * Read JSON file and cast to expected type, returning null if invalid
+ */
+function readTypedJson<T>(filePath: string): T | null {
+  const data = readJson(filePath);
+  return (data && typeof data === 'object') ? (data as T) : null;
+}
+
+/**
  * Read JSON file tool function
  */
 const readJsonFile = readJson;
@@ -102,7 +110,7 @@ export async function handleSearchMemory(
     for (const file of files) {
       try {
         const memoryPath = path.join(memoriesDir, file);
-        const memory = readJsonFile<MemoryData>(memoryPath);
+        const memory = readTypedJson<MemoryData>(memoryPath);
         if (!memory) continue;
 
         const memoryId = file.replace('.json', '');
@@ -215,7 +223,7 @@ export async function handleTagMemory(
     // Load tags index (Python format)
     let tagsIndex: TagsIndex = { tags: {}, memory_tags: {} };
     if (fs.existsSync(tagsIndexPath)) {
-      tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+      tagsIndex = readTypedJson<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
     }
 
     // Ensure memory_tags entry exists
@@ -245,7 +253,7 @@ export async function handleTagMemory(
 
     // Update tags in the memory file itself
     if (fs.existsSync(memoryPath)) {
-      const memory = readJsonFile<MemoryData>(memoryPath);
+      const memory = readTypedJson<MemoryData>(memoryPath);
       if (memory) {
         // Merge existing tags with new tags
         const currentMemoryTags = memory.tags || [];
@@ -314,7 +322,7 @@ export async function handleUntagMemory(
       };
     }
 
-    const tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+    const tagsIndex = readTypedJson<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
     const memoryTags = tagsIndex.memory_tags[memoryId];
 
     if (!memoryTags) {
@@ -355,7 +363,7 @@ export async function handleUntagMemory(
 
     // Update memory file
     if (fs.existsSync(memoryPath)) {
-      const memory = readJsonFile<MemoryData>(memoryPath);
+      const memory = readTypedJson<MemoryData>(memoryPath);
       if (memory && memory.tags) {
         const remainingTags = memory.tags.filter(t => !tags.map(tag => tag.trim().toLowerCase()).includes(t.toLowerCase()));
         memory.tags = remainingTags;
@@ -409,7 +417,7 @@ export async function handleGetMemoryTags(
     let tags: string[] = [];
 
     if (fs.existsSync(tagsIndexPath)) {
-      const tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+      const tagsIndex = readTypedJson<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
       tags = tagsIndex.memory_tags[memoryId] || [];
     }
 
@@ -459,7 +467,7 @@ export async function handleListTags(
     let tags: TagStatOutput[] = [];
 
     if (fs.existsSync(tagsIndexPath)) {
-      const tagsIndex = readJsonFile<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
+      const tagsIndex = readTypedJson<TagsIndex>(tagsIndexPath) || { tags: {}, memory_tags: {} };
 
       tags = Object.entries(tagsIndex.tags)
         .filter(([_, info]) => info.count >= min_count)
@@ -520,7 +528,7 @@ export async function handleSetMemoryPriority(
     // Load priority index
     let priorityIndex: PriorityIndex = { priorities: {} };
     if (fs.existsSync(priorityIndexPath)) {
-      priorityIndex = readJsonFile<PriorityIndex>(priorityIndexPath) || { priorities: {} };
+      priorityIndex = readTypedJson<PriorityIndex>(priorityIndexPath) || { priorities: {} };
     }
 
     // Update priority
@@ -536,7 +544,7 @@ export async function handleSetMemoryPriority(
 
     // Update memory file
     if (fs.existsSync(memoryPath)) {
-      const memory = readJsonFile<MemoryData>(memoryPath);
+      const memory = readTypedJson<MemoryData>(memoryPath);
       if (memory) {
         memory.priority = priority;
         writeJsonFile(memoryPath, memory);
@@ -589,7 +597,7 @@ export async function handleGetHighPriorityMemories(
     let highPriority: any[] = [];
 
     if (fs.existsSync(priorityIndexPath)) {
-      const priorityIndex = readJsonFile<PriorityIndex>(priorityIndexPath) || { priorities: {} };
+      const priorityIndex = readTypedJson<PriorityIndex>(priorityIndexPath) || { priorities: {} };
 
       highPriority = Object.entries(priorityIndex.priorities)
         .filter(([_, info]) => info.level === 'high')

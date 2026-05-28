@@ -483,5 +483,3 @@ class TestVersionRollback(BaseTest):
                 self.assertEqual(result[0]["description"], "d1")
 
 
-if __name__ == "__main__":
-    unittest.main()

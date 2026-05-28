@@ -412,5 +412,3 @@ class TestInstallMcpClients(unittest.TestCase):
         self.assertIn("python3 -m agentsoul.health.companionship_checker --summary-json > companionship-summary.json", companionship_yml)
 
 
-if __name__ == "__main__":
-    unittest.main()

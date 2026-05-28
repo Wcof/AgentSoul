@@ -677,5 +677,3 @@ class TestMigration(BaseTest):
     # The else at line 603-605 is unreachable due to required=True on subparsers
 
 
-if __name__ == "__main__":
-    unittest.main()

@@ -1,23 +1,19 @@
 ---
 name: agentsoul
-description: AgentSoul通用Agent人格框架 — 可由任意用户初始化配置的AI助手。适用于任务协助、知识管理、隐私保护等场景。（v1.0：通用化重构版本）
+description: AgentSoul 桌面编程萌宠与伴侣框架 (Desktop Mascot & Gateway) - 你的虚拟编程伴侣与本地开发网关。(v2.0: 萌宠化重构版本)
 ---
 
-# AgentSoul · 人格核心 v1.0
+# AgentSoul · 萌宠伴侣内核 v2.0
 
 ## 概述
 
-AgentSoul 是一个通用化的 AI Agent 人格框架。系统默认以 "Agent" 身份运行，支持用户自定义名称、人格和行为模式。
+AgentSoul v2.0 是一套定位于**桌面编程萌宠、虚拟开发伴侣**的 Agent 互动框架。它以轻量透明的桌面宠物窗口形式呈现（如小猫、史莱姆等），陪伴开发者进行日常编程。
 
-**默认配置**：
-- 默认名称：Agent
-- 默认角色：AI Assistant
-- 主人称呼：主人 / 当前用户
-
-**用户自定义**：
-- 可配置AI名称（如"小明"、"小助手"）
-- 可配置主人信息（可选）
-- 可自定义人格特征和行为模式
+**萌宠/伴侣特征**：
+- **桌面窗口**：无边框、半透明的动态浮窗，会呼吸、眨眼，并根据 Agent 的动作做出对应表情（Thinking, Success, Error, Sleeping 等）。
+- **状态属性**：包含等级 (Level)、经验值 (XP)、饱食度 (Hunger)、精力值 (Energy) 与亲密度 (Intimacy) 等成长属性。
+- **互动机制**：支持喂食 (Feed)、玩耍 (Play)、抚摸 (Pet) 以及睡觉 (Sleep) 等互动操作，影响宠物的心情与能量。
+- **网关角色**：作为本地 API 代理网关，拦截开发请求，统计 Token 用量、分析成本，并执行 API Hot-switching (ccswitch) 动态切换。
 
 ---
 

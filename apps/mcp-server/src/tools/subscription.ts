@@ -24,8 +24,8 @@ function readSubscriptions(): Subscription[] {
   if (!SUBSCRIPTIONS_PATH) {
     return [];
   }
-  const result = readJson<Subscription[]>(SUBSCRIPTIONS_PATH);
-  return result || [];
+  const result = readJson(SUBSCRIPTIONS_PATH);
+  return (result && Array.isArray(result)) ? (result as Subscription[]) : [];
 }
 
 /**
@@ -319,9 +319,9 @@ function getConfigTimeout(): number {
       cachedTimeout = defaultTimeout;
       return defaultTimeout;
     }
-    const config = readJson<AgentSoulConfig>(checkedPath);
+    const config = (readJson(checkedPath) as AgentSoulConfig);
     if (config && config.subscription && config.subscription.enabled) {
-      cachedTimeout = config.subscription.timeoutMs || defaultTimeout;
+      cachedTimeout = config.subscription.timeoutMs ?? defaultTimeout;
       return cachedTimeout;
     }
     cachedTimeout = defaultTimeout;
@@ -347,9 +347,9 @@ function getConfigRetries(): number {
       cachedRetries = defaultRetries;
       return defaultRetries;
     }
-    const config = readJson<AgentSoulConfig>(checkedPath);
+    const config = (readJson(checkedPath) as AgentSoulConfig);
     if (config && config.subscription && config.subscription.enabled) {
-      cachedRetries = config.subscription.maxRetries ?? defaultRetries;
+      cachedRetries = (config.subscription.maxRetries !== null && config.subscription.maxRetries !== undefined) ? config.subscription.maxRetries : defaultRetries;
       return cachedRetries;
     }
     cachedRetries = defaultRetries;

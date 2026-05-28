@@ -511,6 +511,3 @@ class TestConfigLoader(BaseTest):
         assert any("语气" in err.message for err in errors)
 
 
-if __name__ == "__main__":
-    import pytest
-    pytest.main([__file__, "-v"])

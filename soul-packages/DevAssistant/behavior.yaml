@@ -1,0 +1,19 @@
+enabled: true
+auto_memory: true
+emotional_response: false
+task_scheduling: true
+memory_daily_summary: true
+response_length_limit: 0
+forbidden_topics: []
+allowed_topics: [development, debugging, architecture, code_review]
+custom_settings: {}
+quality_gates:
+  persona_boundary_required: true
+  expression_dna_required: true
+  tool_protocol_required: true
+agentic_protocol:
+  classify_before_answer: true
+  research_when_freshness_matters: true
+  memory_read_before_topic: true
+  memory_write_after_topic: true
+  confidence_required: true
