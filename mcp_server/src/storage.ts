@@ -247,47 +247,56 @@ export class StorageManager {
     const content = readFile(configPath);
     if (content === null) {
       console.error(`[AgentSoul Storage] WARNING: Could not read persona config from ${configPath}, using defaults`);
-      console.error(`[AgentSoul Storage] PROJECT_ROOT = ${PROJECT_ROOT}`);
       return getDefaultPersonaConfig();
     }
 
-    const raw = yaml.load(content) as RawPersonaConfig;
+    try {
+      const raw = yaml.load(content) as any;
 
-    let aiData: Record<string, unknown>;
-    let masterData: Record<string, unknown>;
+      let aiData: Record<string, unknown> = {};
+      let masterData: Record<string, unknown> = {};
 
-    // 检测并处理不同版本的配置格式
-    if ('agent' in raw && raw.agent) {
-      aiData = raw.agent as Record<string, unknown>;
-      masterData = (raw as { master?: Record<string, unknown> }).master || {};
-    } else if ('persona' in raw && raw.persona && 'ai' in raw.persona) {
-      aiData = raw.persona.ai as Record<string, unknown>;
-      masterData = (raw.persona as { master?: Record<string, unknown> }).master || {};
-    } else if ('ai' in raw) {
-      aiData = raw.ai as Record<string, unknown>;
-      masterData = (raw as { master?: Record<string, unknown> }).master || {};
-    } else {
-      aiData = { name: 'Agent' };
-      masterData = {};
+      if (raw && raw.characters && raw.active_character) {
+        const activeChar = raw.active_character;
+        aiData = raw.characters[activeChar] || {};
+        masterData = raw.master || {};
+      } else {
+        if ('agent' in raw && raw.agent) {
+          aiData = raw.agent as Record<string, unknown>;
+          masterData = (raw as { master?: Record<string, unknown> }).master || {};
+        } else if ('persona' in raw && raw.persona && 'ai' in raw.persona) {
+          aiData = raw.persona.ai as Record<string, unknown>;
+          masterData = (raw.persona as { master?: Record<string, unknown> }).master || {};
+        } else if ('ai' in raw) {
+          aiData = raw.ai as Record<string, unknown>;
+          masterData = (raw as { master?: Record<string, unknown> }).master || {};
+        } else {
+          aiData = { name: 'Agent' };
+          masterData = {};
+        }
+      }
+
+      return {
+        ai: {
+          name: safeGet(aiData, 'name', 'Agent'),
+          nickname: safeGet(aiData, 'nickname', ''),
+          naming_mode: safeGet(aiData, 'naming_mode', 'default'),
+          role: safeGet(aiData, 'role', 'AI Assistant'),
+          personality: toList(aiData.personality) as string[],
+          core_values: toList(aiData.core_values) as string[],
+          interaction_style: safeGet(aiData, 'interaction_style', {}),
+        },
+        master: {
+          name: safeGet(masterData, 'name', ''),
+          nickname: toList(masterData.nickname) as string[],
+          timezone: safeGet(masterData, 'timezone', 'Asia/Shanghai'),
+          labels: toList(masterData.labels) as string[],
+        },
+      };
+    } catch (e) {
+      console.error(`[AgentSoul Storage] Error parsing persona config: ${e}`);
+      return getDefaultPersonaConfig();
     }
-
-    return {
-      ai: {
-        name: safeGet(aiData, 'name', 'Agent'),
-        nickname: safeGet(aiData, 'nickname', ''),
-        naming_mode: safeGet(aiData, 'naming_mode', 'default'),
-        role: safeGet(aiData, 'role', 'AI Assistant'),
-        personality: toList(aiData.personality) as string[],
-        core_values: toList(aiData.core_values) as string[],
-        interaction_style: safeGet(aiData, 'interaction_style', {}),
-      },
-      master: {
-        name: safeGet(masterData, 'name', ''),
-        nickname: toList(masterData.nickname) as string[],
-        timezone: safeGet(masterData, 'timezone', 'Asia/Shanghai'),
-        labels: toList(masterData.labels) as string[],
-      },
-    };
   }
 
   /**
@@ -298,23 +307,58 @@ export class StorageManager {
   writePersonaConfig(config: PersonaConfig): boolean {
     const configPath = path.join(PROJECT_ROOT, 'config', 'persona.yaml');
 
-    // Convert back to YAML format expected by the project
-    const yamlContent = yaml.dump({
-      agent: {
-        name: config.ai.name,
-        nickname: config.ai.nickname,
-        role: config.ai.role,
-        personality: config.ai.personality,
-        core_values: config.ai.core_values,
-        interaction_style: config.ai.interaction_style,
-      },
-      master: {
+    let raw: any = {};
+    if (fs.existsSync(configPath)) {
+      try {
+        const content = fs.readFileSync(configPath, 'utf8');
+        raw = yaml.load(content) || {};
+      } catch (e) {
+        raw = {};
+      }
+    }
+
+    let yamlContent = '';
+
+    if (raw && raw.characters && raw.active_character) {
+      const activeChar = raw.active_character;
+      if (!raw.characters[activeChar]) {
+        raw.characters[activeChar] = {};
+      }
+      
+      const char = raw.characters[activeChar];
+      char.name = config.ai.name;
+      char.nickname = config.ai.nickname;
+      char.role = config.ai.role;
+      char.personality = config.ai.personality;
+      char.core_values = config.ai.core_values;
+      char.interaction_style = config.ai.interaction_style;
+
+      raw.master = {
         name: config.master.name,
         nickname: config.master.nickname,
         timezone: config.master.timezone,
         labels: config.master.labels,
-      },
-    });
+      };
+
+      yamlContent = yaml.dump(raw, { noRefs: true });
+    } else {
+      yamlContent = yaml.dump({
+        agent: {
+          name: config.ai.name,
+          nickname: config.ai.nickname,
+          role: config.ai.role,
+          personality: config.ai.personality,
+          core_values: config.ai.core_values,
+          interaction_style: config.ai.interaction_style,
+        },
+        master: {
+          name: config.master.name,
+          nickname: config.master.nickname,
+          timezone: config.master.timezone,
+          labels: config.master.labels,
+        },
+      });
+    }
 
     const success = writeFile(configPath, yamlContent);
     logWAL('writePersonaConfig', 'persona.yaml', { agent_name: config.ai.name, master_name: config.master.name, success });

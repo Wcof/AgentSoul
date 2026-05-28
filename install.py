@@ -470,7 +470,7 @@ def prompt_with_default(prompt_key: str, default: str, lang: str) -> str:
 
 
 def run_interactive_config_wizard(project_root: Path) -> None:
-    """Run bilingual interactive configuration wizard.
+    """Run bilingual interactive configuration wizard for Pet Mascot & Gateway.
 
     Guides user through filling all configuration fields for both agent and master,
     then writes directly to config/persona.yaml and initializes soul state.
@@ -490,7 +490,6 @@ def run_interactive_config_wizard(project_root: Path) -> None:
             lang = 'en'
             break
         else:
-            # Use Chinese for error messages before language is selected
             print(PROMPTS['zh']['invalid_language'])
 
     def p(key: str) -> str:
@@ -500,21 +499,47 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     print(p('welcome'))
     print()
 
-    # Step 2: Agent (Soul) Configuration
+    # Step 2: Agent (Soul / Pet Mascot) Configuration
     print(p('section_agent'))
 
-    agent_name = prompt_with_default('agent_name', DEFAULT_PERSONA_DATA["agent"]["name"], lang)
+    # Choose pet species
+    while True:
+        species_choice = input(p('active_char') if 'active_char' in PROMPTS[lang] else "请选择伴侣萌宠种类 (1: 史莱姆 slime, 2: 橘猫 cat) [默认: 1]: ").strip()
+        if species_choice in ['', '1']:
+            active_char = 'slime'
+            species = 'slime'
+            break
+        elif species_choice == '2':
+            active_char = 'cat'
+            species = 'cat'
+            break
+        else:
+            print("❌ 无效选择，请输入 1 或 2")
+
+    agent_name = prompt_with_default('agent_name', "Slimey" if species == "slime" else "Kitty", lang)
     agent_nickname = prompt_with_default('agent_nickname', '', lang)
-    agent_role = prompt_with_default('agent_role', DEFAULT_PERSONA_DATA["agent"]["role"], lang)
+    agent_role = prompt_with_default('agent_role', "Programming Pet Companion", lang)
+    
     personality_input = input(p('personality') + ": ").strip()
     personality = parse_comma_separated(personality_input)
     core_values_input = input(p('core_values') + ": ").strip()
     core_values = parse_comma_separated(core_values_input)
 
+    # API Proxy Key details
+    print("\n--- 代理网关配置 (API Gateway Proxy) ---")
+    api_url = input("API Gateway 下游 API 地址 (例: https://api.deepseek.com/v1) [可选, 回车跳过]: ").strip()
+    api_key = input("API Gateway 密钥 API Key [可选, 回车跳过]: ").strip()
+    model = input("API Gateway 模型 Model (例: deepseek-chat) [可选, 回车跳过]: ").strip()
+
     print(p('section_interaction'))
-    tone = select_from_list('tone', ALLOWED_TONES, DEFAULT_PERSONA_DATA["agent"]["interaction_style"]["tone"], lang)
-    interaction_lang = select_from_list('language', ALLOWED_LANGUAGES, DEFAULT_PERSONA_DATA["agent"]["interaction_style"]["language"], lang)
-    emoji_usage = select_from_list('emoji_usage', ALLOWED_EMOJI_FREQS, DEFAULT_PERSONA_DATA["agent"]["interaction_style"]["emoji_usage"], lang)
+    default_tone = "Friendly"
+    tone = select_from_list('tone', ALLOWED_TONES, default_tone, lang)
+    
+    default_lang = "Chinese"
+    interaction_lang = select_from_list('language', ALLOWED_LANGUAGES, default_lang, lang)
+    
+    default_emoji = "moderate"
+    emoji_usage = select_from_list('emoji_usage', ALLOWED_EMOJI_FREQS, default_emoji, lang)
 
     print()
 
@@ -527,14 +552,14 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     print(p('timezone') + " " + p('timezone_hint'))
 
     tz_pattern = r'^[A-Za-z]+/[A-Za-z_]+$'
+    default_tz = "Asia/Shanghai"
     while True:
-        timezone = prompt_with_default('timezone', DEFAULT_PERSONA_DATA["master"]["timezone"], lang)
+        timezone = prompt_with_default('timezone', default_tz, lang)
         if not timezone:
-            # Empty falls back to default which is valid
-            timezone = DEFAULT_PERSONA_DATA["master"]["timezone"]
+            timezone = default_tz
             break
         if re.match(tz_pattern, timezone):
-            break  # Valid format
+            break
         print(f"❌ {PROMPTS[lang]['invalid_timezone']}")
 
     labels_input = input(p('labels') + ": ").strip()
@@ -545,11 +570,14 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     # Step 4: Summary
     print(p('summary_header'))
     print()
-    print(p('summary_agent_name').format(name=agent_name or DEFAULT_PERSONA_DATA["agent"]["name"]))
+    print(f"萌宠种类 (Species): {species}")
+    print(p('summary_agent_name').format(name=agent_name))
     print(p('summary_agent_nickname').format(nickname=agent_nickname or '(empty)'))
-    print(p('summary_agent_role').format(role=agent_role or DEFAULT_PERSONA_DATA["agent"]["role"]))
+    print(p('summary_agent_role').format(role=agent_role))
     print(p('summary_personality').format(personality=', '.join(personality) if personality else '(empty)'))
     print(p('summary_core_values').format(values=', '.join(core_values) if core_values else '(empty)'))
+    print(f"网关 API 地址: {api_url or '(empty)'}")
+    print(f"网关 Model 模型: {model or '(empty)'}")
     print(p('summary_tone').format(tone=tone))
     print(p('summary_language').format(lang=interaction_lang))
     print(p('summary_emoji').format(emoji=emoji_usage))
@@ -581,18 +609,33 @@ def run_interactive_config_wizard(project_root: Path) -> None:
     log(p('writing'), "STEP")
 
     config_data = {
-        "agent": {
-            "name": agent_name if agent_name != "" else DEFAULT_PERSONA_DATA["agent"]["name"],
-            "nickname": agent_nickname,
-            "naming_mode": "default",
-            "role": agent_role,
-            "personality": personality,
-            "core_values": core_values,
-            "interaction_style": {
-                "tone": tone,
-                "language": interaction_lang,
-                "emoji_usage": emoji_usage,
-            },
+        "active_character": active_char,
+        "characters": {
+            active_char: {
+                "name": agent_name,
+                "species": species,
+                "stage": "baby",
+                "level": 1,
+                "xp": 0,
+                "hunger": 100,
+                "energy": 100,
+                "intimacy": 0,
+                "active_skin": "default",
+                "unlocked_skins": ["default"],
+                "unlocked_skills": ["chat"],
+                "api_key": api_key,
+                "api_url": api_url,
+                "model": model,
+                "role": agent_role,
+                "nickname": agent_nickname,
+                "personality": personality,
+                "core_values": core_values,
+                "interaction_style": {
+                    "tone": tone,
+                    "language": interaction_lang,
+                    "emoji_usage": emoji_usage,
+                }
+            }
         },
         "master": {
             "name": master_name,
@@ -2739,6 +2782,32 @@ def summarize_component_checks(checks: list[dict[str, Any]]) -> list[dict[str, A
     return results
 
 
+def check_pyside6() -> None:
+    """Check if PySide6 is installed, and prompt to install if missing."""
+    try:
+        import PySide6
+        log("检测到 PySide6 已安装，桌面伴侣 GUI 依赖就绪", "OK")
+    except ImportError:
+        log("提示: 缺少 PySide6 库（用于桌面萌宠伴侣 GUI 渲染）", "WARN")
+        while True:
+            choice = input("是否立即自动使用 pip 安装 PySide6？[Y/n]: ").strip().lower()
+            if choice in ["", "y", "yes"]:
+                log("正在运行 pip install PySide6...", "STEP")
+                try:
+                    import subprocess
+                    subprocess.run([sys.executable, "-m", "pip", "install", "PySide6"], check=True)
+                    log("PySide6 安装成功！", "OK")
+                    break
+                except Exception as e:
+                    log(f"PySide6 安装失败: {e}，您可以后续手动运行 'pip install PySide6'", "ERROR")
+                    break
+            elif choice in ["n", "no"]:
+                log("已跳过 PySide6 安装，桌面伴侣 GUI 届时将无法运行", "INFO")
+                break
+            else:
+                print("❌ 无效选择，请输入 y 或 n")
+
+
 def check_and_initialize_configs(project_root: Path) -> None:
     """Check for existing soul and master configs and prompt for initialization.
 
@@ -2746,6 +2815,7 @@ def check_and_initialize_configs(project_root: Path) -> None:
     - Existing configs: ask user if they want to reset
     - Always re-creates defaults if user agrees
     """
+    check_pyside6()
     config_loader = ConfigLoader(project_root)
     persona_path = project_root / "config" / "persona.yaml"
     soul_state_path = project_root / "data" / "soul" / "soul_variable" / "state_vector.json"

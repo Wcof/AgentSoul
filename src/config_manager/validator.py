@@ -30,13 +30,47 @@ class ConfigValidator:
 
     def validate(self, config: dict[str, Any]) -> list[ValidationError]:
         errors: list[ValidationError] = []
-        errors.extend(self._validate_agent_config(config))
+        
+        # Check if v2 config (multi-character)
+        if "characters" in config:
+            active_char = config.get("active_character")
+            if not active_char:
+                self._add_error(errors, "active_character", "缺少 active_character 字段", "error")
+            elif not isinstance(active_char, str):
+                self._add_error(errors, "active_character", "active_character 必须是字符串", "error")
+            
+            characters = config.get("characters", {})
+            if not isinstance(characters, dict):
+                self._add_error(errors, "characters", "characters 必须是字典类型", "error")
+            else:
+                if active_char and active_char not in characters:
+                    self._add_error(errors, "active_character", f"active_character '{active_char}' 不在 characters 列表中", "error")
+                
+                for char_id, char_data in characters.items():
+                    if not isinstance(char_data, dict):
+                        self._add_error(errors, f"characters.{char_id}", f"角色 {char_id} 的配置必须是字典类型", "error")
+                        continue
+                    
+                    # Wrap char_data under "agent" so existing _validate methods can run unchanged
+                    wrapped = {"agent": char_data}
+                    
+                    # Validate this character
+                    errors.extend(self._validate_agent_config(wrapped))
+                    errors.extend(self._validate_interaction_style(wrapped))
+                    errors.extend(self._validate_expression_dna(wrapped))
+                    errors.extend(self._validate_honest_boundaries(wrapped))
+                    errors.extend(self._validate_internal_tensions(wrapped))
+                    errors.extend(self._validate_capability_profile(wrapped))
+        else:
+            # v1 single agent validation
+            errors.extend(self._validate_agent_config(config))
+            errors.extend(self._validate_interaction_style(config))
+            errors.extend(self._validate_expression_dna(config))
+            errors.extend(self._validate_honest_boundaries(config))
+            errors.extend(self._validate_internal_tensions(config))
+            errors.extend(self._validate_capability_profile(config))
+
         errors.extend(self._validate_master_config(config))
-        errors.extend(self._validate_interaction_style(config))
-        errors.extend(self._validate_expression_dna(config))
-        errors.extend(self._validate_honest_boundaries(config))
-        errors.extend(self._validate_internal_tensions(config))
-        errors.extend(self._validate_capability_profile(config))
         errors.extend(self._validate_behavior_config(config))
         return errors
 

@@ -9,8 +9,13 @@ import sys
 
 # 确保项目根目录和 src 目录在路径中
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+src_path = str(PROJECT_ROOT / "src")
+if src_path not in sys.path:
+    # Insert src after the root project path
+    idx = sys.path.index(str(PROJECT_ROOT)) + 1
+    sys.path.insert(idx, src_path)
 
 
 @pytest.fixture

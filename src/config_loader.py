@@ -77,6 +77,21 @@ class AgentConfig:
     honest_boundaries: HonestBoundaries = field(default_factory=HonestBoundaries)
     internal_tensions: list[InternalTension] = field(default_factory=list)
     capability_profile: CapabilityProfile = field(default_factory=CapabilityProfile)
+    
+    # New Pet Attributes
+    species: str = "slime"
+    stage: str = "baby"
+    level: int = 1
+    xp: int = 0
+    hunger: int = 100
+    energy: int = 100
+    intimacy: int = 0
+    active_skin: str = "default"
+    unlocked_skins: list[str] = field(default_factory=list)
+    unlocked_skills: list[str] = field(default_factory=list)
+    api_key: str = ""
+    api_url: str = ""
+    model: str = ""
 
 
 @dataclass
@@ -123,8 +138,20 @@ class BehaviorConfig:
 
 @dataclass
 class PersonaConfig:
-    ai: AgentConfig = field(default_factory=AgentConfig)
+    active_character: str = "slime"
+    characters: dict[str, AgentConfig] = field(default_factory=dict)
     master: MasterConfig = field(default_factory=MasterConfig)
+
+    @property
+    def ai(self) -> AgentConfig:
+        """Dynamic fallback property returning the active character's configuration."""
+        if self.active_character in self.characters:
+            return self.characters[self.active_character]
+        if self.characters:
+            return next(iter(self.characters.values()))
+        fallback = AgentConfig()
+        self.characters[self.active_character] = fallback
+        return fallback
 
 
 class ConfigLoader(TTLCacheBase):
@@ -158,24 +185,10 @@ class ConfigLoader(TTLCacheBase):
         with open(file_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
-    def load_persona_config(self, persona_path: Path | None = None) -> PersonaConfig:
-        if self._cache_is_valid():
-            assert self._persona_cache is not None
-            return self._persona_cache
-
-        if persona_path is None:
-            persona_path = self.project_root / "config" / "persona.yaml"
-
-        raw_config = self.load_yaml(persona_path)
-        self._config_cache = raw_config
-
-        ai_data = raw_config.get("agent") or raw_config.get("ai") or raw_config.get("persona", {})
-        if isinstance(ai_data, dict):
-            ai_data = ai_data.get("ai", ai_data)
-
-        master_data = raw_config.get("master", {})
-
-        ai_config = AgentConfig(
+    def _parse_agent_config(self, ai_data: Any) -> AgentConfig:
+        if not isinstance(ai_data, dict):
+            ai_data = {}
+        return AgentConfig(
             name=self._safe_get(ai_data, "name", self.DEFAULT_AGENT_NAME),
             nickname=self._safe_get(ai_data, "nickname", ""),
             naming_mode=self._safe_get(ai_data, "naming_mode", "default"),
@@ -187,7 +200,52 @@ class ConfigLoader(TTLCacheBase):
             honest_boundaries=self._parse_honest_boundaries(ai_data.get("honest_boundaries", {})),
             internal_tensions=self._parse_internal_tensions(ai_data.get("internal_tensions", [])),
             capability_profile=self._parse_capability_profile(ai_data.get("capability_profile", {})),
+            species=self._safe_get(ai_data, "species", "slime"),
+            stage=self._safe_get(ai_data, "stage", "baby"),
+            level=int(self._safe_get(ai_data, "level", 1)),
+            xp=int(self._safe_get(ai_data, "xp", 0)),
+            hunger=int(self._safe_get(ai_data, "hunger", 100)),
+            energy=int(self._safe_get(ai_data, "energy", 100)),
+            intimacy=int(self._safe_get(ai_data, "intimacy", 0)),
+            active_skin=self._safe_get(ai_data, "active_skin", "default"),
+            unlocked_skins=self._to_list(ai_data.get("unlocked_skins", ["default"])),
+            unlocked_skills=self._to_list(ai_data.get("unlocked_skills", ["chat"])),
+            api_key=self._safe_get(ai_data, "api_key", ""),
+            api_url=self._safe_get(ai_data, "api_url", ""),
+            model=self._safe_get(ai_data, "model", "")
         )
+
+    def load_persona_config(self, persona_path: Path | None = None) -> PersonaConfig:
+        if self._cache_is_valid():
+            assert self._persona_cache is not None
+            return self._persona_cache
+
+        if persona_path is None:
+            persona_path = self.project_root / "config" / "persona.yaml"
+
+        raw_config = self.load_yaml(persona_path)
+        self._config_cache = raw_config
+
+        active_char = raw_config.get("active_character", "slime")
+        characters_data = raw_config.get("characters", {})
+
+        characters = {}
+        if not characters_data and ("agent" in raw_config or "ai" in raw_config or "persona" in raw_config):
+            # v1 legacy config migration
+            legacy_data = raw_config.get("agent") or raw_config.get("ai") or raw_config.get("persona", {})
+            if isinstance(legacy_data, dict) and "ai" in legacy_data:
+                legacy_data = legacy_data.get("ai", legacy_data)
+            
+            parsed_agent = self._parse_agent_config(legacy_data)
+            characters[active_char] = parsed_agent
+        else:
+            for char_id, char_data in characters_data.items():
+                characters[char_id] = self._parse_agent_config(char_data)
+
+        if not characters:
+            characters[active_char] = AgentConfig(name="Slimey", species="slime")
+
+        master_data = raw_config.get("master", {})
 
         master_config = MasterConfig(
             name=self._safe_get(master_data, "name", self.DEFAULT_MASTER_NAME),
@@ -198,7 +256,11 @@ class ConfigLoader(TTLCacheBase):
             labels=self._to_list(master_data.get("labels", [])),
         )
 
-        self._persona_cache = PersonaConfig(ai=ai_config, master=master_config)
+        self._persona_cache = PersonaConfig(
+            active_character=active_char,
+            characters=characters,
+            master=master_config
+        )
         self._update_cache_timestamp()
         return self._persona_cache
 
@@ -442,6 +504,75 @@ class ConfigLoader(TTLCacheBase):
         # Update cache timestamp when we reload
         self._update_cache_timestamp()
         return behavior
+
+    def save_persona_config(self, config: PersonaConfig, persona_path: Path | None = None) -> None:
+        if persona_path is None:
+            persona_path = self.project_root / "config" / "persona.yaml"
+        
+        characters_dict = {}
+        for char_id, char in config.characters.items():
+            characters_dict[char_id] = {
+                "name": char.name,
+                "nickname": char.nickname,
+                "naming_mode": char.naming_mode,
+                "role": char.role,
+                "personality": char.personality,
+                "core_values": char.core_values,
+                "interaction_style": char.interaction_style,
+                "expression_dna": {
+                    "sentence_length": char.expression_dna.sentence_length,
+                    "question_ratio": char.expression_dna.question_ratio,
+                    "analogy_density": char.expression_dna.analogy_density,
+                    "certainty_style": char.expression_dna.certainty_style,
+                    "structure_preference": char.expression_dna.structure_preference,
+                    "taboo_phrases": char.expression_dna.taboo_phrases,
+                    "signature_moves": char.expression_dna.signature_moves,
+                },
+                "honest_boundaries": {
+                    "limitations": char.honest_boundaries.limitations,
+                    "blind_spots": char.honest_boundaries.blind_spots,
+                    "stale_info_policy": char.honest_boundaries.stale_info_policy,
+                    "uncertainty_policy": char.honest_boundaries.uncertainty_policy,
+                },
+                "internal_tensions": [
+                    {"name": t.name, "description": t.description, "resolution_rule": t.resolution_rule}
+                    for t in char.internal_tensions
+                ],
+                "capability_profile": {
+                    "strong_at": char.capability_profile.strong_at,
+                    "weak_at": char.capability_profile.weak_at,
+                    "must_use_tools_when": char.capability_profile.must_use_tools_when,
+                    "must_refuse_when": char.capability_profile.must_refuse_when,
+                },
+                "species": char.species,
+                "stage": char.stage,
+                "level": char.level,
+                "xp": char.xp,
+                "hunger": char.hunger,
+                "energy": char.energy,
+                "intimacy": char.intimacy,
+                "active_skin": char.active_skin,
+                "unlocked_skins": char.unlocked_skins,
+                "unlocked_skills": char.unlocked_skills,
+                "api_key": char.api_key,
+                "api_url": char.api_url,
+                "model": char.model,
+            }
+        
+        data = {
+            "active_character": config.active_character,
+            "characters": characters_dict,
+            "master": {
+                "name": config.master.name,
+                "nickname": config.master.nickname,
+                "timezone": config.master.timezone,
+                "labels": config.master.labels,
+            }
+        }
+        
+        with open(persona_path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, sort_keys=False)
+
 # Default persona configuration data - created once at module load
 DEFAULT_PERSONA_DATA: dict[str, Any] = {
     "agent": {
