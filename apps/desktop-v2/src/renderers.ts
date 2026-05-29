@@ -13,6 +13,16 @@ import type {
   DesktopRiskNotice,
   CompanionInteractionKind,
 } from "./types";
+import i18nInstance from "./i18n";
+
+function t(key: string, fallback: string): string {
+  // @ts-ignore
+  const instance = typeof i18nInstance !== "undefined" ? i18nInstance : (typeof globalThis.i18nInstance !== "undefined" ? globalThis.i18nInstance : null);
+  if (instance && typeof instance.t === "function") {
+    return instance.t(key);
+  }
+  return fallback;
+}
 
 export const defaultCompanionSnapshot: CompanionRuntimeSnapshot = {
   companion: {
@@ -440,13 +450,13 @@ export function renderControlCenterTaskNavigation(): string {
       <p class="eyebrow">Control Center task navigation</p>
       <p class="control-note">Local-first configuration surface; cloud login not required.</p>
       <div class="control-center-nav-actions">
-        <a href="#control-center-companion" data-nav-target="companion">Companion</a>
-        <a href="#control-center-gateway" data-nav-target="gateway">Gateway</a>
-        <a href="#control-center-skills" data-nav-target="skills">Skills</a>
-        <a href="#control-center-sessions" data-nav-target="sessions">Sessions</a>
-        <a href="#control-center-costs" data-nav-target="costs">Costs</a>
-        <a href="#control-center-safety" data-nav-target="safety">Safety</a>
-        <a href="#control-center-settings" data-nav-target="settings">Settings</a>
+        <a href="#control-center-companion" data-nav-target="companion">${t("nav.companion", "Companion")}</a>
+        <a href="#control-center-gateway" data-nav-target="gateway">${t("nav.gateway", "Gateway")}</a>
+        <a href="#control-center-skills" data-nav-target="skills">${t("nav.skills", "Skills")}</a>
+        <a href="#control-center-sessions" data-nav-target="sessions">${t("nav.sessions", "Sessions")}</a>
+        <a href="#control-center-costs" data-nav-target="costs">${t("nav.costs", "Costs")}</a>
+        <a href="#control-center-safety" data-nav-target="safety">${t("nav.safety", "Safety")}</a>
+        <a href="#control-center-settings" data-nav-target="settings">${t("nav.settings", "Settings")}</a>
       </div>
     </nav>
   `;
@@ -459,7 +469,7 @@ export function renderControlCenterCompanionArea(
     <section id="control-center-companion" class="control-center-area control-center-companion-area" data-control-area="companion" aria-label="Control Center Companion Area">
       <div class="control-area-header">
         <p class="eyebrow">Control Center</p>
-        <h2>Companion Area</h2>
+        <h2>${t("companion.title", "Companion Area")}</h2>
         <p>${escapeHtml(area.moodLabel)} · ${escapeHtml(area.appearanceLabel)}</p>
       </div>
       <dl class="control-vitals">

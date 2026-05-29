@@ -68,6 +68,10 @@
     "confirm": "Confirm",
     "deny": "Deny",
     "approve": "Approve",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "feed": "Feed",
+    "play": "Play",
+    "pet": "Pet",
+    "sleep": "Sleep"
   }
 }

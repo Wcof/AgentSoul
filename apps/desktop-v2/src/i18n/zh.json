@@ -68,6 +68,10 @@
     "confirm": "确认",
     "deny": "拒绝",
     "approve": "批准",
-    "loading": "加载中..."
+    "loading": "加载中...",
+    "feed": "喂食",
+    "play": "玩耍",
+    "pet": "抚摸",
+    "sleep": "睡觉"
   }
 }
