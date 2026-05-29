@@ -6,7 +6,9 @@
     "sessions": "Sessions",
     "costs": "Costs",
     "safety": "Safety",
-    "settings": "Settings"
+    "settings": "Settings",
+    "title": "Control Center task navigation",
+    "note": "Local-first configuration surface; cloud login not required."
   },
   "companion": {
     "title": "Companion Area",
@@ -19,26 +21,82 @@
     "intimacy": "Intimacy",
     "growthHistory": "Growth History",
     "emotionTrajectory": "Emotion Trajectory",
-    "appearance": "Appearance"
+    "appearance": "Appearance",
+    "sourceType": {
+      "interaction": "interaction",
+      "gateway": "gateway",
+      "work-session": "work-session"
+    }
   },
   "gateway": {
     "title": "Gateway Area",
     "providerProfiles": "Provider Profiles",
     "routingHealth": "Routing Health",
     "adapterStatus": "Adapter Status",
-    "activeProvider": "Active Provider"
+    "activeProvider": "Active Provider",
+    "clientProtocol": "Client Protocol",
+    "providerProtocol": "Provider Protocol",
+    "targetModel": "Target Model",
+    "directFallback": "Direct Client Config fallback",
+    "note": "Gateway Route remains the default for audit, growth, and approval control.",
+    "state": {
+      "ready": "ready",
+      "not-ready": "not-ready",
+      "unsupported-route": "unsupported-route",
+      "supported": "supported",
+      "unsupported": "unsupported",
+      "gateway-route": "gateway-route",
+      "direct-client-config": "direct-client-config",
+      "not-needed": "not-needed",
+      "available": "available",
+      "active": "active"
+    }
   },
   "skills": {
     "title": "Skills Area",
     "installed": "Installed Skill Packs",
     "projectActivation": "Project Activation",
-    "managedFiles": "Managed Rule Files"
+    "managedFiles": "Managed Rule Files",
+    "projectActivationFor": "Project Skill Activation for",
+    "toggleActivation": "Toggle Project Skill Activation",
+    "ruleDeployment": "Workspace Rule Deployment",
+    "safetyPolicyState": "Safety Policy state",
+    "deployRules": "Deploy Workspace Rules",
+    "managedFile": "Managed Rule File",
+    "installedLabel": "installed",
+    "via": "via",
+    "deployment": "deployment",
+    "status": {
+      "not-deployed": "not-deployed",
+      "deployed": "deployed",
+      "approval-required": "approval-required"
+    },
+    "method": {
+      "symlink": "symlink",
+      "copy": "copy"
+    },
+    "source": {
+      "project": "project",
+      "global-default": "global-default"
+    }
   },
   "sessions": {
     "title": "Sessions Area",
     "searchable": "Searchable",
     "resumable": "Resumable",
-    "launch": "Launch Session"
+    "launch": "Launch Session",
+    "searchLabel": "Work Session search",
+    "launcherLabel": "safety-gated Session Launcher",
+    "keyword": "Keyword",
+    "resume": "Resume Session",
+    "source": "Session Source",
+    "resumeCommand": "Session Resume Command",
+    "launcher": "Session Launcher",
+    "note": "Session Launcher actions use {{action}} and are available only for resumable Work Sessions.",
+    "searchDesc": "Search Index from Session Source metadata and evidence.",
+    "safetyPolicyNote": "uses Safety Policy before terminal execution.",
+    "launcherNote": "Session Launcher actions use",
+    "launcherNoteSuffix": "and are available only for resumable Work Sessions."
   },
   "costs": {
     "title": "Costs Area",
@@ -46,21 +104,71 @@
     "providerUsage": "Provider Usage",
     "modelMix": "Model Mix",
     "latency": "Latency",
-    "trends": "Trends"
+    "trends": "Trends",
+    "tokenUsageTitle": "Token Usage",
+    "latencyTitle": "Latency",
+    "providerMix": "Provider Mix",
+    "note": "Estimated Cost is calculated locally from Audit Records. Provider Usage is a separate provider-reported source when available.",
+    "total": "total",
+    "input": "input",
+    "output": "output",
+    "average": "average"
   },
   "safety": {
     "title": "Safety Area",
     "approvalHistory": "Approval History",
     "riskNotices": "Risk Notices",
     "trustGrants": "Trust Grants",
-    "actionRiskClasses": "Action Risk Classes"
+    "actionRiskClasses": "Action Risk Classes",
+    "clientAuthorizationMode": "Client Authorization Mode",
+    "revokeGrant": "Revoke Scoped Trust Grant",
+    "authMode": {
+      "normal": "normal",
+      "elevated": "elevated",
+      "fully-authorized": "fully-authorized"
+    },
+    "riskClass": {
+      "safe": "safe",
+      "sensitive": "sensitive",
+      "high-risk": "high-risk",
+      "critical": "critical"
+    },
+    "action": {
+      "revokedAt": "revokedAt",
+      "expires": "expires"
+    }
   },
   "settings": {
-    "title": "Settings",
+    "title": "Settings Area",
     "persona": "Persona Configuration",
     "locale": "Language",
     "appearance": "Appearance Settings",
-    "health": "Health Diagnostics"
+    "health": "Health Diagnostics",
+    "localFirst": "Local-first",
+    "cloudLogin": "Cloud login",
+    "sensitiveExport": "Sensitive Export",
+    "remoteSync": "Remote Sync",
+    "growthProfile": "Growth Profile",
+    "xpMultiplier": "XP multiplier",
+    "energyCost": "Energy cost",
+    "fatigueThreshold": "Fatigue threshold",
+    "growthCap": "Growth Cap",
+    "note": "User-managed Export keeps backups under the user's control. Sensitive Export requires explicit high-risk confirmation.",
+    "cloudLoginNotRequired": "Cloud login not required.",
+    "portableExportStatusLabel": "Portable Data export:",
+    "required": "required",
+    "notRequired": "not required",
+    "available": "available",
+    "profile": {
+      "default": "default"
+    },
+    "safetyAction": {
+      "export-secret": "export-secret"
+    },
+    "remoteSyncStatus": {
+      "out-of-core-scope": "out-of-core-scope",
+      "disabled": "disabled"
+    }
   },
   "common": {
     "save": "Save",
@@ -72,6 +180,28 @@
     "feed": "Feed",
     "play": "Play",
     "pet": "Pet",
-    "sleep": "Sleep"
+    "sleep": "Sleep",
+    "controlCenter": "Control Center",
+    "appName": "AgentSoul v2",
+    "appDesc": "Local-first AI Agent Companion for the Desktop Companion and Control Center.",
+    "notConnected": "not connected",
+    "enabled": "enabled",
+    "disabled": "disabled",
+    "yes": "yes",
+    "no": "no"
+  },
+  "mood": {
+    "neutral": "neutral",
+    "positive": "positive",
+    "fatigue": "fatigue",
+    "sleep": "sleep",
+    "attention": "attention"
+  },
+  "appearance": {
+    "slime": "slime",
+    "cat": "cat",
+    "default": "default",
+    "tabby": "tabby",
+    "black": "black"
   }
 }

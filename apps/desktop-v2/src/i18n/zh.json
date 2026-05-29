@@ -6,7 +6,9 @@
     "sessions": "会话",
     "costs": "成本",
     "safety": "安全",
-    "settings": "设置"
+    "settings": "设置",
+    "title": "控制中心任务导航",
+    "note": "本地优先配置界面；无需云端登录。"
   },
   "companion": {
     "title": "伙伴区域",
@@ -19,26 +21,82 @@
     "intimacy": "亲密度",
     "growthHistory": "成长历史",
     "emotionTrajectory": "情绪轨迹",
-    "appearance": "外观"
+    "appearance": "外观",
+    "sourceType": {
+      "interaction": "互动",
+      "gateway": "网关",
+      "work-session": "工作会话"
+    }
   },
   "gateway": {
     "title": "网关区域",
     "providerProfiles": "服务商配置",
     "routingHealth": "路由健康",
     "adapterStatus": "适配器状态",
-    "activeProvider": "活动服务商"
+    "activeProvider": "活动服务商",
+    "clientProtocol": "客户端协议",
+    "providerProtocol": "服务商协议",
+    "targetModel": "目标模型",
+    "directFallback": "直接客户端配置回退",
+    "note": "网关路由依然是审计、成长和审批控制的默认通道。",
+    "state": {
+      "ready": "准备就绪",
+      "not-ready": "未就绪",
+      "unsupported-route": "不支持的路由",
+      "supported": "已支持",
+      "unsupported": "不支持",
+      "gateway-route": "网关路由",
+      "direct-client-config": "直接客户端配置",
+      "not-needed": "不需要",
+      "available": "可用",
+      "active": "活跃"
+    }
   },
   "skills": {
     "title": "技能区域",
     "installed": "已安装技能包",
     "projectActivation": "项目激活",
-    "managedFiles": "托管规则文件"
+    "managedFiles": "托管规则文件",
+    "projectActivationFor": "项目技能激活",
+    "toggleActivation": "切换项目技能激活",
+    "ruleDeployment": "工作区规则部署",
+    "safetyPolicyState": "安全策略状态",
+    "deployRules": "部署工作区规则",
+    "managedFile": "托管规则文件",
+    "installedLabel": "安装于",
+    "via": "通过",
+    "deployment": "部署",
+    "status": {
+      "not-deployed": "未部署",
+      "deployed": "已部署",
+      "approval-required": "需要审批"
+    },
+    "method": {
+      "symlink": "符号链接",
+      "copy": "复制"
+    },
+    "source": {
+      "project": "项目",
+      "global-default": "全局默认"
+    }
   },
   "sessions": {
     "title": "会话区域",
     "searchable": "可搜索",
     "resumable": "可恢复",
-    "launch": "启动会话"
+    "launch": "启动会话",
+    "searchLabel": "工作会话搜索",
+    "launcherLabel": "安全门控会话启动器",
+    "keyword": "关键词",
+    "resume": "恢复会话",
+    "source": "会话来源",
+    "resumeCommand": "会话恢复命令",
+    "launcher": "会话启动器",
+    "note": "会话启动器操作使用 {{action}}，且仅适用于可恢复的工作会话。",
+    "searchDesc": "根据会话来源元数据和凭证进行搜索检索。",
+    "safetyPolicyNote": "在终端执行前使用安全策略。",
+    "launcherNote": "会话启动器操作使用",
+    "launcherNoteSuffix": "且仅适用于可恢复的工作会话。"
   },
   "costs": {
     "title": "成本区域",
@@ -46,21 +104,71 @@
     "providerUsage": "服务商用量",
     "modelMix": "模型占比",
     "latency": "延迟",
-    "trends": "趋势"
+    "trends": "趋势",
+    "tokenUsageTitle": "代币用量",
+    "latencyTitle": "延迟",
+    "providerMix": "服务商比例",
+    "note": "估计成本是由本地审计记录计算得出。服务商用量是服务商报告的独立来源（如果可用）。",
+    "total": "总计",
+    "input": "输入",
+    "output": "输出",
+    "average": "平均"
   },
   "safety": {
     "title": "安全区域",
     "approvalHistory": "审批历史",
     "riskNotices": "风险通知",
     "trustGrants": "信任授权",
-    "actionRiskClasses": "操作风险等级"
+    "actionRiskClasses": "操作风险等级",
+    "clientAuthorizationMode": "客户端授权模式",
+    "revokeGrant": "撤销信任授权",
+    "authMode": {
+      "normal": "普通",
+      "elevated": "提权",
+      "fully-authorized": "完全授权"
+    },
+    "riskClass": {
+      "safe": "安全",
+      "sensitive": "敏感",
+      "high-risk": "高风险",
+      "critical": "危急"
+    },
+    "action": {
+      "revokedAt": "已撤销于",
+      "expires": "过期时间"
+    }
   },
   "settings": {
-    "title": "设置",
+    "title": "设置区域",
     "persona": "人格配置",
     "locale": "语言",
     "appearance": "外观设置",
-    "health": "健康诊断"
+    "health": "健康诊断",
+    "localFirst": "本地优先",
+    "cloudLogin": "云端登录",
+    "sensitiveExport": "敏感导出",
+    "remoteSync": "远程同步",
+    "growthProfile": "成长配置文件",
+    "xpMultiplier": "经验倍数",
+    "energyCost": "能量消耗倍数",
+    "fatigueThreshold": "疲劳阈值",
+    "growthCap": "成长上限",
+    "note": "用户管理导出将备份保留在用户控制下。敏感导出需要明确的高风险确认。",
+    "cloudLoginNotRequired": "无需云端登录。",
+    "portableExportStatusLabel": "便携式数据导出：",
+    "required": "需要",
+    "notRequired": "不需要",
+    "available": "可用",
+    "profile": {
+      "default": "默认"
+    },
+    "safetyAction": {
+      "export-secret": "导出敏感数据"
+    },
+    "remoteSyncStatus": {
+      "out-of-core-scope": "非核心范围",
+      "disabled": "已禁用"
+    }
   },
   "common": {
     "save": "保存",
@@ -72,6 +180,28 @@
     "feed": "喂食",
     "play": "玩耍",
     "pet": "抚摸",
-    "sleep": "睡觉"
+    "sleep": "睡觉",
+    "controlCenter": "控制中心",
+    "appName": "AgentSoul v2",
+    "appDesc": "本地优先的桌面伴侣与控制中心 AI 智能体。",
+    "notConnected": "未连接",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "yes": "是",
+    "no": "否"
+  },
+  "mood": {
+    "neutral": "中性",
+    "positive": "积极",
+    "fatigue": "疲劳",
+    "sleep": "熟睡",
+    "attention": "警惕"
+  },
+  "appearance": {
+    "slime": "粘液怪",
+    "cat": "猫咪",
+    "default": "默认",
+    "tabby": "斑纹",
+    "black": "黑色"
   }
 }
