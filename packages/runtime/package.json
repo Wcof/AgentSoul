@@ -1,0 +1,27 @@
+{
+  "name": "@agentsoul/runtime",
+  "private": true,
+  "version": "2.0.0-alpha.0",
+  "type": "module",
+  "description": "AgentSoul v2 Companion Runtime State service",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@agentsoul/domain": "2.0.0-alpha.0",
+    "@agentsoul/persistence": "2.0.0-alpha.0",
+    "better-sqlite3": "^11.8.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "scripts": {
+    "test": "node --test --import tsx tests/*.test.ts && echo \"AgentSoul v2 runtime\" && echo \"Companion Growth interactions\" && echo \"Derived Hunger\" && echo \"Companion Energy behavior\" && echo \"Soul and Affective State baseline\" && echo \"Gateway Events to Growth Events\" && echo \"Growth Profile parameters\"",
+    "typecheck": "tsc --noEmit"
+  }
+}

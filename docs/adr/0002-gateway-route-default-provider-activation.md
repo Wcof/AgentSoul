@@ -1,0 +1,3 @@
+# Gateway Route as Default Provider Activation
+
+AgentSoul v2.0 uses Gateway Route as the default Provider Activation Mode for supported AI coding clients, with Direct Client Config kept as a fallback. Gateway Route is preferred because it gives AgentSoul a controlled place to route and translate provider traffic, produce Gateway Events for audit and growth, estimate cost and latency, and support approval-related flows. Direct Client Config remains useful for compatibility and low-intrusion fallback, but it cannot guarantee complete traffic audit, Companion growth conversion, or approval control.

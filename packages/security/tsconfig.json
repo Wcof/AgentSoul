@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@agentsoul/security": ["src/index.ts"],
+      "@agentsoul/domain": ["../domain/src/index.ts"]
+    }
+  },
+  "include": ["src", "tests"]
+}

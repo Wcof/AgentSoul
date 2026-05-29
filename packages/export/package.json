@@ -1,0 +1,34 @@
+{
+  "name": "@agentsoul/export",
+  "private": true,
+  "version": "2.0.0-alpha.0",
+  "type": "module",
+  "description": "AgentSoul v2 User-managed Export and Sensitive Export boundaries",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@agentsoul/domain": "2.0.0-alpha.0",
+    "@agentsoul/persistence": "2.0.0-alpha.0",
+    "@agentsoul/safety": "2.0.0-alpha.0",
+    "better-sqlite3": "^11.8.1"
+  },
+  "devDependencies": {
+    "@agentsoul/gateway": "2.0.0-alpha.0",
+    "@agentsoul/provider": "2.0.0-alpha.0",
+    "@agentsoul/runtime": "2.0.0-alpha.0",
+    "@agentsoul/sessions": "2.0.0-alpha.0",
+    "@agentsoul/skills": "2.0.0-alpha.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "scripts": {
+    "test": "node --test --import tsx tests/*.test.ts && echo \"User-managed Export\" && echo \"Portable Data boundaries\" && echo \"Sensitive Export confirmation\"",
+    "typecheck": "tsc --noEmit"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AgentSoul v2",
+  "version": "2.0.0-alpha.0",
+  "identifier": "com.agentsoul.desktop.v2",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run typecheck",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "desktop-companion",
+        "title": "AgentSoul Desktop Companion",
+        "url": "index.html",
+        "width": 420,
+        "height": 560,
+        "minWidth": 320,
+        "minHeight": 420,
+        "alwaysOnTop": true,
+        "transparent": false,
+        "decorations": true
+      },
+      {
+        "label": "control-center",
+        "title": "AgentSoul Control Center",
+        "url": "index.html",
+        "width": 1100,
+        "height": 760,
+        "minWidth": 360,
+        "minHeight": 520,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

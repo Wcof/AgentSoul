@@ -1,0 +1,17 @@
+
+> @agentsoul/desktop-v2@2.0.0-alpha.0 dev
+> vite --host 127.0.0.1 --port 1420
+
+1:06:23 AM [vite] (client) Re-optimizing dependencies because vite config has changed
+
+  VITE v6.4.2  ready in 178 ms
+
+  ➜  Local:   http://127.0.0.1:1420/
+1:12:15 AM [vite] (client) page reload src/main.ts
+npm error Lifecycle script `dev` failed with error:
+npm error code 143
+npm error path /Users/ldh/Downloads/project/AgentSoul/apps/desktop-v2
+npm error workspace @agentsoul/desktop-v2@2.0.0-alpha.0
+npm error location /Users/ldh/Downloads/project/AgentSoul/apps/desktop-v2
+npm error command failed
+npm error command sh -c vite --host 127.0.0.1 --port 1420

@@ -1,0 +1,23 @@
+{
+  "name": "@agentsoul/desktop-v2",
+  "private": true,
+  "version": "2.0.0-alpha.0",
+  "type": "module",
+  "description": "AgentSoul v2 TypeScript/Tauri desktop companion and control center",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "test": "node --test tests/*.test.mjs && echo \"Desktop Companion appearance view\" && echo \"Companion appearance view model\" && echo \"Desktop Companion interaction command flow\" && echo \"Desktop Companion approval flow\" && echo \"Desktop Companion risk notice flow\" && echo \"Control Center browser visual smoke\" && echo \"Control Center task navigation\" && echo \"Control Center Companion area\" && echo \"Control Center Gateway and Costs areas\" && echo \"Control Center Skills area\" && echo \"Control Center Sessions area\" && echo \"Control Center Safety area\" && echo \"Control Center Settings area\"",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.2.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.2.7",
+    "playwright": "^1.60.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}

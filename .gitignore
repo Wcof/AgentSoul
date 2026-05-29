@@ -41,8 +41,11 @@ memToAgentSoul.md
 claudes.md
 
 # MCP Server / Node.js
+node_modules/
 apps/mcp-server/node_modules/
 apps/mcp-server/dist/
+apps/desktop-v2/dist/
+apps/desktop-v2/test-results/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

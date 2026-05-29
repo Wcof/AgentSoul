@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@agentsoul/export": ["src/index.ts"],
+      "@agentsoul/domain": ["../domain/src/index.ts"],
+      "@agentsoul/persistence": ["../persistence/src/index.ts"],
+      "@agentsoul/safety": ["../safety/src/index.ts"],
+      "@agentsoul/gateway": ["../gateway/src/index.ts"],
+      "@agentsoul/provider": ["../provider/src/index.ts"],
+      "@agentsoul/runtime": ["../runtime/src/index.ts"],
+      "@agentsoul/sessions": ["../sessions/src/index.ts"],
+      "@agentsoul/skills": ["../skills/src/index.ts"]
+    }
+  },
+  "include": ["src", "tests"]
+}

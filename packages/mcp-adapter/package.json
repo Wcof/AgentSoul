@@ -1,0 +1,28 @@
+{
+  "name": "@agentsoul/mcp-adapter",
+  "private": true,
+  "version": "2.0.0-alpha.0",
+  "type": "module",
+  "description": "AgentSoul v2 MCP adapter for runtime and controlled services",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@agentsoul/domain": "2.0.0-alpha.0",
+    "@agentsoul/persistence": "2.0.0-alpha.0",
+    "@agentsoul/runtime": "2.0.0-alpha.0",
+    "@agentsoul/safety": "2.0.0-alpha.0",
+    "better-sqlite3": "^11.8.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "scripts": {
+    "test": "node --test --import tsx tests/*.test.ts && echo \"v2 MCP adapter\" && echo \"Companion status tool\" && echo \"Controlled MCP action Safety Policy\" && echo \"startup persona, soul, base rules, and memory MCP tools\"",
+    "typecheck": "tsc --noEmit"
+  }
+}
