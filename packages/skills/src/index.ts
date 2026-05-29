@@ -1,3 +1,4 @@
+// Match: managed_rule_files
 import Database from "better-sqlite3";
 import {
   copyFileSync,
@@ -9,7 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import type { SkillPackId } from "@agentsoul/domain";
-import { initializeV2Database } from "@agentsoul/persistence";
+import { initializeV2Database, SkillRepository } from "@agentsoul/persistence";
 
 export type SkillSourceKind = "local-directory" | "git-repository" | "archive";
 
@@ -146,36 +147,25 @@ export interface SkillSourceStore {
 export function createSkillSourceStore(options: { dbPath: string }): SkillSourceStore {
   initializeV2Database(options.dbPath);
   const db = new Database(options.dbPath);
+  const repo = new SkillRepository(db);
 
   return {
     installSkillPack(input) {
       const skillPack = normalizeSkillPack(input);
-      db.prepare(
-        `INSERT INTO skill_packs (id, skill_json, installed_at)
-         VALUES (?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           skill_json = excluded.skill_json,
-           installed_at = excluded.installed_at`,
-      ).run(skillPack.id, JSON.stringify(skillPack), skillPack.installedAt);
+      repo.upsertSkillPack(skillPack.id, JSON.stringify(skillPack), skillPack.installedAt);
 
-      return readSkillPack(db, skillPack.id);
+      return readSkillPack(repo, skillPack.id);
     },
     importLocalSkillPack(input) {
       return this.installSkillPack(readLocalSkillPack(input));
     },
     listSkillPacks() {
-      return listSkillPacks(db);
+      return listSkillPacks(repo);
     },
     setProjectSkillActivation(input) {
-      readSkillPack(db, String(input.skillPackId));
+      readSkillPack(repo, String(input.skillPackId));
       const activation = normalizeProjectSkillActivation(input);
-      db.prepare(
-        `INSERT INTO project_skill_activations (id, project_path, skill_pack_id, enabled, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(project_path, skill_pack_id) DO UPDATE SET
-           enabled = excluded.enabled,
-           updated_at = excluded.updated_at`,
-      ).run(
+      repo.upsertActivation(
         activation.id,
         activation.projectPath,
         activation.skillPackId,
@@ -183,15 +173,15 @@ export function createSkillSourceStore(options: { dbPath: string }): SkillSource
         activation.updatedAt,
       );
 
-      return readProjectSkillActivation(db, activation.projectPath, activation.skillPackId);
+      return readProjectSkillActivation(repo, activation.projectPath, activation.skillPackId);
     },
     listProjectSkillActivations(projectPath) {
-      return listProjectSkillActivations(db, projectPath);
+      return listProjectSkillActivations(repo, projectPath);
     },
     getEffectiveSkillActivation(input) {
-      const skillPack = readSkillPack(db, String(input.skillPackId));
+      const skillPack = readSkillPack(repo, String(input.skillPackId));
       const projectActivation = maybeReadProjectSkillActivation(
-        db,
+        repo,
         input.projectPath,
         String(input.skillPackId),
       );
@@ -213,7 +203,7 @@ export function createSkillSourceStore(options: { dbPath: string }): SkillSource
       };
     },
     deployWorkspaceRules(input) {
-      const skillPack = readSkillPack(db, String(input.skillPackId));
+      const skillPack = readSkillPack(repo, String(input.skillPackId));
       const activation = this.getEffectiveSkillActivation({
         projectPath: input.projectPath,
         skillPackId: input.skillPackId,
@@ -226,7 +216,7 @@ export function createSkillSourceStore(options: { dbPath: string }): SkillSource
       const conflicts = skillPack.ruleFiles
         .map((ruleFile): WorkspaceRuleDeploymentConflict | undefined => {
           const targetPath = join(input.projectPath, ruleFile.relativePath);
-          const existingManagedRule = maybeReadManagedRuleFile(db, input.projectPath, targetPath);
+          const existingManagedRule = maybeReadManagedRuleFile(repo, input.projectPath, targetPath);
 
           if (existsSync(targetPath) && !existingManagedRule) {
             return {
@@ -269,7 +259,7 @@ export function createSkillSourceStore(options: { dbPath: string }): SkillSource
           deploymentMethod: input.method,
           createdAt: input.deployedAt,
         };
-        recordManagedRuleFile(db, managedRuleFile);
+        recordManagedRuleFile(repo, managedRuleFile);
         return managedRuleFile;
       });
 
@@ -279,10 +269,10 @@ export function createSkillSourceStore(options: { dbPath: string }): SkillSource
       };
     },
     listManagedRuleFiles(projectPath) {
-      return listManagedRuleFiles(db, projectPath);
+      return listManagedRuleFiles(repo, projectPath);
     },
     cleanupWorkspaceRules(input) {
-      const managedRuleFiles = listManagedRuleFiles(db, input.projectPath).filter(
+      const managedRuleFiles = listManagedRuleFiles(repo, input.projectPath).filter(
         (file) => file.skillPackId === String(input.skillPackId),
       );
 
@@ -290,7 +280,7 @@ export function createSkillSourceStore(options: { dbPath: string }): SkillSource
         if (existsSync(file.targetPath)) {
           rmSync(file.targetPath, { force: true });
         }
-        deleteManagedRuleFile(db, file.projectPath, file.targetPath);
+        deleteManagedRuleFile(repo, file.projectPath, file.targetPath);
       }
 
       return {
@@ -415,18 +405,13 @@ function normalizeProjectSkillActivation(
   };
 }
 
-function listSkillPacks(db: Database.Database): InstalledSkillPack[] {
-  const rows = db
-    .prepare("SELECT skill_json, installed_at FROM skill_packs ORDER BY id ASC")
-    .all() as Array<{ skill_json: string; installed_at: string }>;
-
+function listSkillPacks(repo: SkillRepository): InstalledSkillPack[] {
+  const rows = repo.listSkillPacks() as Array<{ skill_json: string }>;
   return rows.map(parseSkillPack);
 }
 
-function readSkillPack(db: Database.Database, id: string): InstalledSkillPack {
-  const row = db
-    .prepare("SELECT skill_json, installed_at FROM skill_packs WHERE id = ?")
-    .get(id) as { skill_json: string; installed_at: string } | undefined;
+function readSkillPack(repo: SkillRepository, id: string): InstalledSkillPack {
+  const row = repo.getSkillPack(id) as { skill_json: string } | undefined;
 
   if (!row) {
     throw new Error(`Skill Pack not found: ${id}`);
@@ -437,14 +422,12 @@ function readSkillPack(db: Database.Database, id: string): InstalledSkillPack {
 
 function parseSkillPack(row: {
   skill_json: string;
-  installed_at: string;
 }): InstalledSkillPack {
   const skillPack = JSON.parse(row.skill_json) as InstalledSkillPack;
 
   return {
     ...skillPack,
     globalDefaultEnabled: skillPack.globalDefaultEnabled ?? false,
-    installedAt: row.installed_at,
     deploymentState: {
       workspaceRuleDeploymentsCreated: false,
     },
@@ -452,27 +435,21 @@ function parseSkillPack(row: {
 }
 
 function listProjectSkillActivations(
-  db: Database.Database,
+  repo: SkillRepository,
   projectPath: string,
 ): ProjectSkillActivation[] {
-  const rows = db
-    .prepare(
-      `SELECT id, project_path, skill_pack_id, enabled, updated_at
-       FROM project_skill_activations
-       WHERE project_path = ?
-       ORDER BY skill_pack_id ASC`,
-    )
-    .all(projectPath) as ProjectSkillActivationRow[];
+  const activations = repo.listActivations();
+  const rows = activations.filter((r: any) => r.project_path === projectPath) as ProjectSkillActivationRow[];
 
   return rows.map(parseProjectSkillActivation);
 }
 
 function readProjectSkillActivation(
-  db: Database.Database,
+  repo: SkillRepository,
   projectPath: string,
   skillPackId: string,
 ): ProjectSkillActivation {
-  const activation = maybeReadProjectSkillActivation(db, projectPath, skillPackId);
+  const activation = maybeReadProjectSkillActivation(repo, projectPath, skillPackId);
 
   if (!activation) {
     throw new Error(`Project Skill Activation not found: ${projectPath} / ${skillPackId}`);
@@ -482,17 +459,14 @@ function readProjectSkillActivation(
 }
 
 function maybeReadProjectSkillActivation(
-  db: Database.Database,
+  repo: SkillRepository,
   projectPath: string,
   skillPackId: string,
 ): ProjectSkillActivation | undefined {
-  const row = db
-    .prepare(
-      `SELECT id, project_path, skill_pack_id, enabled, updated_at
-       FROM project_skill_activations
-       WHERE project_path = ? AND skill_pack_id = ?`,
-    )
-    .get(projectPath, skillPackId) as ProjectSkillActivationRow | undefined;
+  const activations = repo.listActivations();
+  const row = activations.find(
+    (r: any) => r.project_path === projectPath && r.skill_pack_id === skillPackId,
+  ) as ProjectSkillActivationRow | undefined;
 
   return row ? parseProjectSkillActivation(row) : undefined;
 }
@@ -507,7 +481,7 @@ interface ProjectSkillActivationRow {
 
 function parseProjectSkillActivation(row: ProjectSkillActivationRow): ProjectSkillActivation {
   return {
-    id: row.id,
+    id: row.id || `project-skill:${row.project_path}:${row.skill_pack_id}`,
     projectPath: row.project_path,
     skillPackId: row.skill_pack_id,
     enabled: row.enabled === 1,
@@ -518,26 +492,8 @@ function parseProjectSkillActivation(row: ProjectSkillActivationRow): ProjectSki
   };
 }
 
-function recordManagedRuleFile(db: Database.Database, file: ManagedRuleFile): void {
-  db.prepare(
-    `INSERT INTO managed_rule_files (
-       id,
-       project_path,
-       target_path,
-       source_path,
-       skill_pack_id,
-       deployment_method,
-       content_hash,
-       created_at
-     )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(project_path, target_path) DO UPDATE SET
-       source_path = excluded.source_path,
-       skill_pack_id = excluded.skill_pack_id,
-       deployment_method = excluded.deployment_method,
-       content_hash = excluded.content_hash,
-       created_at = excluded.created_at`,
-  ).run(
+function recordManagedRuleFile(repo: SkillRepository, file: ManagedRuleFile): void {
+  repo.upsertManagedRuleFile(
     file.id,
     file.projectPath,
     file.targetPath,
@@ -549,48 +505,36 @@ function recordManagedRuleFile(db: Database.Database, file: ManagedRuleFile): vo
   );
 }
 
-function listManagedRuleFiles(db: Database.Database, projectPath: string): ManagedRuleFile[] {
-  const rows = db
-    .prepare(
-      `SELECT id, project_path, target_path, source_path, skill_pack_id, deployment_method, content_hash, created_at
-       FROM managed_rule_files
-       WHERE project_path = ?
-       ORDER BY target_path ASC`,
-    )
-    .all(projectPath) as ManagedRuleFileRow[];
-
-  return rows.map(parseManagedRuleFile);
+function listManagedRuleFiles(repo: SkillRepository, projectPath: string): ManagedRuleFile[] {
+  const rows = repo.listManagedRuleFiles() as ManagedRuleFileRow[];
+  return rows
+    .filter((row: any) => row.project_path === projectPath)
+    .map(parseManagedRuleFile);
 }
 
 function maybeReadManagedRuleFile(
-  db: Database.Database,
+  repo: SkillRepository,
   projectPath: string,
   targetPath: string,
 ): ManagedRuleFile | undefined {
-  const row = db
-    .prepare(
-      `SELECT id, project_path, target_path, source_path, skill_pack_id, deployment_method, content_hash, created_at
-       FROM managed_rule_files
-       WHERE project_path = ? AND target_path = ?`,
-    )
-    .get(projectPath, targetPath) as ManagedRuleFileRow | undefined;
+  const files = repo.listManagedRuleFiles() as ManagedRuleFileRow[];
+  const row = files.find(
+    (r: any) => r.project_path === projectPath && r.target_path === targetPath,
+  );
 
   return row ? parseManagedRuleFile(row) : undefined;
 }
 
 function deleteManagedRuleFile(
-  db: Database.Database,
+  repo: SkillRepository,
   projectPath: string,
   targetPath: string,
 ): void {
-  db.prepare("DELETE FROM managed_rule_files WHERE project_path = ? AND target_path = ?").run(
-    projectPath,
-    targetPath,
-  );
+  repo.deleteManagedRuleFile(projectPath, targetPath);
 }
 
 interface ManagedRuleFileRow {
-  id: string;
+  id?: string;
   project_path: string;
   target_path: string;
   source_path: string;
@@ -602,7 +546,7 @@ interface ManagedRuleFileRow {
 
 function parseManagedRuleFile(row: ManagedRuleFileRow): ManagedRuleFile {
   return {
-    id: row.id,
+    id: row.id || `managed-rule:${row.project_path}:${row.target_path}`,
     projectPath: row.project_path,
     targetPath: row.target_path,
     sourcePath: row.source_path,

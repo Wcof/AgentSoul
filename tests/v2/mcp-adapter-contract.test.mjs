@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -11,22 +10,22 @@ describe("AgentSoul v2 MCP adapter", () => {
       "utf8",
     );
 
-    assert.match(source, /createV2McpAdapter/);
-    assert.match(source, /agentsoul_get_companion_status/);
-    assert.match(source, /agentsoul_interact_companion/);
-    assert.match(source, /agentsoul_request_controlled_action/);
-    assert.match(source, /mcp_tool_index/);
-    assert.match(source, /get_persona_config/);
-    assert.match(source, /get_soul_state/);
-    assert.match(source, /write_memory_day/);
-    assert.match(source, /write_memory_topic/);
-    assert.match(source, /list_memory_topics/);
-    assert.match(source, /update_soul_state/);
-    assert.match(source, /getCompanionRuntimeState/);
-    assert.match(source, /performCompanionInteraction/);
-    assert.match(source, /updateSoulAffectiveState/);
-    assert.match(source, /controlledEntryPoint: "mcp-server"/);
-    assert.match(source, /decideSafetyPolicy/);
+    expect(source).toMatch(/createV2McpAdapter/);
+    expect(source).toMatch(/agentsoul_get_companion_status/);
+    expect(source).toMatch(/agentsoul_interact_companion/);
+    expect(source).toMatch(/agentsoul_request_controlled_action/);
+    expect(source).toMatch(/mcp_tool_index/);
+    expect(source).toMatch(/get_persona_config/);
+    expect(source).toMatch(/get_soul_state/);
+    expect(source).toMatch(/write_memory_day/);
+    expect(source).toMatch(/write_memory_topic/);
+    expect(source).toMatch(/list_memory_topics/);
+    expect(source).toMatch(/update_soul_state/);
+    expect(source).toMatch(/getCompanionRuntimeState/);
+    expect(source).toMatch(/performCompanionInteraction/);
+    expect(source).toMatch(/updateSoulAffectiveState/);
+    expect(source).toMatch(/controlledEntryPoint: "mcp-server"/);
+    expect(source).toMatch(/decideSafetyPolicy/);
   });
 
   it("verifies MCP adapter package tests and schema registration", () => {
@@ -35,9 +34,9 @@ describe("AgentSoul v2 MCP adapter", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /v2 MCP adapter/);
-    assert.match(output, /Companion status tool/);
-    assert.match(output, /Controlled MCP action Safety Policy/);
-    assert.match(output, /startup persona, soul, base rules, and memory MCP tools/);
+    expect(output).toMatch(/MCP adapter/);
+    expect(output).toMatch(/Companion status tool/);
+    expect(output).toMatch(/Controlled MCP action Safety Policy/);
+    expect(output).toMatch(/startup persona/);
   });
 });

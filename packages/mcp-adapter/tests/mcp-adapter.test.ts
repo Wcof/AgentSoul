@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +11,7 @@ import {
 import type { CompanionRuntimeState } from "@agentsoul/runtime";
 import { createCompanionRuntime } from "@agentsoul/runtime";
 import { createV2McpAdapter } from "@agentsoul/mcp-adapter";
+import { decideSafetyPolicy } from "@agentsoul/safety";
 
 describe("v2 MCP adapter", () => {
   it("registers and calls the Companion status tool", () => {
@@ -42,33 +42,24 @@ describe("v2 MCP adapter", () => {
       },
     });
 
-    assert.deepEqual(
-      adapter.listTools().map((tool) => tool.name).slice(0, 3),
-      [
+    expect(adapter.listTools().map((tool) => tool.name).slice(0, 3)).toEqual([
         "agentsoul_get_companion_status",
         "agentsoul_interact_companion",
         "agentsoul_request_controlled_action",
-      ],
-    );
+      ]);
 
     const tools = adapter.listTools();
-    assert.equal(
-      tools.find((tool) => tool.name === "agentsoul_interact_companion")?.inputSchema.required?.[0],
-      "interaction",
-    );
-    assert.deepEqual(
-      tools.find((tool) => tool.name === "agentsoul_request_controlled_action")?.inputSchema
-        .required,
-      ["actionKind", "clientAuthorizationMode", "approvalSurfaceAvailable", "now"],
-    );
+    expect(tools.find((tool) => tool.name === "agentsoul_interact_companion")?.inputSchema.required?.[0]).toBe("interaction");
+    expect(tools.find((tool) => tool.name === "agentsoul_request_controlled_action")?.inputSchema
+        .required).toEqual(["actionKind", "clientAuthorizationMode", "approvalSurfaceAvailable", "now"]);
 
     const result = adapter.callTool({
       name: "agentsoul_get_companion_status",
       arguments: {},
     });
 
-    assert.equal(result.content[0].type, "json");
-    assert.deepEqual(result.content[0].json, state);
+    expect(result.content[0].type).toBe("json");
+    expect(result.content[0].json).toEqual(state);
   });
 
   it("invokes supported Companion interactions through the Runtime service", () => {
@@ -108,14 +99,14 @@ describe("v2 MCP adapter", () => {
       },
     });
 
-    assert.deepEqual(calls, ["feed"]);
-    assert.equal(result.content[0].type, "json");
+    expect(calls).toEqual(["feed"]);
+    expect(result.content[0].type).toBe("json");
     const interactionResult = result.content[0].json as {
       outcome: string;
       state: CompanionRuntimeState;
     };
-    assert.equal(interactionResult.outcome, "applied");
-    assert.equal(interactionResult.state.companion.id, "active-companion");
+    expect(interactionResult.outcome).toBe("applied");
+    expect(interactionResult.state.companion.id).toBe("active-companion");
   });
 
   it("reads Companion status from the v2 Runtime State service", () => {
@@ -139,17 +130,17 @@ describe("v2 MCP adapter", () => {
           arguments: {},
         });
 
-        assert.equal(result.content[0].type, "json");
+        expect(result.content[0].type).toBe("json");
         const runtimeState = result.content[0].json as CompanionRuntimeState;
 
-        assert.equal(runtimeState.companion.id, "active-companion");
-        assert.equal(runtimeState.companion.vitals.level, 3);
-        assert.equal(runtimeState.companion.vitals.xp, 42);
-        assert.equal(runtimeState.companion.vitals.companionEnergy, 77);
-        assert.equal(runtimeState.companion.vitals.hunger, 66);
-        assert.equal(runtimeState.companion.vitals.intimacy, 55);
-        assert.equal(runtimeState.soul.personaName, "Default Companion Soul");
-        assert.equal(runtimeState.providerProfile.activationMode, "gateway-route");
+        expect(runtimeState.companion.id).toBe("active-companion");
+        expect(runtimeState.companion.vitals.level).toBe(3);
+        expect(runtimeState.companion.vitals.xp).toBe(42);
+        expect(runtimeState.companion.vitals.companionEnergy).toBe(77);
+        expect(runtimeState.companion.vitals.hunger).toBe(66);
+        expect(runtimeState.companion.vitals.intimacy).toBe(55);
+        expect(runtimeState.soul.personaName).toBe("Default Companion Soul");
+        expect(runtimeState.providerProfile.activationMode).toBe("gateway-route");
       } finally {
         runtime.close();
       }
@@ -182,6 +173,7 @@ describe("v2 MCP adapter", () => {
           };
         },
       },
+      decideSafetyPolicy,
     });
 
     const result = adapter.callTool({
@@ -197,16 +189,16 @@ describe("v2 MCP adapter", () => {
       },
     });
 
-    assert.equal(result.content[0].type, "json");
+    expect(result.content[0].type).toBe("json");
     const decision = result.content[0].json as {
       outcome: string;
       actionRiskClass: string;
       approvalRequest?: { id: string; actionRiskClass: string };
     };
-    assert.equal(decision.outcome, "approval-required");
-    assert.equal(decision.actionRiskClass, "high-risk");
-    assert.equal(decision.approvalRequest?.actionRiskClass, "high-risk");
-    assert.match(decision.approvalRequest?.id ?? "", /^approval:execute-command:/);
+    expect(decision.outcome).toBe("approval-required");
+    expect(decision.actionRiskClass).toBe("high-risk");
+    expect(decision.approvalRequest?.actionRiskClass).toBe("high-risk");
+    expect(decision.approvalRequest?.id ?? "").toMatch(/^approval:execute-command:/);
   });
 
   it("provides v2 replacements for startup persona, soul, base rules, and memory MCP tools", () => {
@@ -215,8 +207,7 @@ describe("v2 MCP adapter", () => {
       const adapter = createV2McpAdapter({ runtime, dbPath });
 
       try {
-        assert.deepEqual(
-          [
+        expect([
             "mcp_tool_index",
             "get_persona_config",
             "get_soul_state",
@@ -226,24 +217,19 @@ describe("v2 MCP adapter", () => {
             "write_memory_day",
             "write_memory_topic",
             "update_soul_state",
-          ].every((toolName) => adapter.listTools().some((tool) => tool.name === toolName)),
-          true,
-        );
+          ].every((toolName) => adapter.listTools().some((tool) => tool.name === toolName))).toEqual(true);
 
         const persona = adapter.callTool({ name: "get_persona_config", arguments: {} });
-        assert.equal(persona.content[0].type, "json");
-        assert.equal(
-          (persona.content[0].json as { companion: { id: string }; soul: { personaName: string } })
-            .companion.id,
-          "active-companion",
-        );
+        expect(persona.content[0].type).toBe("json");
+        expect((persona.content[0].json as { companion: { id: string }; soul: { personaName: string } })
+            .companion.id).toBe("active-companion");
 
         const baseRules = adapter.callTool({
           name: "get_base_rules",
           arguments: { name: "memory_base" },
         });
-        assert.equal(baseRules.content[0].type, "text");
-        assert.match(baseRules.content[0].text, /memory/i);
+        expect(baseRules.content[0].type).toBe("text");
+        expect(baseRules.content[0].text).toMatch(/memory/i);
 
         const writeTopic = adapter.callTool({
           name: "write_memory_topic",
@@ -252,8 +238,8 @@ describe("v2 MCP adapter", () => {
             content: "MCP startup compatibility is now backed by v2 local storage.",
           },
         });
-        assert.equal(writeTopic.content[0].type, "json");
-        assert.equal((writeTopic.content[0].json as { success: boolean }).success, true);
+        expect(writeTopic.content[0].type).toBe("json");
+        expect((writeTopic.content[0].json as { success: boolean }).success).toBe(true);
 
         adapter.callTool({
           name: "write_memory_day",
@@ -267,13 +253,10 @@ describe("v2 MCP adapter", () => {
           name: "list_memory_topics",
           arguments: { status: "active" },
         });
-        assert.equal(topics.content[0].type, "json");
-        assert.deepEqual(
-          (topics.content[0].json as { topics: Array<{ topic: string; status: string }> }).topics.map(
+        expect(topics.content[0].type).toBe("json");
+        expect((topics.content[0].json as { topics: Array<{ topic: string; status: string }> }).topics.map(
             (topic) => ({ topic: topic.topic, status: topic.status }),
-          ),
-          [{ topic: "AgentSoul v2 rewrite", status: "active" }],
-        );
+          )).toEqual([{ topic: "AgentSoul v2 rewrite", status: "active" }]);
 
         const soul = adapter.callTool({
           name: "update_soul_state",
@@ -284,20 +267,14 @@ describe("v2 MCP adapter", () => {
             trigger: "startup compatibility test",
           },
         });
-        assert.equal(soul.content[0].type, "json");
-        assert.equal(
-          (soul.content[0].json as { newState: { affectiveState: { pleasure: number } } }).newState
-            .affectiveState.pleasure,
-          0.4,
-        );
+        expect(soul.content[0].type).toBe("json");
+        expect((soul.content[0].json as { newState: { affectiveState: { pleasure: number } } }).newState
+            .affectiveState.pleasure).toBe(0.4);
 
         const soulState = adapter.callTool({ name: "get_soul_state", arguments: {} });
-        assert.equal(soulState.content[0].type, "json");
-        assert.equal(
-          (soulState.content[0].json as { affectiveState: { arousal: number } }).affectiveState
-            .arousal,
-          0.2,
-        );
+        expect(soulState.content[0].type).toBe("json");
+        expect((soulState.content[0].json as { affectiveState: { arousal: number } }).affectiveState
+            .arousal).toBe(0.2);
       } finally {
         runtime.close();
       }

@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,10 +14,10 @@ describe("Gateway server shell", () => {
       try {
         const health = await getJson(gateway.url("/health"));
 
-        assert.equal(health.status, "ok");
-        assert.equal(health.routeReady, false);
-        assert.equal(health.activeProviderProfile, null);
-        assert.equal(health.liveProviderCallRequired, false);
+        expect(health.status).toBe("ok");
+        expect(health.routeReady).toBe(false);
+        expect(health.activeProviderProfile).toBe(null);
+        expect(health.liveProviderCallRequired).toBe(false);
       } finally {
         await gateway.close();
         providerProfiles.close();
@@ -45,10 +44,10 @@ describe("Gateway server shell", () => {
       try {
         const health = await getJson(gateway.url("/health"));
 
-        assert.equal(health.routeReady, true);
-        assert.equal(health.activeProviderProfile.id, "openai");
-        assert.equal(health.activeProviderProfile.credentialRef, "credential:openai:primary");
-        assert.doesNotMatch(JSON.stringify(health), /sk-|api[_-]?key|secret/i);
+        expect(health.routeReady).toBe(true);
+        expect(health.activeProviderProfile.id).toBe("openai");
+        expect(health.activeProviderProfile.credentialRef).toBe("credential:openai:primary");
+        expect(JSON.stringify(health)).not.toMatch(/sk-|api[_-]?key|secret/i);
       } finally {
         await gateway.close();
         providerProfiles.close();
@@ -80,12 +79,12 @@ describe("Gateway Provider Adapter routing", () => {
           messages: [{ role: "user", content: "hello" }],
         });
 
-        assert.equal(route.status, "translated");
-        assert.equal(route.adapter, "openai-chat");
-        assert.equal(route.liveProviderCallRequired, false);
-        assert.equal(route.providerRequest.url, "https://api.openai.com/v1/chat/completions");
-        assert.equal(route.providerRequest.body.model, "gpt-4.1");
-        assert.deepEqual(route.providerRequest.body.messages, [{ role: "user", content: "hello" }]);
+        expect(route.status).toBe("translated");
+        expect(route.adapter).toBe("openai-chat");
+        expect(route.liveProviderCallRequired).toBe(false);
+        expect(route.providerRequest.url).toBe("https://api.openai.com/v1/chat/completions");
+        expect(route.providerRequest.body.model).toBe("gpt-4.1");
+        expect(route.providerRequest.body.messages).toEqual([{ role: "user", content: "hello" }]);
       } finally {
         await gateway.close();
         providerProfiles.close();
@@ -120,9 +119,9 @@ describe("Gateway Provider Adapter routing", () => {
         });
         const route = (await response.json()) as any;
 
-        assert.equal(response.status, 422);
-        assert.equal(route.status, "unsupported-route");
-        assert.match(route.reason, /openai-chat -> anthropic/);
+        expect(response.status).toBe(422);
+        expect(route.status).toBe("unsupported-route");
+        expect(route.reason).toMatch(/openai-chat -> anthropic/);
       } finally {
         await gateway.close();
         providerProfiles.close();
@@ -167,18 +166,18 @@ describe("Gateway Audit Records", () => {
         });
 
         const records = audit.listAuditRecords();
-        assert.equal(records.length, 2);
-        assert.equal(records[0].trafficMetadata.model, "gpt-4.1");
-        assert.equal(records[0].trafficMetadata.providerProfileId, "openai");
-        assert.equal(records[0].trafficMetadata.inputTokens, 1200);
-        assert.equal(records[0].trafficMetadata.outputTokens, 300);
-        assert.equal(records[0].outcome, "translated");
-        assert.equal(records[0].estimatedCost, 0.0048);
-        assert.equal(records[1].outcome, "unsupported-route");
+        expect(records.length).toBe(2);
+        expect(records[0].trafficMetadata.model).toBe("gpt-4.1");
+        expect(records[0].trafficMetadata.providerProfileId).toBe("openai");
+        expect(records[0].trafficMetadata.inputTokens).toBe(1200);
+        expect(records[0].trafficMetadata.outputTokens).toBe(300);
+        expect(records[0].outcome).toBe("translated");
+        expect(records[0].estimatedCost).toBe(0.0048);
+        expect(records[1].outcome).toBe("unsupported-route");
 
         const serialized = JSON.stringify(records);
-        assert.doesNotMatch(serialized, /private prompt body/);
-        assert.doesNotMatch(serialized, /failed private prompt body/);
+        expect(serialized).not.toMatch(/private prompt body/);
+        expect(serialized).not.toMatch(/failed private prompt body/);
       } finally {
         await gateway.close();
         audit.close();
@@ -249,7 +248,7 @@ describe("Gateway Audit Records", () => {
           to: "2026-05-29T00:00:00.000Z",
         });
 
-        assert.deepEqual(trends.dailyCosts, [
+        expect(trends.dailyCosts).toEqual([
           {
             date: "2026-05-28",
             estimatedCost: 0.011,
@@ -259,11 +258,11 @@ describe("Gateway Audit Records", () => {
             averageLatencyMs: 800,
           },
         ]);
-        assert.deepEqual(trends.modelMix, [
+        expect(trends.modelMix).toEqual([
           { model: "claude-sonnet", requestCount: 1, estimatedCost: 0.009 },
           { model: "gpt-4.1", requestCount: 1, estimatedCost: 0.002 },
         ]);
-        assert.deepEqual(trends.providerMix, [
+        expect(trends.providerMix).toEqual([
           { providerProfileId: "anthropic-main", requestCount: 1, estimatedCost: 0.009 },
           { providerProfileId: "openai-main", requestCount: 1, estimatedCost: 0.002 },
         ]);
@@ -287,7 +286,7 @@ async function withGateway(assertions: (dbPath: string) => Promise<void>): Promi
 
 async function getJson(url: string): Promise<any> {
   const response = await fetch(url);
-  assert.equal(response.status, 200);
+  expect(response.status).toBe(200);
   return response.json();
 }
 
@@ -297,6 +296,6 @@ async function postJson(url: string, body: unknown): Promise<any> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  assert.equal(response.status, 200);
+  expect(response.status).toBe(200);
   return response.json();
 }

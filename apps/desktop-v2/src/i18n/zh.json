@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "companion": "伙伴",
+    "gateway": "网关",
+    "skills": "技能",
+    "sessions": "会话",
+    "costs": "成本",
+    "safety": "安全",
+    "settings": "设置"
+  },
+  "companion": {
+    "title": "伙伴区域",
+    "vitals": "生命体征",
+    "mood": "心情",
+    "level": "等级",
+    "xp": "经验",
+    "energy": "能量",
+    "hunger": "饥饿",
+    "intimacy": "亲密度",
+    "growthHistory": "成长历史",
+    "emotionTrajectory": "情绪轨迹",
+    "appearance": "外观"
+  },
+  "gateway": {
+    "title": "网关区域",
+    "providerProfiles": "服务商配置",
+    "routingHealth": "路由健康",
+    "adapterStatus": "适配器状态",
+    "activeProvider": "活动服务商"
+  },
+  "skills": {
+    "title": "技能区域",
+    "installed": "已安装技能包",
+    "projectActivation": "项目激活",
+    "managedFiles": "托管规则文件"
+  },
+  "sessions": {
+    "title": "会话区域",
+    "searchable": "可搜索",
+    "resumable": "可恢复",
+    "launch": "启动会话"
+  },
+  "costs": {
+    "title": "成本区域",
+    "estimatedCost": "估计成本",
+    "providerUsage": "服务商用量",
+    "modelMix": "模型占比",
+    "latency": "延迟",
+    "trends": "趋势"
+  },
+  "safety": {
+    "title": "安全区域",
+    "approvalHistory": "审批历史",
+    "riskNotices": "风险通知",
+    "trustGrants": "信任授权",
+    "actionRiskClasses": "操作风险等级"
+  },
+  "settings": {
+    "title": "设置",
+    "persona": "人格配置",
+    "locale": "语言",
+    "appearance": "外观设置",
+    "health": "健康诊断"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "deny": "拒绝",
+    "approve": "批准",
+    "loading": "加载中..."
+  }
+}

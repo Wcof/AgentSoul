@@ -15,7 +15,7 @@ import pytest
 # Ensure project root is on sys.path so `common` package resolves correctly
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.adaptive_learning.pad_engine import (
+from agentsoul.learning.adaptive_learning.pad_engine import (
     DriftSeverity,
     EventType,
     PADEngine,
@@ -304,3 +304,203 @@ class TestSummary:
         assert "pleasure" in d
         assert "baseline" in d
         assert "learning_intensity" in d
+
+
+# ============================================================================
+# Deep Tests: Emotion Naming (Mehrabian 1996)
+# ============================================================================
+
+class TestEmotionNaming:
+    """PAD → emotion label mapping based on Mehrabian's 8-quadrant model."""
+
+    def test_excited_confident(self):
+        """P+ A+ D+ → excited_confident"""
+        assert PADEngine.name_emotion(0.5, 0.5, 0.5) == "excited_confident"
+
+    def test_dependent_admiring(self):
+        """P+ A+ D- → dependent_admiring"""
+        assert PADEngine.name_emotion(0.5, 0.5, -0.5) == "dependent_admiring"
+
+    def test_relaxed_composed(self):
+        """P+ A- D+ → relaxed_composed"""
+        assert PADEngine.name_emotion(0.5, -0.5, 0.5) == "relaxed_composed"
+
+    def test_docile_content(self):
+        """P+ A- D- → docile_content"""
+        assert PADEngine.name_emotion(0.5, -0.5, -0.5) == "docile_content"
+
+    def test_angry_hostile(self):
+        """P- A+ D+ → angry_hostile"""
+        assert PADEngine.name_emotion(-0.5, 0.5, 0.5) == "angry_hostile"
+
+    def test_anxious_fearful(self):
+        """P- A+ D- → anxious_fearful"""
+        assert PADEngine.name_emotion(-0.5, 0.5, -0.5) == "anxious_fearful"
+
+    def test_bored_contemptuous(self):
+        """P- A- D+ → bored_contemptuous"""
+        assert PADEngine.name_emotion(-0.5, -0.5, 0.5) == "bored_contemptuous"
+
+    def test_melancholic_sad(self):
+        """P- A- D- → melancholic_sad"""
+        assert PADEngine.name_emotion(-0.5, -0.5, -0.5) == "melancholic_sad"
+
+    def test_neutral_near_zero(self):
+        """Values near zero should be neutral."""
+        assert PADEngine.name_emotion(0.01, 0.01, 0.01) == "neutral"
+
+    def test_neutral_exact_zero(self):
+        assert PADEngine.name_emotion(0.0, 0.0, 0.0) == "neutral"
+
+
+# ============================================================================
+# Deep Tests: Energy Management
+# ============================================================================
+
+class TestEnergyManagement:
+    """Energy consumption during interactions and recovery during rest."""
+
+    def test_energy_decreases_on_interaction(self, engine):
+        initial_energy = engine.get_state().energy
+        engine.adjust_from_feedback("positive")
+        assert engine.get_state().energy < initial_energy
+
+    def test_energy_decreases_on_event(self, engine):
+        initial_energy = engine.get_state().energy
+        engine.apply_event(EventType.STRESS, intensity=1.0)
+        assert engine.get_state().energy < initial_energy
+
+    def test_energy_recovers_on_rest(self, tmp_path_factory_pad):
+        engine = PADEngine(data_path=tmp_path_factory_pad, learning_intensity=0.3)
+        # Drain some energy
+        engine.adjust_from_feedback("positive")
+        engine.adjust_from_feedback("positive")
+        low_energy = engine.get_state().energy
+
+        # Simulate rest by backdating last_updated
+        engine._state.last_updated = datetime.now() - timedelta(hours=3)
+        engine._save_state()
+
+        # Reload engine
+        engine2 = PADEngine(data_path=tmp_path_factory_pad, learning_intensity=0.3)
+        recovered_energy = engine2.get_state().energy
+        assert recovered_energy > low_energy
+
+    def test_relaxation_event_restores_energy(self, engine):
+        # Drain energy
+        engine.apply_event(EventType.STRESS, intensity=1.5)
+        low = engine.get_state().energy
+        # Relax
+        engine.apply_event(EventType.RELAXATION, intensity=1.0)
+        assert engine.get_state().energy > low
+
+
+# ============================================================================
+# Deep Tests: Drift Detection
+# ============================================================================
+
+class TestDriftDetection:
+    """Drift detection at various severity levels."""
+
+    def test_no_drift_at_baseline(self, engine):
+        report = engine.detect_drift()
+        assert report.severity == DriftSeverity.NONE
+
+    def test_mild_drift_after_few_events(self, engine):
+        for _ in range(3):
+            engine.apply_event(EventType.POSITIVE, intensity=1.0)
+        report = engine.detect_drift()
+        assert report.severity in (DriftSeverity.NONE, DriftSeverity.MILD)
+
+    def test_severe_drift_after_many_stress_events(self, engine):
+        for _ in range(15):
+            engine.apply_event(EventType.STRESS, intensity=2.0)
+        report = engine.detect_drift()
+        assert report.severity in (DriftSeverity.MODERATE, DriftSeverity.SEVERE)
+
+    def test_drift_report_contains_emotion_profile(self, engine):
+        report = engine.detect_drift()
+        assert report.emotion_profile in (
+            "excited", "relaxed", "anxious", "depressed", "neutral"
+        )
+
+    def test_drift_resets_after_engine_reset(self, engine):
+        for _ in range(10):
+            engine.apply_event(EventType.NEGATIVE, intensity=1.5)
+        engine.reset()
+        report = engine.detect_drift()
+        assert report.severity == DriftSeverity.NONE
+
+
+# ============================================================================
+# Deep Tests: Event Perturbation
+# ============================================================================
+
+class TestEventPerturbation:
+    """Event perturbation effects on PAD state."""
+
+    def test_positive_increases_pleasure(self, engine):
+        old_p = engine.get_state().pleasure
+        result = engine.apply_event(EventType.POSITIVE)
+        assert result.delta_pleasure > 0
+        assert engine.get_state().pleasure > old_p
+
+    def test_negative_decreases_pleasure(self, engine):
+        old_p = engine.get_state().pleasure
+        engine.apply_event(EventType.NEGATIVE)
+        assert engine.get_state().pleasure < old_p
+
+    def test_stress_increases_arousal(self, engine):
+        old_a = engine.get_state().arousal
+        engine.apply_event(EventType.STRESS)
+        assert engine.get_state().arousal > old_a
+
+    def test_relaxation_decreases_arousal(self, engine):
+        # First raise arousal
+        engine.apply_event(EventType.STRESS)
+        high_a = engine.get_state().arousal
+        engine.apply_event(EventType.RELAXATION)
+        assert engine.get_state().arousal < high_a
+
+    def test_intensity_scales_deltas(self, engine):
+        engine.apply_event(EventType.POSITIVE, intensity=0.5)
+        delta_low = engine.get_state().pleasure - 0.3  # baseline
+        engine.reset()
+        engine.apply_event(EventType.POSITIVE, intensity=2.0)
+        delta_high = engine.get_state().pleasure - 0.3
+        assert abs(delta_high) > abs(delta_low)
+
+    def test_neutral_event_no_change(self, engine):
+        old_state = (engine.get_state().pleasure, engine.get_state().arousal,
+                     engine.get_state().dominance)
+        engine.apply_event(EventType.NEUTRAL, intensity=1.0)
+        new_state = (engine.get_state().pleasure, engine.get_state().arousal,
+                     engine.get_state().dominance)
+        assert new_state == pytest.approx(old_state, abs=0.01)
+
+
+# ============================================================================
+# Deep Tests: Emotion Resonance
+# ============================================================================
+
+class TestEmotionResonance:
+    """Consecutive same-type events should amplify each other."""
+
+    def test_consecutive_positive_amplifies(self, engine):
+        engine.apply_event(EventType.POSITIVE, intensity=1.0)
+        delta_first = engine.get_state().pleasure - 0.3
+
+        engine.apply_event(EventType.POSITIVE, intensity=1.0)
+        total_delta = engine.get_state().pleasure - 0.3
+
+        # Second event should amplify due to resonance
+        assert total_delta > delta_first * 1.5
+
+    def test_different_events_break_resonance(self, engine):
+        engine.apply_event(EventType.POSITIVE, intensity=1.0)
+        engine.apply_event(EventType.NEGATIVE, intensity=1.0)
+        # No resonance accumulated for the negative event
+        engine.apply_event(EventType.POSITIVE, intensity=1.0)
+        # This third positive should not have as much resonance as consecutive
+        report = engine.get_summary()
+        assert "resonance" in report

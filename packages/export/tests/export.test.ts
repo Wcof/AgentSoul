@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +8,7 @@ import { createProviderProfileService } from "@agentsoul/provider";
 import { createCompanionRuntime } from "@agentsoul/runtime";
 import { createSessionSourceScanner } from "@agentsoul/sessions";
 import { createSkillSourceStore } from "@agentsoul/skills";
+import { decideSafetyPolicy } from "@agentsoul/safety";
 
 describe("User-managed Export", () => {
   it("exports Portable Data and excludes credentials, bodies, raw evidence, and private auth files", () => {
@@ -17,50 +17,45 @@ describe("User-managed Export", () => {
       const service = createUserManagedExportService({
         dbPath,
         clock: () => new Date("2026-05-29T10:00:00.000Z"),
+        decideSafetyPolicy,
       });
 
       try {
         const portable = service.createPortableDataExport();
         const serialized = JSON.stringify(portable);
 
-        assert.equal(portable.exportKind, "portable-data");
-        assert.equal(portable.formatVersion, "agentsoul-export-v1");
-        assert.equal(portable.schemaVersion, 1);
-        assert.equal(portable.sensitiveDataIncluded, false);
-        assert.equal(portable.createdAt, "2026-05-29T10:00:00.000Z");
+        expect(portable.exportKind).toBe("portable-data");
+        expect(portable.formatVersion).toBe("agentsoul-export-v1");
+        expect(portable.schemaVersion).toBe(1);
+        expect(portable.sensitiveDataIncluded).toBe(false);
+        expect(portable.createdAt).toBe("2026-05-29T10:00:00.000Z");
 
-        assert.ok(portable.companion);
-        assert.equal(portable.growthEvents.length, 1);
-        assert.equal(portable.providerProfiles[0]?.id, "anthropic-main");
-        assert.equal(portable.providerProfiles[0]?.name, "Anthropic Main");
-        assert.equal("credentialRef" in (portable.providerProfiles[0] ?? {}), false);
-        assert.equal(portable.providerProfiles[0]?.adapterSettingsIncluded, false);
-        assert.equal((portable.skillPacks[0] as { name?: string } | undefined)?.name, "TDD");
-        assert.equal(
-          (portable.projectSkillActivations[0] as { enabled?: boolean } | undefined)?.enabled,
-          true,
-        );
-        assert.equal(portable.workSessions[0]?.id, "work-session-1");
-        assert.equal(
-          (
+        expect(portable.companion).toBeTruthy();
+        expect(portable.growthEvents.length).toBe(1);
+        expect(portable.providerProfiles[0]?.id).toBe("anthropic-main");
+        expect(portable.providerProfiles[0]?.name).toBe("Anthropic Main");
+        expect("credentialRef" in (portable.providerProfiles[0] ?? {})).toBe(false);
+        expect(portable.providerProfiles[0]?.adapterSettingsIncluded).toBe(false);
+        expect((portable.skillPacks[0] as { name?: string } | undefined)?.name).toBe("TDD");
+        expect((portable.projectSkillActivations[0] as { enabled?: boolean } | undefined)?.enabled).toBe(true);
+        expect(portable.workSessions[0]?.id).toBe("work-session-1");
+        expect((
             portable.trafficMetadataSummaries[0]?.trafficMetadata as
               | { inputTokens?: number }
               | undefined
-          )?.inputTokens,
-          1200,
-        );
-        assert.deepEqual(portable.exclusions, [
+          )?.inputTokens).toBe(1200);
+        expect(portable.exclusions).toEqual([
           "Credentials",
           "captured request/response bodies",
           "raw indexed evidence",
           "private client auth files",
         ]);
 
-        assert.doesNotMatch(serialized, /sk-anthropic-secret/);
-        assert.doesNotMatch(serialized, /credential:anthropic-main/);
-        assert.doesNotMatch(serialized, /captured request body/);
-        assert.doesNotMatch(serialized, /raw indexed evidence text/);
-        assert.doesNotMatch(serialized, new RegExp("\\.claude/auth"));
+        expect(serialized).not.toMatch(/sk-anthropic-secret/);
+        expect(serialized).not.toMatch(/credential:anthropic-main/);
+        expect(serialized).not.toMatch(/captured request body/);
+        expect(serialized).not.toMatch(/raw indexed evidence text/);
+        expect(serialized).not.toMatch(new RegExp("\\.claude/auth"));
       } finally {
         service.close();
       }
@@ -69,7 +64,7 @@ describe("User-managed Export", () => {
 
   it("requires explicit high-risk confirmation before creating a Sensitive Export", () => {
     withDatabase((dbPath) => {
-      const service = createUserManagedExportService({ dbPath });
+      const service = createUserManagedExportService({ dbPath, decideSafetyPolicy });
 
       try {
         const pending = service.createSensitiveExport({
@@ -84,12 +79,12 @@ describe("User-managed Export", () => {
           clientId: "claude-code",
         });
 
-        assert.equal(pending.status, "approval-required");
+        expect(pending.status).toBe("approval-required");
         if (pending.status !== "approval-required") {
           throw new Error("Expected approval-required");
         }
-        assert.equal(pending.actionRiskClass, "critical");
-        assert.match(pending.approvalRequestId, /^approval:export-secret:/);
+        expect(pending.actionRiskClass).toBe("critical");
+        expect(pending.approvalRequestId).toMatch(/^approval:export-secret:/);
 
         const denied = service.createSensitiveExport({
           payload: { credential: "sk-anthropic-secret" },
@@ -98,7 +93,7 @@ describe("User-managed Export", () => {
           now: "2026-05-29T10:05:00.000Z",
           approvalDecisionKind: "denied",
         });
-        assert.deepEqual(denied, {
+        expect(denied).toEqual({
           status: "denied",
           reason: "approval-denied",
         });
@@ -111,15 +106,15 @@ describe("User-managed Export", () => {
           approvalDecisionKind: "allowed",
         });
 
-        assert.equal(exported.status, "exported");
+        expect(exported.status).toBe("exported");
         if (exported.status !== "exported") {
           throw new Error("Expected exported");
         }
-        assert.equal(exported.exportKind, "sensitive-export");
-        assert.equal(exported.formatVersion, "agentsoul-export-v1");
-        assert.equal(exported.schemaVersion, 1);
-        assert.equal(exported.sensitiveDataIncluded, true);
-        assert.deepEqual(exported.payload, { credential: "sk-anthropic-secret" });
+        expect(exported.exportKind).toBe("sensitive-export");
+        expect(exported.formatVersion).toBe("agentsoul-export-v1");
+        expect(exported.schemaVersion).toBe(1);
+        expect(exported.sensitiveDataIncluded).toBe(true);
+        expect(exported.payload).toEqual({ credential: "sk-anthropic-secret" });
       } finally {
         service.close();
       }
@@ -228,3 +223,32 @@ function withDatabase(fn: (dbPath: string) => void): void {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+  it("generates ExportManifest with included and excluded sections", () => {
+    withDatabase((dbPath) => {
+      const service = createUserManagedExportService({
+        dbPath,
+        clock: () => new Date("2026-05-29T10:00:00.000Z"),
+        decideSafetyPolicy,
+      });
+
+      try {
+        const portableManifest = service.createExportManifest("portable");
+        expect(portableManifest.kind).toBe("portable");
+        expect(portableManifest.includedSections).toContain("companion");
+        expect(portableManifest.includedSections).toContain("growthEvents");
+        expect(portableManifest.includedSections).toContain("providerProfiles");
+        expect(portableManifest.excludedSections).toContain("credentials");
+        expect(portableManifest.excludedSections).toContain("capturedBodies");
+        expect(portableManifest.createdAt).toBe("2026-05-29T10:00:00.000Z");
+
+        const sensitiveManifest = service.createExportManifest("sensitive");
+        expect(sensitiveManifest.kind).toBe("sensitive");
+        expect(sensitiveManifest.includedSections).toContain("credentials");
+        expect(sensitiveManifest.includedSections).toContain("capturedBodies");
+        expect(sensitiveManifest.excludedSections).toHaveLength(0);
+      } finally {
+        service.close();
+      }
+    });
+  });

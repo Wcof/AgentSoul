@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import {
   existsSync,
@@ -40,19 +39,19 @@ describe("Skill Source Store and Skill Installation", () => {
           installedAt: "2026-05-28T11:10:00.000Z",
         });
 
-        assert.equal(installed.id, "tdd");
-        assert.equal(installed.source.kind, "local-directory");
-        assert.equal(installed.deploymentState.workspaceRuleDeploymentsCreated, false);
+        expect(installed.id).toBe("tdd");
+        expect(installed.source.kind).toBe("local-directory");
+        expect(installed.deploymentState.workspaceRuleDeploymentsCreated).toBe(false);
 
         const skillPacks = store.listSkillPacks();
-        assert.equal(skillPacks.length, 1);
-        assert.equal(skillPacks[0]?.source.uri, "/Users/ldh/.agents/skills/tdd");
-        assert.equal(skillPacks[0]?.ruleFiles[0]?.relativePath, "CLAUDE.md");
+        expect(skillPacks.length).toBe(1);
+        expect(skillPacks[0]?.source.uri).toBe("/Users/ldh/.agents/skills/tdd");
+        expect(skillPacks[0]?.ruleFiles[0]?.relativePath).toBe("CLAUDE.md");
 
         const db = new Database(dbPath, { readonly: true, fileMustExist: true });
         try {
-          assert.equal(readCount(db, "project_skill_activations"), 0);
-          assert.equal(readCount(db, "managed_rule_files"), 0);
+          expect(readCount(db, "project_skill_activations")).toBe(0);
+          expect(readCount(db, "managed_rule_files")).toBe(0);
         } finally {
           db.close();
         }
@@ -87,19 +86,16 @@ describe("Skill Source Store and Skill Installation", () => {
           installedAt: "2026-05-29T12:00:00.000Z",
         });
 
-        assert.equal(imported.id, "external-tdd");
-        assert.equal(imported.name, "External TDD");
-        assert.equal(imported.description, "Representative external agent rule pack");
-        assert.equal(imported.source.kind, "local-directory");
-        assert.equal(imported.source.uri, externalPackPath);
-        assert.equal(imported.source.revision, "1.2.3");
-        assert.deepEqual(
-          imported.ruleFiles.map((ruleFile) => ruleFile.relativePath).sort(),
-          [".cursorrules", "CLAUDE.md"],
-        );
-        assert.equal(imported.deploymentState.workspaceRuleDeploymentsCreated, false);
-        assert.equal(store.listSkillPacks().length, 1);
-        assert.equal(store.listManagedRuleFiles(externalPackPath).length, 0);
+        expect(imported.id).toBe("external-tdd");
+        expect(imported.name).toBe("External TDD");
+        expect(imported.description).toBe("Representative external agent rule pack");
+        expect(imported.source.kind).toBe("local-directory");
+        expect(imported.source.uri).toBe(externalPackPath);
+        expect(imported.source.revision).toBe("1.2.3");
+        expect(imported.ruleFiles.map((ruleFile) => ruleFile.relativePath).sort()).toEqual([".cursorrules", "CLAUDE.md"]);
+        expect(imported.deploymentState.workspaceRuleDeploymentsCreated).toBe(false);
+        expect(store.listSkillPacks().length).toBe(1);
+        expect(store.listManagedRuleFiles(externalPackPath).length).toBe(0);
       } finally {
         store.close();
         rmSync(externalPackPath, { recursive: true, force: true });
@@ -122,15 +118,12 @@ describe("Project Skill Activation", () => {
           enabled: true,
           updatedAt: "2026-05-28T11:21:00.000Z",
         });
-        assert.equal(enabled.enabled, true);
-        assert.equal(enabled.deploymentState.workspaceRuleDeploymentsCreated, false);
-        assert.equal(
-          store.getEffectiveSkillActivation({
+        expect(enabled.enabled).toBe(true);
+        expect(enabled.deploymentState.workspaceRuleDeploymentsCreated).toBe(false);
+        expect(store.getEffectiveSkillActivation({
             projectPath: "/workspace/app",
             skillPackId: "tdd",
-          }).enabled,
-          true,
-        );
+          }).enabled).toBe(true);
 
         const disabled = store.setProjectSkillActivation({
           projectPath: "/workspace/app",
@@ -138,16 +131,13 @@ describe("Project Skill Activation", () => {
           enabled: false,
           updatedAt: "2026-05-28T11:22:00.000Z",
         });
-        assert.equal(disabled.enabled, false);
-        assert.equal(
-          store.listProjectSkillActivations("/workspace/app")[0]?.enabled,
-          false,
-        );
+        expect(disabled.enabled).toBe(false);
+        expect(store.listProjectSkillActivations("/workspace/app")[0]?.enabled).toBe(false);
 
         const db = new Database(dbPath, { readonly: true, fileMustExist: true });
         try {
-          assert.equal(readCount(db, "project_skill_activations"), 1);
-          assert.equal(readCount(db, "managed_rule_files"), 0);
+          expect(readCount(db, "project_skill_activations")).toBe(1);
+          expect(readCount(db, "managed_rule_files")).toBe(0);
         } finally {
           db.close();
         }
@@ -164,20 +154,14 @@ describe("Project Skill Activation", () => {
       try {
         installTddSkillPack(store, "2026-05-28T11:30:00.000Z", true);
 
-        assert.equal(
-          store.getEffectiveSkillActivation({
+        expect(store.getEffectiveSkillActivation({
             projectPath: "/workspace/app",
             skillPackId: "tdd",
-          }).source,
-          "global-default",
-        );
-        assert.equal(
-          store.getEffectiveSkillActivation({
+          }).source).toBe("global-default");
+        expect(store.getEffectiveSkillActivation({
             projectPath: "/workspace/app",
             skillPackId: "tdd",
-          }).enabled,
-          true,
-        );
+          }).enabled).toBe(true);
 
         store.setProjectSkillActivation({
           projectPath: "/workspace/app",
@@ -190,8 +174,8 @@ describe("Project Skill Activation", () => {
           projectPath: "/workspace/app",
           skillPackId: "tdd",
         });
-        assert.equal(effective.source, "project");
-        assert.equal(effective.enabled, false);
+        expect(effective.source).toBe("project");
+        expect(effective.enabled).toBe(false);
       } finally {
         store.close();
       }
@@ -239,19 +223,19 @@ describe("Workspace Rule Deployment", () => {
         });
         const targetPath = join(workspacePath, "CLAUDE.md");
 
-        assert.equal(deployment.status, "deployed");
-        assert.equal(lstatSync(targetPath).isSymbolicLink(), true);
-        assert.equal(readlinkSync(targetPath), sourcePath);
-        assert.equal(store.listManagedRuleFiles(workspacePath)[0]?.targetPath, targetPath);
+        expect(deployment.status).toBe("deployed");
+        expect(lstatSync(targetPath).isSymbolicLink()).toBe(true);
+        expect(readlinkSync(targetPath)).toBe(sourcePath);
+        expect(store.listManagedRuleFiles(workspacePath)[0]?.targetPath).toBe(targetPath);
 
         const cleanup = store.cleanupWorkspaceRules({
           projectPath: workspacePath,
           skillPackId: "tdd",
         });
 
-        assert.equal(cleanup.removed.length, 1);
-        assert.equal(existsSync(targetPath), false);
-        assert.equal(store.listManagedRuleFiles(workspacePath).length, 0);
+        expect(cleanup.removed.length).toBe(1);
+        expect(existsSync(targetPath)).toBe(false);
+        expect(store.listManagedRuleFiles(workspacePath).length).toBe(0);
       } finally {
         store.close();
         rmSync(workspacePath, { recursive: true, force: true });
@@ -298,9 +282,9 @@ describe("Workspace Rule Deployment", () => {
         });
         const targetPath = join(workspacePath, "CLAUDE.md");
 
-        assert.equal(deployment.status, "deployed");
-        assert.equal(readFileSync(targetPath, "utf8"), "Use TDD.\n");
-        assert.equal(store.listManagedRuleFiles(workspacePath)[0]?.deploymentMethod, "copy");
+        expect(deployment.status).toBe("deployed");
+        expect(readFileSync(targetPath, "utf8")).toBe("Use TDD.\n");
+        expect(store.listManagedRuleFiles(workspacePath)[0]?.deploymentMethod).toBe("copy");
 
         store.cleanupWorkspaceRules({
           projectPath: workspacePath,
@@ -315,11 +299,11 @@ describe("Workspace Rule Deployment", () => {
           deployedAt: "2026-05-28T11:53:00.000Z",
         });
 
-        assert.equal(conflict.status, "approval-required");
-        assert.equal(conflict.conflicts[0]?.targetPath, targetPath);
-        assert.equal(conflict.conflicts[0]?.reason, "user-authored-file");
-        assert.equal(readFileSync(targetPath, "utf8"), "user-authored rules\n");
-        assert.equal(store.listManagedRuleFiles(workspacePath).length, 0);
+        expect(conflict.status).toBe("approval-required");
+        expect(conflict.conflicts[0]?.targetPath).toBe(targetPath);
+        expect(conflict.conflicts[0]?.reason).toBe("user-authored-file");
+        expect(readFileSync(targetPath, "utf8")).toBe("user-authored rules\n");
+        expect(store.listManagedRuleFiles(workspacePath).length).toBe(0);
       } finally {
         store.close();
         rmSync(workspacePath, { recursive: true, force: true });

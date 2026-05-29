@@ -558,29 +558,32 @@ rm -rf var/data/
 
 ## 🧪 开发
 
+### v2.0 TypeScript 开发与测试
+
+在 AgentSoul v2.0 工作区中，推荐使用 `vitest` 进行测试：
+
 ```bash
-# 运行所有测试
-python3 -m pytest tests/ -v
+# 运行所有 v2 TypeScript 测试 (Vitest)
+npx vitest run
 
-# 运行单个测试文件
-python3 -m pytest tests/test_health_check.py -v
+# 运行特定子包的测试
+npm run persistence:test   # 持久化仓库测试
+npm run runtime:test       # 伴侣内核运行时测试
+npm run safety:test        # 安全卡口拦截策略测试
+npm run skills:test        # 技能分发及部署测试
+npm run sessions:test      # 会话扫描测试
+npm run mcp-adapter:test   # MCP 适配器测试
+npm run v2:test            # 桌面挂件行为及界面测试
 
-# 运行隐私扫描（检查敏感信息）
-python3 scripts/scan_privacy.py
+# 子包类型检查
+npm run v2:typecheck
+npm run runtime:typecheck
+npm run persistence:typecheck
+```
 
-# Type 检查
-mypy src/
+### 手动编译 MCP 服务
 
-# Lint 检查
-ruff check src/
-
-# 格式化代码
-black src/
-
-# 从旧 xiaonuan 项目迁移
-python3 scripts/migrate_from_xiaonuan.py /path/to/old/config
-
-# 手动编译 MCP 服务
+```bash
 cd apps/mcp-server && npm install && npm run build
 ```
 

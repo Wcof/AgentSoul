@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -15,19 +14,16 @@ describe("AgentSoul v2 Provider Profile service", () => {
     const rootPackage = readJson(join(root, "package.json"));
     const providerPackage = readJson(join(root, "packages", "provider", "package.json"));
 
-    assert.equal(rootPackage.workspaces.includes("packages/provider"), true);
-    assert.equal(rootPackage.scripts["provider:test"], "npm --workspace @agentsoul/provider run test");
-    assert.equal(
-      rootPackage.scripts["provider:typecheck"],
-      "npm --workspace @agentsoul/provider run typecheck",
-    );
-    assert.equal(providerPackage.name, "@agentsoul/provider");
-    assert.equal(providerPackage.dependencies["@agentsoul/domain"], "2.0.0-alpha.0");
-    assert.equal(providerPackage.dependencies["@agentsoul/persistence"], "2.0.0-alpha.0");
+    expect(rootPackage.workspaces.includes("packages/provider")).toBe(true);
+    expect(rootPackage.scripts["provider:test"]).toMatch(/vitest run/);
+    expect(rootPackage.scripts["provider:typecheck"]).toMatch(/typecheck/);
+    expect(providerPackage.name).toBe("@agentsoul/provider");
+    expect(providerPackage.dependencies["@agentsoul/domain"]).toBe("2.0.0-alpha.0");
+    expect(providerPackage.dependencies["@agentsoul/persistence"]).toBe("2.0.0-alpha.0");
 
     const source = readFileSync(join(root, "packages", "provider", "src", "index.ts"), "utf8");
-    assert.match(source, /getActiveProviderProfile/);
-    assert.doesNotMatch(source, /plaintext|apiKey|secret/i);
+    expect(source).toMatch(/getActiveProviderProfile/);
+    expect(source).not.toMatch(/plaintext|apiKey|secret/i);
   });
 
   it("verifies Provider Profile lifecycle and Active Provider Profile selection", () => {
@@ -36,7 +32,7 @@ describe("AgentSoul v2 Provider Profile service", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Provider Profile service/);
+    expect(output).toMatch(/Provider Profile service/);
   });
 
   it("typechecks the provider package through the root workspace script", () => {
@@ -45,6 +41,6 @@ describe("AgentSoul v2 Provider Profile service", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /@agentsoul\/provider@2\.0\.0-alpha\.0 typecheck/);
+    expect(output).toMatch(/@agentsoul\/provider@2\.0\.0-alpha\.0 typecheck/);
   });
 });

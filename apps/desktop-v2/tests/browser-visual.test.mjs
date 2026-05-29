@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdirSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { join } from "node:path";
@@ -29,7 +28,7 @@ describe("Desktop and Control Center browser visual smoke", () => {
       await vite.listen();
       browser = await chromium.launch();
       const url = vite.resolvedUrls?.local[0];
-      assert.ok(url, "Vite dev server should expose a local URL");
+      expect(url).toBeTruthy();
 
       for (const viewport of [
         { name: "desktop", width: 1280, height: 900 },
@@ -86,18 +85,15 @@ describe("Desktop and Control Center browser visual smoke", () => {
           };
         });
 
-        assert.ok(
-          layout.scrollWidth <= layout.clientWidth + 1,
-          `${viewport.name} layout should not horizontally overflow: ${layout.scrollWidth} > ${layout.clientWidth}`,
-        );
-        assert.deepEqual(layout.collapsed, []);
-        assert.deepEqual(layout.clippedText, []);
+        expect(layout.scrollWidth <= layout.clientWidth + 1).toBeTruthy();
+        expect(layout.collapsed).toEqual([]);
+        expect(layout.clippedText).toEqual([]);
 
         const screenshot = await page.screenshot({
           fullPage: true,
           path: join(screenshotDir, `${viewport.name}.png`),
         });
-        assert.ok(screenshot.length > 10_000, `${viewport.name} screenshot should be non-empty`);
+        expect(screenshot.length > 10_000).toBeTruthy();
 
         await page.close();
       }

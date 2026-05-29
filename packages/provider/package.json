@@ -21,7 +21,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "test": "node --test --import tsx tests/*.test.ts && echo \"Provider Profile service\" && echo \"Direct Client Config fallback\"",
+    "test": "cd ../.. && vitest run packages/provider/tests/ && echo \"Provider Profile service\" && echo \"Direct Client Config fallback\"",
     "typecheck": "tsc --noEmit"
   }
 }

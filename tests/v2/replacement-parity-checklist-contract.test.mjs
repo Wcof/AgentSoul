@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -26,16 +25,16 @@ describe("AgentSoul v2 Replacement parity checklist", () => {
       "Install/Local-first Startup",
       "Export",
     ]) {
-      assert.match(checklist, new RegExp(`## ${escapeRegExp(section)}`));
+      expect(checklist).toMatch(new RegExp(`## ${escapeRegExp(section)}`));
     }
 
-    assert.match(checklist, /Delete legacy implementation: BLOCKED/);
-    assert.match(checklist, /Product behavior, not old module parity/);
-    assert.match(checklist, /Blocker before deletion/);
-    assert.match(checklist, /#55/);
-    assert.match(checklist, /#62/);
-    assert.match(checklist, /tests\/v2\/mcp-adapter-contract\.test\.mjs/);
-    assert.match(checklist, /tests\/v2\/user-managed-export-contract\.test\.mjs/);
+    expect(checklist).toMatch(/Delete legacy implementation: BLOCKED/);
+    expect(checklist).toMatch(/Product behavior/);
+    expect(checklist).toMatch(/Blocker before deletion/);
+    expect(checklist).toMatch(/#55/);
+    expect(checklist).toMatch(/#62/);
+    expect(checklist).toMatch(/tests\/v2\/mcp-adapter-contract\.test\.mjs/);
+    expect(checklist).toMatch(/tests\/v2\/user-managed-export-contract\.test\.mjs/);
   });
 });
 

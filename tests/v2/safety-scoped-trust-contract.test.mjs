@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,13 +9,13 @@ describe("AgentSoul v2 Scoped Trust Grants", () => {
   it("exposes scoped trust creation, matching, expiry, and Critical Action boundaries", () => {
     const source = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
 
-    assert.match(source, /createScopedTrustGrantStore/);
-    assert.match(source, /CreateScopedTrustGrantInput/);
-    assert.match(source, /targetPathPrefix/);
-    assert.match(source, /providerProfileId/);
-    assert.match(source, /expiresAt/);
-    assert.match(source, /maxRiskClass/);
-    assert.match(source, /input\.actionRiskClass === "critical"/);
+    expect(source).toMatch(/createScopedTrustGrantStore/);
+    expect(source).toMatch(/CreateScopedTrustGrantInput/);
+    expect(source).toMatch(/targetPathPrefix/);
+    expect(source).toMatch(/providerProfileId/);
+    expect(source).toMatch(/expiresAt/);
+    expect(source).toMatch(/maxRiskClass/);
+    expect(source).toMatch(/input\.actionRiskClass === "critical"/);
   });
 
   it("verifies Scoped Trust Grant behavior through the Safety package suite", () => {
@@ -25,6 +24,6 @@ describe("AgentSoul v2 Scoped Trust Grants", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Scoped Trust Grants/);
+    expect(output).toMatch(/Scoped Trust Grants/);
   });
 });

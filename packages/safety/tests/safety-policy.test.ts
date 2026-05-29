@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import {
   classifyActionRisk,
   createApprovalFlow,
@@ -22,17 +21,17 @@ describe("Safety Policy decision engine", () => {
       now: "2026-05-28T10:00:00.000Z",
     });
 
-    assert.equal(decision.outcome, "approval-required");
-    assert.equal(decision.actionRiskClass, "high-risk");
-    assert.equal(decision.approvalRequest?.actionRiskClass, "high-risk");
-    assert.match(decision.approvalRequest?.title ?? "", /Write file/);
+    expect(decision.outcome).toBe("approval-required");
+    expect(decision.actionRiskClass).toBe("high-risk");
+    expect(decision.approvalRequest?.actionRiskClass).toBe("high-risk");
+    expect(decision.approvalRequest?.title ?? "").toMatch(/Write file/);
   });
 
   it("classifies Safe, Sensitive, High-risk, and Critical actions consistently", () => {
-    assert.equal(classifyActionRisk({ kind: "chat" }), "safe");
-    assert.equal(classifyActionRisk({ kind: "read-sensitive-path", target: "~/.ssh" }), "sensitive");
-    assert.equal(classifyActionRisk({ kind: "execute-command", target: "npm test" }), "high-risk");
-    assert.equal(classifyActionRisk({ kind: "export-secret", target: "provider credentials" }), "critical");
+    expect(classifyActionRisk({ kind: "chat" })).toBe("safe");
+    expect(classifyActionRisk({ kind: "read-sensitive-path", target: "~/.ssh" })).toBe("sensitive");
+    expect(classifyActionRisk({ kind: "execute-command", target: "npm test" })).toBe("high-risk");
+    expect(classifyActionRisk({ kind: "export-secret", target: "provider credentials" })).toBe("critical");
   });
 
   it("emits a Risk Notice instead of Approval Required for bypassed fully authorized clients", () => {
@@ -46,10 +45,10 @@ describe("Safety Policy decision engine", () => {
       now: "2026-05-28T10:05:00.000Z",
     });
 
-    assert.equal(decision.outcome, "risk-notice");
-    assert.equal(decision.actionRiskClass, "high-risk");
-    assert.equal(decision.approvalRequest, undefined);
-    assert.equal(decision.riskNotice?.clientAuthorizationMode, "fully-authorized");
+    expect(decision.outcome).toBe("risk-notice");
+    expect(decision.actionRiskClass).toBe("high-risk");
+    expect(decision.approvalRequest).toBe(undefined);
+    expect(decision.riskNotice?.clientAuthorizationMode).toBe("fully-authorized");
   });
 
   it("denies by default when an approval surface is unavailable for a controlled high-risk action", () => {
@@ -64,9 +63,9 @@ describe("Safety Policy decision engine", () => {
       now: "2026-05-28T10:10:00.000Z",
     });
 
-    assert.equal(decision.outcome, "deny");
-    assert.equal(decision.actionRiskClass, "high-risk");
-    assert.equal(decision.approvalDecision?.kind, "unavailable-denied");
+    expect(decision.outcome).toBe("deny");
+    expect(decision.actionRiskClass).toBe("high-risk");
+    expect(decision.approvalDecision?.kind).toBe("unavailable-denied");
   });
 
   it("resolves unanswered approval requests as timeout-denied decisions", () => {
@@ -81,9 +80,9 @@ describe("Safety Policy decision engine", () => {
       "2026-05-28T10:16:00.000Z",
     );
 
-    assert.equal(decision.requestId, "approval:execute-command:2026-05-28T10:15:00.000Z");
-    assert.equal(decision.kind, "timeout-denied");
-    assert.equal(decision.decidedAt, "2026-05-28T10:16:00.000Z");
+    expect(decision.requestId).toBe("approval:execute-command:2026-05-28T10:15:00.000Z");
+    expect(decision.kind).toBe("timeout-denied");
+    expect(decision.decidedAt).toBe("2026-05-28T10:16:00.000Z");
   });
 
   it("allows high-risk actions covered by a valid Scoped Trust Grant", () => {
@@ -113,9 +112,9 @@ describe("Safety Policy decision engine", () => {
       now: "2026-05-28T10:20:00.000Z",
     });
 
-    assert.equal(decision.outcome, "allow");
-    assert.equal(decision.actionRiskClass, "high-risk");
-    assert.equal(decision.trustGrantId, "trust:tests");
+    expect(decision.outcome).toBe("allow");
+    expect(decision.actionRiskClass).toBe("high-risk");
+    expect(decision.trustGrantId).toBe("trust:tests");
   });
 
   it("allows Safe actions and emits Risk Notice for Sensitive actions", () => {
@@ -134,11 +133,11 @@ describe("Safety Policy decision engine", () => {
       now: "2026-05-28T10:25:00.000Z",
     });
 
-    assert.equal(safeDecision.outcome, "allow");
-    assert.equal(safeDecision.actionRiskClass, "safe");
-    assert.equal(sensitiveDecision.outcome, "risk-notice");
-    assert.equal(sensitiveDecision.actionRiskClass, "sensitive");
-    assert.match(sensitiveDecision.riskNotice?.message ?? "", /~\/.ssh\/config/);
+    expect(safeDecision.outcome).toBe("allow");
+    expect(safeDecision.actionRiskClass).toBe("safe");
+    expect(sensitiveDecision.outcome).toBe("risk-notice");
+    expect(sensitiveDecision.actionRiskClass).toBe("sensitive");
+    expect(sensitiveDecision.riskNotice?.message ?? "").toMatch(/~\/.ssh\/config/);
   });
 });
 
@@ -156,14 +155,14 @@ describe("Approval Required flow", () => {
     if (!("status" in pending)) {
       throw new Error("Expected Approval Required state");
     }
-    assert.equal(pending.status, "approval-required");
-    assert.equal(pending.approvalRequest.actionRiskClass, "high-risk");
-    assert.equal(flow.getPendingApproval()?.id, pending.approvalRequest.id);
+    expect(pending.status).toBe("approval-required");
+    expect(pending.approvalRequest.actionRiskClass).toBe("high-risk");
+    expect(flow.getPendingApproval()?.id).toBe(pending.approvalRequest.id);
 
     const allowed = flow.decideApproval(pending.approvalRequest.id, "allowed", "2026-05-28T10:30:10.000Z");
 
-    assert.equal(allowed.kind, "allowed");
-    assert.equal(flow.getPendingApproval(), undefined);
+    expect(allowed.kind).toBe("allowed");
+    expect(flow.getPendingApproval()).toBe(undefined);
   });
 
   it("records explicit denial and timeout-denied decisions for pending approvals", () => {
@@ -179,14 +178,14 @@ describe("Approval Required flow", () => {
     if (!("status" in deniedPending)) {
       throw new Error("Expected Approval Required state");
     }
-    assert.equal(deniedPending.status, "approval-required");
+    expect(deniedPending.status).toBe("approval-required");
     const denied = deniedFlow.decideApproval(
       deniedPending.approvalRequest.id,
       "denied",
       "2026-05-28T10:35:05.000Z",
     );
-    assert.equal(denied.kind, "denied");
-    assert.equal(deniedFlow.getPendingApproval(), undefined);
+    expect(denied.kind).toBe("denied");
+    expect(deniedFlow.getPendingApproval()).toBe(undefined);
 
     const timeoutFlow = createApprovalFlow();
     const timeoutPending = timeoutFlow.requestApproval({
@@ -200,12 +199,12 @@ describe("Approval Required flow", () => {
     if (!("status" in timeoutPending)) {
       throw new Error("Expected Approval Required state");
     }
-    assert.equal(timeoutPending.status, "approval-required");
+    expect(timeoutPending.status).toBe("approval-required");
     const timeout = timeoutFlow.timeoutPendingApproval("2026-05-28T10:37:00.000Z");
 
-    assert.equal(timeout?.kind, "timeout-denied");
-    assert.equal(timeout?.requestId, timeoutPending.approvalRequest.id);
-    assert.equal(timeoutFlow.getPendingApproval(), undefined);
+    expect(timeout?.kind).toBe("timeout-denied");
+    expect(timeout?.requestId).toBe(timeoutPending.approvalRequest.id);
+    expect(timeoutFlow.getPendingApproval()).toBe(undefined);
   });
 });
 
@@ -222,10 +221,10 @@ describe("Risk Notice flow", () => {
     if (!("status" in result)) {
       throw new Error("Expected Risk Notice state");
     }
-    assert.equal(result.status, "risk-notice");
-    assert.equal(result.blocking, false);
-    assert.equal(result.riskNotice.clientAuthorizationMode, "fully-authorized");
-    assert.equal(flow.getRiskNotices()[0]?.id, result.riskNotice.id);
+    expect(result.status).toBe("risk-notice");
+    expect(result.blocking).toBe(false);
+    expect(result.riskNotice.clientAuthorizationMode).toBe("fully-authorized");
+    expect(flow.getRiskNotices()[0]?.id).toBe(result.riskNotice.id);
   });
 });
 
@@ -242,9 +241,8 @@ describe("Scoped Trust Grants", () => {
       createdAt: "2026-05-28T10:45:00.000Z",
     });
 
-    assert.equal(store.listGrants()[0]?.id, grant.id);
-    assert.equal(
-      store.findMatchingGrant({
+    expect(store.listGrants()[0]?.id).toBe(grant.id);
+    expect(store.findMatchingGrant({
         action: { kind: "execute-command", target: "/workspace/app/scripts/test.sh" },
         actionRiskClass: "high-risk",
         scope: {
@@ -253,12 +251,9 @@ describe("Scoped Trust Grants", () => {
           providerProfileId: "openai",
         },
         now: "2026-05-28T10:50:00.000Z",
-      })?.id,
-      grant.id,
-    );
+      })?.id).toBe(grant.id);
 
-    assert.equal(
-      store.findMatchingGrant({
+    expect(store.findMatchingGrant({
         action: { kind: "execute-command", target: "/workspace/other/scripts/test.sh" },
         actionRiskClass: "high-risk",
         scope: {
@@ -267,11 +262,8 @@ describe("Scoped Trust Grants", () => {
           providerProfileId: "openai",
         },
         now: "2026-05-28T10:50:00.000Z",
-      }),
-      undefined,
-    );
-    assert.equal(
-      store.findMatchingGrant({
+      })).toBe(undefined);
+    expect(store.findMatchingGrant({
         action: { kind: "execute-command", target: "/workspace/app/scripts/test.sh" },
         actionRiskClass: "high-risk",
         scope: {
@@ -280,9 +272,7 @@ describe("Scoped Trust Grants", () => {
           providerProfileId: "openai",
         },
         now: "2026-05-28T11:00:00.000Z",
-      }),
-      undefined,
-    );
+      })).toBe(undefined);
   });
 
   it("does not let ordinary Scoped Trust Grants cover Critical Actions", () => {
@@ -295,8 +285,7 @@ describe("Scoped Trust Grants", () => {
       createdAt: "2026-05-28T10:45:00.000Z",
     });
 
-    assert.equal(
-      store.findMatchingGrant({
+    expect(store.findMatchingGrant({
         action: { kind: "export-secret", target: "provider credentials" },
         actionRiskClass: "critical",
         scope: {
@@ -304,9 +293,7 @@ describe("Scoped Trust Grants", () => {
           clientId: "claude-code",
         },
         now: "2026-05-28T10:50:00.000Z",
-      }),
-      undefined,
-    );
+      })).toBe(undefined);
   });
 
   it("revokes Scoped Trust Grants so they no longer match future actions", () => {
@@ -321,10 +308,9 @@ describe("Scoped Trust Grants", () => {
 
     const revoked = store.revokeGrant(grant.id, "2026-05-28T10:50:00.000Z");
 
-    assert.equal(revoked?.id, grant.id);
-    assert.equal(revoked?.revokedAt, "2026-05-28T10:50:00.000Z");
-    assert.equal(
-      store.findMatchingGrant({
+    expect(revoked?.id).toBe(grant.id);
+    expect(revoked?.revokedAt).toBe("2026-05-28T10:50:00.000Z");
+    expect(store.findMatchingGrant({
         action: { kind: "launch-session", target: "claude -r session-1" },
         actionRiskClass: "high-risk",
         scope: {
@@ -332,8 +318,6 @@ describe("Scoped Trust Grants", () => {
           clientId: "claude-code",
         },
         now: "2026-05-28T10:55:00.000Z",
-      }),
-      undefined,
-    );
+      })).toBe(undefined);
   });
 });

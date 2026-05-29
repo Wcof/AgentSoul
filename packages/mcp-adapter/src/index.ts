@@ -1,13 +1,14 @@
-import Database from "better-sqlite3";
+import { createRequire } from "module";
 import type { ClientAuthorizationMode } from "@agentsoul/domain";
-import { initializeV2Database } from "@agentsoul/persistence";
 import type {
   CompanionInteractionKind,
   CompanionRuntimeService,
   CompanionRuntimeState,
 } from "@agentsoul/runtime";
 import type { SafetyActionKind, ScopedTrustGrant } from "@agentsoul/safety";
-import { decideSafetyPolicy } from "@agentsoul/safety";
+import { initializeV2Database, McpMemoryRepository } from "@agentsoul/persistence";
+
+const require = createRequire(import.meta.url);
 
 export interface McpToolDefinition {
   name: string;
@@ -45,6 +46,8 @@ export interface V2McpAdapterOptions {
   > &
     Partial<Pick<CompanionRuntimeService, "updateSoulAffectiveState">>;
   dbPath?: string;
+  decideSafetyPolicy?: (options: any) => any;
+  memoryStore?: McpMemoryStore;
 }
 
 export interface V2McpAdapter {
@@ -212,7 +215,11 @@ const STARTUP_TOOLS: McpToolDefinition[] = [
 ];
 
 export function createV2McpAdapter(options: V2McpAdapterOptions): V2McpAdapter {
-  const memoryStore = options.dbPath ? createMcpMemoryStore(options.dbPath) : undefined;
+  const decideSafetyPolicyFn = options.decideSafetyPolicy || ((input: any) => {
+    throw new Error("decideSafetyPolicy callback is required to evaluate safety policy");
+  });
+
+  const memoryStore = options.memoryStore || (options.dbPath ? createMcpMemoryStore(options.dbPath) : undefined);
 
   return {
     listTools() {
@@ -232,7 +239,7 @@ export function createV2McpAdapter(options: V2McpAdapterOptions): V2McpAdapter {
             options.runtime.performCompanionInteraction(parseInteraction(call.arguments)),
           );
         case "agentsoul_request_controlled_action":
-          return jsonResult(decideSafetyPolicy(parseControlledAction(call.arguments)));
+          return jsonResult(decideSafetyPolicyFn(parseControlledAction(call.arguments)));
         case "mcp_tool_index":
           return jsonResult(buildMcpToolIndex(this.listTools(), call.arguments));
         case "get_persona_config":
@@ -382,7 +389,7 @@ function categorizeTool(name: string): string {
   return "companion";
 }
 
-interface McpMemoryStore {
+export interface McpMemoryStore {
   writeDay(args: Record<string, unknown> | undefined): { success: true; date: string; mode: string };
   writeTopic(args: Record<string, unknown> | undefined): { success: true; topic: string; mode: string };
   listTopics(args: Record<string, unknown> | undefined): {
@@ -392,37 +399,32 @@ interface McpMemoryStore {
 }
 
 function createMcpMemoryStore(dbPath: string): McpMemoryStore {
+  const Database = require("better-sqlite3");
   initializeV2Database(dbPath);
   const db = new Database(dbPath);
+  const repo = new McpMemoryRepository(db);
 
   return {
     writeDay(args) {
       const date = parseRequiredString(args?.date, "date");
       const content = parseRequiredString(args?.content, "content");
       const append = args?.append === true;
-      writeMemoryRecord(db, "day", date, content, append);
+      writeMemoryRecord(repo, "day", date, content, append);
       return { success: true, date, mode: append ? "append" : "overwrite" };
     },
     writeTopic(args) {
       const topic = parseRequiredString(args?.topic, "topic");
       const content = parseRequiredString(args?.content, "content");
       const append = args?.append === true;
-      writeMemoryRecord(db, "topic", topic, content, append);
+      writeMemoryRecord(repo, "topic", topic, content, append);
       return { success: true, topic, mode: append ? "append" : "overwrite" };
     },
     listTopics(args) {
       const status = parseOptionalString(args?.status) ?? "active";
-      const rows = db
-        .prepare(
-          `SELECT memory_key, status, updated_at
-           FROM mcp_memory_records
-           WHERE memory_type = 'topic'
-           ORDER BY memory_key ASC`,
-        )
-        .all() as Array<{ memory_key: string; status: string; updated_at: string }>;
+      const rows = repo.listTopics();
       const topics = rows
-        .filter((row) => status === "all" || row.status === status)
-        .map((row) => ({
+        .filter((row: any) => status === "all" || row.status === status)
+        .map((row: any) => ({
           topic: row.memory_key,
           status: row.status,
           updatedAt: row.updated_at,
@@ -437,27 +439,16 @@ function createMcpMemoryStore(dbPath: string): McpMemoryStore {
 }
 
 function writeMemoryRecord(
-  db: Database.Database,
+  repo: McpMemoryRepository,
   memoryType: "day" | "topic",
   memoryKey: string,
   content: string,
   append: boolean,
 ): void {
-  const current = db
-    .prepare(
-      "SELECT content FROM mcp_memory_records WHERE memory_type = ? AND memory_key = ?",
-    )
-    .get(memoryType, memoryKey) as { content: string } | undefined;
+  const current = repo.getMemoryRecord(memoryType, memoryKey);
   const nextContent = append && current ? `${current.content}\n\n${content}` : content;
 
-  db.prepare(
-    `INSERT INTO mcp_memory_records (id, memory_type, memory_key, content, status, updated_at)
-     VALUES (?, ?, ?, ?, 'active', datetime('now'))
-     ON CONFLICT(memory_type, memory_key) DO UPDATE SET
-       content = excluded.content,
-       status = excluded.status,
-       updated_at = excluded.updated_at`,
-  ).run(`mcp-memory:${memoryType}:${memoryKey}`, memoryType, memoryKey, nextContent);
+  repo.upsertMemoryRecord(`mcp-memory:${memoryType}:${memoryKey}`, memoryType, memoryKey, nextContent);
 }
 
 function requireMemoryStore(store: McpMemoryStore | undefined): McpMemoryStore {

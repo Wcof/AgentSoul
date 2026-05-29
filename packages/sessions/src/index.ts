@@ -1,9 +1,8 @@
 import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import type { ApprovalDecisionKind, ClientAuthorizationMode, WorkSession } from "@agentsoul/domain";
-import { initializeV2Database } from "@agentsoul/persistence";
+import { initializeV2Database, SessionRepository } from "@agentsoul/persistence";
 import type { ControlledEntryPoint, ScopedTrustGrant } from "@agentsoul/safety";
-import { decideSafetyPolicy } from "@agentsoul/safety";
 
 export interface CreateSessionSourceScannerOptions {
   dbPath: string;
@@ -71,6 +70,15 @@ export interface CreateSessionLauncherOptions {
   scopedTrustGrants?: ScopedTrustGrant[];
   now: string;
   executeTerminalCommand(command: string): void;
+  decideSafetyPolicy: (options: {
+    action: { kind: "launch-session"; target: string };
+    controlledEntryPoint: ControlledEntryPoint;
+    clientAuthorizationMode: ClientAuthorizationMode;
+    approvalSurfaceAvailable: boolean;
+    scopedTrustGrants?: ScopedTrustGrant[];
+    scope: { projectPath: string; clientId: string };
+    now: string;
+  }) => any;
 }
 
 export interface LaunchWorkSessionInput {
@@ -127,13 +135,14 @@ export function createSessionSourceScanner(
 ): SessionSourceScanner {
   initializeV2Database(options.dbPath);
   const db = new Database(options.dbPath);
+  const repo = new SessionRepository(db);
 
   return {
     scanJsonlSessionSource(input) {
-      return scanJsonlSessionSource(db, input);
+      return scanJsonlSessionSource(repo, input);
     },
     recordWorkSession(input) {
-      upsertWorkSession(db, {
+      upsertWorkSession(repo, {
         id: input.id,
         source: input.source,
         projectPath: input.projectPath,
@@ -150,7 +159,7 @@ export function createSessionSourceScanner(
         },
       });
 
-      const session = listWorkSessions(db).find((workSession) => workSession.id === input.id);
+      const session = listWorkSessions(repo).find((workSession) => workSession.id === input.id);
 
       if (!session) {
         throw new Error(`Work Session was not recorded: ${input.id}`);
@@ -159,10 +168,10 @@ export function createSessionSourceScanner(
       return session;
     },
     listWorkSessions() {
-      return listWorkSessions(db);
+      return listWorkSessions(repo);
     },
     searchWorkSessions(input) {
-      return searchWorkSessions(db, input);
+      return searchWorkSessions(repo, input);
     },
     close() {
       db.close();
@@ -191,7 +200,7 @@ export function createSessionLauncher(options: CreateSessionLauncherOptions): Se
         };
       }
 
-      const safetyDecision = decideSafetyPolicy({
+      const safetyDecision = options.decideSafetyPolicy({
         action: {
           kind: "launch-session",
           target: session.resumeCommand,
@@ -256,7 +265,7 @@ export function createSessionLauncher(options: CreateSessionLauncherOptions): Se
 }
 
 function scanJsonlSessionSource(
-  db: Database.Database,
+  repo: SessionRepository,
   input: ScanJsonlSessionSourceInput,
 ): ScanJsonlSessionSourceResult {
   const lines = readFileSync(input.sourcePath, "utf8").split(/\r?\n/);
@@ -264,7 +273,7 @@ function scanJsonlSessionSource(
   let created = 0;
   let skippedMalformed = 0;
 
-  const transaction = db.transaction(() => {
+  repo.runTransaction(() => {
     for (const line of lines) {
       if (line.trim().length === 0) {
         continue;
@@ -285,7 +294,7 @@ function scanJsonlSessionSource(
         continue;
       }
 
-      const result = upsertWorkSession(db, {
+      const result = upsertWorkSession(repo, {
         id: normalized.id,
         source: input.source,
         projectPath: normalized.projectPath,
@@ -301,8 +310,6 @@ function scanJsonlSessionSource(
     }
   });
 
-  transaction();
-
   return {
     scanned,
     created,
@@ -311,7 +318,7 @@ function scanJsonlSessionSource(
 }
 
 function upsertWorkSession(
-  db: Database.Database,
+  repo: SessionRepository,
   input: {
     id: string;
     source: string;
@@ -321,38 +328,20 @@ function upsertWorkSession(
     sessionJson: SessionJson;
     lastActiveAt: string;
   },
-): Database.RunResult {
-  return db
-    .prepare(
-      `INSERT INTO work_sessions (id, source, project_path, searchable, resumable, session_json, last_active_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         source = excluded.source,
-         project_path = excluded.project_path,
-         searchable = excluded.searchable,
-         resumable = excluded.resumable,
-         session_json = excluded.session_json,
-         last_active_at = excluded.last_active_at`,
-    )
-    .run(
-      input.id,
-      input.source,
-      input.projectPath,
-      input.searchable ? 1 : 0,
-      input.resumable ? 1 : 0,
-      JSON.stringify(input.sessionJson),
-      input.lastActiveAt,
-    );
+): any {
+  return repo.upsertWorkSession(
+    input.id,
+    input.source,
+    input.projectPath,
+    input.searchable ? 1 : 0,
+    input.resumable ? 1 : 0,
+    JSON.stringify(input.sessionJson),
+    input.lastActiveAt,
+  );
 }
 
-function listWorkSessions(db: Database.Database): ScannedWorkSession[] {
-  const rows = db
-    .prepare(
-      `SELECT id, source, project_path, searchable, resumable, session_json, last_active_at
-       FROM work_sessions
-       ORDER BY last_active_at ASC, id ASC`,
-    )
-    .all() as WorkSessionRow[];
+function listWorkSessions(repo: SessionRepository): ScannedWorkSession[] {
+  const rows = repo.listWorkSessions() as WorkSessionRow[];
 
   return rows.map((row) => {
     const sessionJson = parseSessionJson(row.session_json);
@@ -374,12 +363,12 @@ function listWorkSessions(db: Database.Database): ScannedWorkSession[] {
 }
 
 function searchWorkSessions(
-  db: Database.Database,
+  repo: SessionRepository,
   input: SearchWorkSessionsInput,
 ): WorkSessionSearchResult[] {
   const keyword = input.keyword?.toLocaleLowerCase();
 
-  return listWorkSessions(db)
+  return listWorkSessions(repo)
     .filter((session) => session.searchable)
     .filter((session) => !input.projectPath || session.projectPath === input.projectPath)
     .filter((session) => !input.source || session.source === input.source)

@@ -1,9 +1,9 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSessionLauncher, createSessionSourceScanner } from "@agentsoul/sessions";
+import { decideSafetyPolicy } from "@agentsoul/safety";
 
 describe("Session Source scanning", () => {
   it("scans a local JSONL Session Source into searchable Work Sessions with evidence", () => {
@@ -38,21 +38,19 @@ describe("Session Source scanning", () => {
           client: "claude-code",
         });
 
-        assert.equal(result.scanned, 3);
-        assert.equal(result.created, 2);
-        assert.equal(result.skippedMalformed, 1);
+        expect(result.scanned).toBe(3);
+        expect(result.created).toBe(2);
+        expect(result.skippedMalformed).toBe(1);
 
         const sessions = scanner.listWorkSessions();
-        assert.deepEqual(
-          sessions.map((session) => ({
+        expect(sessions.map((session) => ({
             id: session.id,
             projectPath: session.projectPath,
             source: session.source,
             searchable: session.searchable,
             resumable: session.resumable,
             sessionId: session.sessionId,
-          })),
-          [
+          }))).toEqual([
             {
               id: "claude-code-history-jsonl:session-1",
               projectPath: "/workspace/app",
@@ -69,9 +67,8 @@ describe("Session Source scanning", () => {
               resumable: false,
               sessionId: "session-2",
             },
-          ],
-        );
-        assert.match(sessions[0]?.evidenceSummary ?? "", /gateway route/);
+          ]);
+        expect(sessions[0]?.evidenceSummary ?? "").toMatch(/gateway route/);
       } finally {
         scanner.close();
       }
@@ -128,21 +125,19 @@ describe("Session Source scanning", () => {
           client: "assistant-history",
         });
 
-        assert.equal(result.scanned, 3);
-        assert.equal(result.created, 3);
-        assert.equal(result.skippedMalformed, 0);
+        expect(result.scanned).toBe(3);
+        expect(result.created).toBe(3);
+        expect(result.skippedMalformed).toBe(0);
 
         const sessions = scanner.listWorkSessions();
-        assert.deepEqual(
-          sessions.map((session) => ({
+        expect(sessions.map((session) => ({
             id: session.id,
             projectPath: session.projectPath,
             lastActiveAt: session.lastActiveAt,
             evidenceSummary: session.evidenceSummary,
             searchable: session.searchable,
             resumable: session.resumable,
-          })),
-          [
+          }))).toEqual([
             {
               id: "mixed-assistant-history-jsonl:claude-session",
               projectPath: "/workspace/claude-app",
@@ -167,8 +162,7 @@ describe("Session Source scanning", () => {
               searchable: true,
               resumable: false,
             },
-          ],
-        );
+          ]);
       } finally {
         scanner.close();
       }
@@ -219,16 +213,14 @@ describe("Session Source scanning", () => {
           activeTo: "2026-05-28T12:11:00.000Z",
         });
 
-        assert.deepEqual(
-          results.map((session) => ({
+        expect(results.map((session) => ({
             id: session.id,
             source: session.source,
             client: session.client,
             resumable: session.resumable,
             availableActions: session.availableActions,
             resumeCommand: session.resumeCommand,
-          })),
-          [
+          }))).toEqual([
             {
               id: "codex-responses:resumable-1",
               source: "codex-responses",
@@ -245,11 +237,10 @@ describe("Session Source scanning", () => {
               availableActions: [],
               resumeCommand: undefined,
             },
-          ],
-        );
+          ]);
 
-        assert.equal(scanner.searchWorkSessions({ source: "codex-responses" }).length, 1);
-        assert.equal(scanner.searchWorkSessions({ client: "claude-code" }).length, 1);
+        expect(scanner.searchWorkSessions({ source: "codex-responses" }).length).toBe(1);
+        expect(scanner.searchWorkSessions({ client: "claude-code" }).length).toBe(1);
       } finally {
         scanner.close();
       }
@@ -297,31 +288,29 @@ describe("Session Source scanning", () => {
           executeTerminalCommand(command) {
             terminal.executedCommands.push(command);
           },
+          decideSafetyPolicy,
         });
 
-        assert.deepEqual(
-          launcher.launchWorkSession({
+        expect(launcher.launchWorkSession({
             workSessionId: "claude-code-history-jsonl:searchable-only",
-          }),
-          {
+          })).toEqual({
             status: "not-launchable",
             reason: "non-resumable",
-          },
-        );
-        assert.deepEqual(terminal.executedCommands, []);
+          });
+        expect(terminal.executedCommands).toEqual([]);
 
         const pending = launcher.launchWorkSession({
           workSessionId: "claude-code-history-jsonl:resumable",
         });
-        assert.equal(pending.status, "approval-required");
-        assert.deepEqual(terminal.executedCommands, []);
+        expect(pending.status).toBe("approval-required");
+        expect(terminal.executedCommands).toEqual([]);
 
         const denied = launcher.launchWorkSession({
           workSessionId: "claude-code-history-jsonl:resumable",
           approvalDecisionKind: "denied",
         });
-        assert.equal(denied.status, "denied");
-        assert.deepEqual(terminal.executedCommands, []);
+        expect(denied.status).toBe("denied");
+        expect(terminal.executedCommands).toEqual([]);
 
         const trustedLauncher = createSessionLauncher({
           scanner,
@@ -343,16 +332,17 @@ describe("Session Source scanning", () => {
           executeTerminalCommand(command) {
             terminal.executedCommands.push(command);
           },
+          decideSafetyPolicy,
         });
 
         const launched = trustedLauncher.launchWorkSession({
           workSessionId: "claude-code-history-jsonl:resumable",
         });
 
-        assert.equal(launched.status, "launched");
-        assert.equal(launched.command, "claude -r resumable");
-        assert.equal(launched.trustGrantId, "trust:launch-session");
-        assert.deepEqual(terminal.executedCommands, ["claude -r resumable"]);
+        expect(launched.status).toBe("launched");
+        expect(launched.command).toBe("claude -r resumable");
+        expect(launched.trustGrantId).toBe("trust:launch-session");
+        expect(terminal.executedCommands).toEqual(["claude -r resumable"]);
       } finally {
         scanner.close();
       }

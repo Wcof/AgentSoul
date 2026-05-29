@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,12 +9,12 @@ describe("AgentSoul v2 Control Center Gateway and Costs areas", () => {
   it("exposes Gateway and Costs Area rendering from local API snapshot data", () => {
     const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
 
-    assert.match(source, /Control Center Gateway Area/);
-    assert.match(source, /Control Center Costs Area/);
-    assert.match(source, /renderControlCenterGatewayAreaViewModel/);
-    assert.match(source, /renderControlCenterCostsAreaViewModel/);
-    assert.match(source, /data-control-area="gateway"/);
-    assert.match(source, /data-control-area="costs"/);
+    expect(source).toMatch(/Control Center Gateway Area/);
+    expect(source).toMatch(/Control Center Costs Area/);
+    expect(source).toMatch(/renderControlCenterGatewayAreaViewModel/);
+    expect(source).toMatch(/renderControlCenterCostsAreaViewModel/);
+    expect(source).toMatch(/data-control-area="gateway"/);
+    expect(source).toMatch(/data-control-area="costs"/);
   });
 
   it("verifies active provider, route health, adapter support, estimated cost, provider usage, tokens, latency, and mix rendering", () => {
@@ -28,15 +27,15 @@ describe("AgentSoul v2 Control Center Gateway and Costs areas", () => {
       encoding: "utf8",
     });
 
-    assert.match(appTest, /Active Provider Profile/);
-    assert.match(appTest, /Gateway Route Health/);
-    assert.match(appTest, /Provider Adapter Support/);
-    assert.match(appTest, /Estimated Cost/);
-    assert.match(appTest, /Provider Usage/);
-    assert.match(appTest, /Token Usage/);
-    assert.match(appTest, /Latency/);
-    assert.match(appTest, /Model Mix/);
-    assert.match(appTest, /Provider Mix/);
-    assert.match(output, /Control Center Gateway and Costs areas/);
+    expect(appTest).toMatch(/Active Provider Profile/);
+    expect(appTest).toMatch(/Gateway Route Health/);
+    expect(appTest).toMatch(/Provider Adapter Support/);
+    expect(appTest).toMatch(/Estimated Cost/);
+    expect(appTest).toMatch(/Provider Usage/);
+    expect(appTest).toMatch(/Token Usage/);
+    expect(appTest).toMatch(/Latency/);
+    expect(appTest).toMatch(/Model Mix/);
+    expect(appTest).toMatch(/Provider Mix/);
+    expect(output).toMatch(/Control Center Gateway and Costs areas/);
   });
 });

@@ -228,10 +228,26 @@ export function safeGet<T>(obj: Record<string, unknown> | undefined, key: string
 export function logWAL(
   operation: string,
   identifier: string,
-  targetPath: string,
-  success: boolean,
+  targetPathOrMeta?: string | Record<string, unknown>,
+  successOrMeta?: boolean | Record<string, unknown>,
   metadata?: Record<string, unknown>
 ): void {
+  // Backward compatibility: support old 3-arg calls
+  let targetPath: string;
+  let success: boolean;
+  if (typeof targetPathOrMeta === 'object' && targetPathOrMeta !== null) {
+    // Old pattern: logWAL(op, id, metadata)
+    metadata = targetPathOrMeta;
+    targetPath = identifier;
+    success = true;
+  } else {
+    targetPath = targetPathOrMeta || identifier;
+    success = typeof successOrMeta === 'boolean' ? successOrMeta : true;
+    if (typeof successOrMeta === 'object' && successOrMeta !== null) {
+      metadata = successOrMeta;
+    }
+  }
+
   try {
     const walDir = path.join(DATA_ROOT, 'wal');
     // Ensure WAL directory exists before writing

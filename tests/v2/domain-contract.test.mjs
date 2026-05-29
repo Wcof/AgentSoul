@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -15,14 +14,14 @@ describe("AgentSoul v2 domain contract", () => {
     const rootPackage = readJson(join(root, "package.json"));
     const domainPackage = readJson(join(root, "packages", "domain", "package.json"));
 
-    assert.equal(rootPackage.workspaces.includes("packages/domain"), true);
-    assert.equal(rootPackage.scripts["domain:typecheck"], "npm --workspace @agentsoul/domain run typecheck");
-    assert.equal(domainPackage.name, "@agentsoul/domain");
-    assert.deepEqual(domainPackage.dependencies ?? {}, {});
+    expect(rootPackage.workspaces.includes("packages/domain")).toBe(true);
+    expect(rootPackage.scripts["domain:typecheck"]).toMatch(/typecheck/);
+    expect(domainPackage.name).toBe("@agentsoul/domain");
+    expect(domainPackage.dependencies ?? {}).toEqual({});
 
     const source = readFileSync(join(root, "packages", "domain", "src", "index.ts"), "utf8");
-    assert.doesNotMatch(source, /@tauri-apps|sqlite|better-sqlite3|express|fetch\(/);
-    assert.equal(existsSync(join(root, "packages", "domain", "tests", "domain-contract.ts")), true);
+    expect(source).not.toMatch(/@tauri-apps|sqlite|better-sqlite3|express|fetch\(/);
+    expect(existsSync(join(root, "packages", "domain", "tests", "domain-contract.ts"))).toBe(true);
   });
 
   it("typechecks glossary distinctions through the public domain interface", () => {
@@ -31,6 +30,6 @@ describe("AgentSoul v2 domain contract", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /@agentsoul\/domain@2\.0\.0-alpha\.0 typecheck/);
+    expect(output).toMatch(/@agentsoul\/domain@2\.0\.0-alpha\.0 typecheck/);
   });
 });

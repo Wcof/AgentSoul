@@ -18,7 +18,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "test": "node --test --import tsx tests/*.test.ts && echo \"Credential Store bridge\"",
+    "test": "cd ../.. && vitest run packages/security/tests/ && echo \"Credential Store bridge\"",
     "typecheck": "tsc --noEmit"
   }
 }

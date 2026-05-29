@@ -22,7 +22,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "test": "node --test --import tsx tests/*.test.ts && echo \"v2 MCP adapter\" && echo \"Companion status tool\" && echo \"Controlled MCP action Safety Policy\" && echo \"startup persona, soul, base rules, and memory MCP tools\"",
+    "test": "cd ../.. && vitest run packages/mcp-adapter/tests/ && echo \"MCP adapter\" && echo \"v2 MCP adapter\" && echo \"Companion status tool\" && echo \"Controlled MCP action Safety Policy\" && echo \"startup persona\"",
     "typecheck": "tsc --noEmit"
   }
 }

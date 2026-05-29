@@ -513,3 +513,122 @@ Domain Expert: "Yes. That means Intimacy is high, while Mood is currently negati
 Developer: "Does a low-level Companion prevent me from enabling a TDD Skill Pack?"
 
 Domain Expert: "No. Level unlocks expression and cosmetics, not core development Capabilities."
+
+---
+
+## v2 新增术语 / v2 New Terms
+
+**Locale / 语言区域**:
+The user's preferred language setting, either `zh` (Chinese) or `en` (English). Locale controls UI copy and system prompts but does not affect persona dialogue, which is driven by the persona config's bilingual fields.
+_Avoid_: language, lang, i18n key
+
+**Emotion Label / 情绪标签**:
+A named emotion derived from the PAD three-dimensional affective state using Mehrabian's eight-quadrant model (e.g. `excited_confident`, `anxious_fearful`, `melancholic_sad`). Emotion Labels are read-only classifications, not mutable state.
+_Avoid_: mood, feeling, affect
+
+**Drift Severity / 漂移严重度**:
+A measure of how far the Soul's current PAD state has deviated from its long-term baseline. Levels: `none`, `mild`, `moderate`, `severe`. Drift detection does not change state; it only reports.
+_Avoid_: mood change, personality reset
+
+**Event Perturbation / 事件扰动**:
+The immediate impact of an external event (positive, negative, stress, surprise, etc.) on the Soul's PAD state. Each event type has a defined impact profile. Consecutive same-type events amplify through emotion resonance.
+_Avoid_: feedback, interaction
+
+**Emotion Resonance / 情绪共振**:
+The amplification effect when consecutive events of the same type occur. Each additional same-type event within the resonance window increases the impact by a configurable boost factor.
+_Avoid_: accumulation, stacking
+
+**PAD Baseline / PAD 基线**:
+The Soul's long-term stable PAD values that represent its core personality. Baseline updates slowly from interaction history (20% weight per update window). Time decay pulls current PAD state back toward baseline.
+_Avoid_: default state, initial state
+
+**Emotion Snapshot / 情绪快照**:
+A point-in-time record of the Soul's PAD state, energy, and trigger event. Snapshots are appended to an emotion history trajectory for visualization. Sampled at configurable intervals to avoid excessive density.
+_Avoid_: mood log, state history
+
+**Memory Layer / 记忆层**:
+The time-based or topic-based category of a memory entry: `day`, `week`, `month`, `year`, or `topic`. Each layer has its own storage and retrieval semantics. Memories can be consolidated across layers.
+_Avoid_: memory type, memory category
+
+**Memory Priority / 记忆优先级**:
+A three-level attribute (`low`, `medium`, `high`) assigned to memory entries that affects retrieval ranking and retention. High-priority memories surface first in search and are less likely to be archived.
+_Avoid_: importance, weight
+
+**Entity / 实体**:
+A structured knowledge object tracked in entity memory, representing a real-world concept the Companion has learned about. Six entity types: `person`, `hardware`, `project`, `concept`, `place`, `service`. Each entity has typed facts with confidence levels.
+_Avoid_: item, record, object
+
+**Entity Fact / 实体事实**:
+A single attribute-value pair attached to an Entity, with a confidence level (`high`, `medium`, `low`) and source attribution. Facts can be updated or merged when new information arrives.
+_Avoid_: property, field, tag
+
+**Semantic Match / 语义匹配**:
+A memory search result that combines vector similarity score with keyword matching and priority weighting. Returned by the SemanticRetriever with a composite relevance score.
+_Avoid_: search result, memory hit
+
+**Deduplication Result / 去重结果**:
+The output of checking whether a new memory is semantically similar to existing memories. Contains a boolean flag, the most similar existing memory ID, and the similarity score.
+_Avoid_: duplicate check, merge result
+
+**Persona Seed / 人格种子**:
+Initial user-authored values for the Companion's persona: name, role, personality traits, core values, interaction style, and bilingual descriptions. The Seed is used to create or reset runtime persona state, but is not the source of truth after initialization.
+_Avoid_: persona config, character file
+
+**Health Report / 健康报告**:
+A structured assessment of AgentSoul installation integrity and component status. Each component is checked and rated `ok`, `warn`, or `error`. The overall score is 0-100.
+_Avoid_: diagnostic, status check
+
+**Companionship Report / 陪伴连续性报告**:
+An assessment of the long-term quality of the user-Companion relationship, based on five core metrics. Used to evaluate whether the Companion is being meaningfully engaged over time.
+_Avoid_: relationship score, engagement report
+
+**Export Kind / 导出类型**:
+The sensitivity level of a data export: `portable` (non-sensitive, default) or `sensitive` (includes secrets, captured bodies, raw evidence). Sensitive exports require explicit user confirmation.
+_Avoid_: export level, backup type
+
+**Companion Visual / 伴侣形象**:
+The visual representation of the Companion in the desktop floating window. Default visuals (slime, cat) are rendered as Canvas 2D vector code. Custom visuals can be loaded as Lottie/SVG files. Changing visual does not change Companion identity, Soul, or service routing.
+_Avoid_: pet skin, character model
+
+**Desktop Companion / 桌面伴侣**:
+The lightweight always-visible floating window that renders the Companion's visual, status bubble, and quick interactions. Uses Canvas 2D for animation, receives state updates via Tauri event bus. Distinct from the Control Center.
+_Avoid_: pet window, floating widget
+
+**Control Center / 控制中心**:
+The full management surface implemented as a React application inside Tauri. Primary areas: Companion, Gateway, Skills, Sessions, Costs, Safety, Settings. Uses shadcn/ui components and reads from SQLite as authoritative source.
+_Avoid_: dashboard, admin panel
+
+**Gateway Sidecar / 网关伴随进程**:
+The Gateway process managed by the Tauri application lifecycle (started on app launch, stopped on app close), but also capable of running independently via `npx @agentsoul/gateway serve` for CLI and headless environments.
+_Avoid_: embedded gateway, proxy process
+
+---
+
+## v2 架构对话 / v2 Architecture Dialogue
+
+Developer: "v2 代码还需要 Python 吗？"
+Domain Expert: "不需要。v2 完全用 TypeScript 实现。Python 代码仅作为行为参考，等 TS 完全替代后删除。"
+
+Developer: "旧的 Python 运行数据需要迁移吗？"
+Domain Expert: "不需要。v2 从空白开始，旧数据不保留。（ADR-0006）"
+
+Developer: "桌面浮窗和 Control Center 是同一个窗口吗？"
+Domain Expert: "不是。桌面浮窗是独立的透明小窗口，Canvas 渲染 Companion 动画。Control Center 是完整的管理面板，React 渲染。两者通过 Tauri 事件总线通信，SQLite 为权威来源。"
+
+Developer: "Gateway 必须在桌面应用运行时才能工作吗？"
+Domain Expert: "不需要。Gateway 由 Tauri sidecar 管理生命周期，但也可以独立运行。CLI 用户可以单独启动 Gateway。"
+
+Developer: "i18n 切换会影响人格对话吗？"
+Domain Expert: "不会。系统 UI 文案和人格对话分开管理。i18next 只管系统 UI，人格对话由 persona config 的中英双语字段驱动。切换 locale 改变 UI 语言，切换人格改变对话风格。"
+
+Developer: "Companion 形象需要外部图片资源吗？"
+Domain Expert: "默认不需要。基础形象（粘液怪/猫）用纯 Canvas 矢量代码绘制，零外部依赖。高级皮肤可以通过 Lottie/SVG 文件扩展。"
+
+Developer: "MCP Server 是独立进程还是集成在 Tauri 里？"
+Domain Expert: "独立进程。MCP Server 保持独立 Node.js 进程，通过 @agentsoul/mcp-adapter 调用 v2 packages。这样 MCP 在没有桌面应用时也能工作。"
+
+Developer: "MCP Server 是重构还是重写？"
+Domain Expert: "全量重写。直接调用 v2 packages，不保留过渡代码。"
+
+Developer: "Python 代码什么时候删除？"
+Domain Expert: "v2 全部完成并验证通过后统一删除。实施过程中保留作为行为参考。"

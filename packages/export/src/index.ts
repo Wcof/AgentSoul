@@ -1,9 +1,8 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
-import type { ClientAuthorizationMode, ProviderProfile } from "@agentsoul/domain";
+import type { ClientAuthorizationMode, ExportManifest, ExportKind, ProviderProfile } from "@agentsoul/domain";
 import { initializeV2Database } from "@agentsoul/persistence";
 import type { ScopedTrustGrant } from "@agentsoul/safety";
-import { decideSafetyPolicy } from "@agentsoul/safety";
 
 export const USER_MANAGED_EXPORT_FORMAT_VERSION = "agentsoul-export-v1";
 export const USER_MANAGED_EXPORT_SCHEMA_VERSION = 1;
@@ -90,12 +89,22 @@ export interface SensitiveExportInput {
 export interface UserManagedExportService {
   createPortableDataExport(): PortableDataExport;
   createSensitiveExport(input: SensitiveExportInput): SensitiveExportResult;
+  createExportManifest(kind: ExportKind): ExportManifest;
   close(): void;
 }
 
 export function createUserManagedExportService(options: {
   dbPath: string;
   clock?: () => Date;
+  decideSafetyPolicy: (options: {
+    action: { kind: "export-secret"; target: string };
+    controlledEntryPoint: any;
+    clientAuthorizationMode: any;
+    approvalSurfaceAvailable: boolean;
+    scopedTrustGrants?: any[];
+    scope: { projectPath?: string; clientId?: string };
+    now: string;
+  }) => any;
 }): UserManagedExportService {
   initializeV2Database(options.dbPath);
   const db = new Database(options.dbPath);
@@ -108,11 +117,14 @@ export function createUserManagedExportService(options: {
       return portable;
     },
     createSensitiveExport(input) {
-      const sensitive = createSensitiveExport(input);
+      const sensitive = createSensitiveExport(input, options.decideSafetyPolicy);
       if (sensitive.status === "exported") {
         recordExport(db, sensitive.exportKind, sensitive, sensitive.createdAt);
       }
       return sensitive;
+    },
+    createExportManifest(kind: ExportKind): ExportManifest {
+      return createExportManifest(kind, clock().toISOString());
     },
     close() {
       db.close();
@@ -147,8 +159,11 @@ export function createPortableDataExport(
   };
 }
 
-export function createSensitiveExport(input: SensitiveExportInput): SensitiveExportResult {
-  const decision = decideSafetyPolicy({
+export function createSensitiveExport(
+  input: SensitiveExportInput,
+  decideSafetyPolicyFn: (options: any) => any,
+): SensitiveExportResult {
+  const decision = decideSafetyPolicyFn({
     action: {
       kind: "export-secret",
       target: "Sensitive Export",
@@ -363,4 +378,40 @@ function recordExport(
     `INSERT INTO export_records (id, export_kind, export_json, created_at)
      VALUES (?, ?, ?, ?)`,
   ).run(randomUUID(), exportKind, JSON.stringify(exportJson), createdAt);
+}
+
+export function createExportManifest(kind: ExportKind, createdAt: string): ExportManifest {
+  const portableSections = [
+    "companion",
+    "growthEvents",
+    "providerProfiles",
+    "skillPacks",
+    "projectSkillActivations",
+    "managedRuleFiles",
+    "workSessions",
+    "trafficMetadataSummaries",
+  ];
+
+  const sensitiveSections = [
+    "credentials",
+    "capturedBodies",
+    "rawEvidence",
+    "privateAuthFiles",
+  ];
+
+  if (kind === "portable") {
+    return {
+      kind,
+      includedSections: portableSections,
+      excludedSections: sensitiveSections,
+      createdAt,
+    };
+  }
+
+  return {
+    kind,
+    includedSections: [...portableSections, ...sensitiveSections],
+    excludedSections: [],
+    createdAt,
+  };
 }

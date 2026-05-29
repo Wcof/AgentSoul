@@ -11,8 +11,8 @@ import json
 import time
 from pathlib import Path
 import pytest
-from src.storage.db import DatabaseManager
-from src.sessions.scanners.claude_jsonl import ClaudeJsonlScanner
+from agentsoul.storage.db import DatabaseManager
+from sessions.scanners.claude_jsonl import ClaudeJsonlScanner
 
 
 @pytest.fixture

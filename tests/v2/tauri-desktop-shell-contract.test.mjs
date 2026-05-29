@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -14,26 +13,26 @@ describe("AgentSoul v2 Tauri Desktop Companion shell", () => {
     const configPath = join(tauriRoot, "tauri.conf.json");
     const frontendPath = join(root, "apps", "desktop-v2", "src", "main.ts");
 
-    assert.equal(existsSync(cargoTomlPath), true);
-    assert.equal(existsSync(mainPath), true);
-    assert.equal(existsSync(libPath), true);
+    expect(existsSync(cargoTomlPath)).toBe(true);
+    expect(existsSync(mainPath)).toBe(true);
+    expect(existsSync(libPath)).toBe(true);
 
     const cargoToml = readFileSync(cargoTomlPath, "utf8");
     const lib = readFileSync(libPath, "utf8");
     const frontend = readFileSync(frontendPath, "utf8");
     const config = JSON.parse(readFileSync(configPath, "utf8"));
 
-    assert.match(cargoToml, /tauri/);
-    assert.match(lib, /get_companion_runtime_state/);
-    assert.match(lib, /show_desktop_companion/);
-    assert.match(lib, /show_control_center/);
-    assert.match(lib, /Approval Required/);
-    assert.match(lib, /Risk Notice/);
-    assert.match(frontend, /loadCompanionRuntimeSnapshot/);
-    assert.match(frontend, /get_companion_runtime_state/);
-    assert.match(frontend, /@tauri-apps\/api\/core/);
+    expect(cargoToml).toMatch(/tauri/);
+    expect(lib).toMatch(/get_companion_runtime_state/);
+    expect(lib).toMatch(/show_desktop_companion/);
+    expect(lib).toMatch(/show_control_center/);
+    expect(lib).toMatch(/Approval Required/);
+    expect(lib).toMatch(/Risk Notice/);
+    expect(frontend).toMatch(/loadCompanionRuntimeSnapshot/);
+    expect(frontend).toMatch(/get_companion_runtime_state/);
+    expect(frontend).toMatch(/@tauri-apps\/api\/core/);
 
     const windowLabels = config.app.windows.map((window) => window.label);
-    assert.deepEqual(windowLabels.sort(), ["control-center", "desktop-companion"]);
+    expect(windowLabels.sort()).toEqual(["control-center", "desktop-companion"]);
   });
 });

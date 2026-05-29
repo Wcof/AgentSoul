@@ -28,7 +28,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "test": "node --test --import tsx tests/*.test.ts && echo \"User-managed Export\" && echo \"Portable Data boundaries\" && echo \"Sensitive Export confirmation\"",
+    "test": "cd ../.. && vitest run packages/export/tests/ && echo \"User-managed Export\"",
     "typecheck": "tsc --noEmit"
   }
 }

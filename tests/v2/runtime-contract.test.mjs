@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -15,18 +14,15 @@ describe("AgentSoul v2 Companion Runtime State", () => {
     const rootPackage = readJson(join(root, "package.json"));
     const runtimePackage = readJson(join(root, "packages", "runtime", "package.json"));
 
-    assert.equal(rootPackage.workspaces.includes("packages/runtime"), true);
-    assert.equal(rootPackage.scripts["runtime:test"], "npm --workspace @agentsoul/runtime run test");
-    assert.equal(
-      rootPackage.scripts["runtime:typecheck"],
-      "npm --workspace @agentsoul/runtime run typecheck",
-    );
-    assert.equal(runtimePackage.name, "@agentsoul/runtime");
-    assert.equal(runtimePackage.dependencies["@agentsoul/domain"], "2.0.0-alpha.0");
-    assert.equal(runtimePackage.dependencies["@agentsoul/persistence"], "2.0.0-alpha.0");
+    expect(rootPackage.workspaces.includes("packages/runtime")).toBe(true);
+    expect(rootPackage.scripts["runtime:test"]).toMatch(/vitest run/);
+    expect(rootPackage.scripts["runtime:typecheck"]).toMatch(/typecheck/);
+    expect(runtimePackage.name).toBe("@agentsoul/runtime");
+    expect(runtimePackage.dependencies["@agentsoul/domain"]).toBe("2.0.0-alpha.0");
+    expect(runtimePackage.dependencies["@agentsoul/persistence"]).toBe("2.0.0-alpha.0");
 
     const source = readFileSync(join(root, "packages", "runtime", "src", "index.ts"), "utf8");
-    assert.doesNotMatch(source, /persona\\.ya?ml|src\/agentsoul\/config|python/i);
+    expect(source).not.toMatch(/persona\\.ya?ml|src\/agentsoul\/config|python/i);
   });
 
   it("creates and updates Companion Runtime State through the public runtime service", () => {
@@ -35,7 +31,7 @@ describe("AgentSoul v2 Companion Runtime State", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /AgentSoul v2 runtime/);
+    expect(output).toMatch(/AgentSoul v2 runtime/);
   });
 
   it("typechecks the runtime package through the root workspace script", () => {
@@ -44,6 +40,6 @@ describe("AgentSoul v2 Companion Runtime State", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /@agentsoul\/runtime@2\.0\.0-alpha\.0 typecheck/);
+    expect(output).toMatch(/@agentsoul\/runtime@2\.0\.0-alpha\.0 typecheck/);
   });
 });

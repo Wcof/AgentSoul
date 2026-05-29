@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -11,9 +10,9 @@ describe("AgentSoul v2 Gateway Events to Growth Events", () => {
     const runtimeSource = readFileSync(join(root, "packages", "runtime", "src", "index.ts"), "utf8");
     const gatewaySource = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
 
-    assert.match(runtimeSource, /applyGatewayTrafficGrowth/);
-    assert.match(runtimeSource, /gateway-traffic-v1/);
-    assert.doesNotMatch(gatewaySource, /writeRuntimeState|companion_state|applyGatewayTrafficGrowth/);
+    expect(runtimeSource).toMatch(/applyGatewayTrafficGrowth/);
+    expect(runtimeSource).toMatch(/gateway-traffic-v1/);
+    expect(gatewaySource).not.toMatch(/writeRuntimeState|companion_state|applyGatewayTrafficGrowth/);
   });
 
   it("verifies successful and failed Gateway traffic growth behavior", () => {
@@ -22,6 +21,6 @@ describe("AgentSoul v2 Gateway Events to Growth Events", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Gateway Events to Growth Events/);
+    expect(output).toMatch(/Gateway Events to Growth Events/);
   });
 });

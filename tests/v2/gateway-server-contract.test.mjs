@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -15,19 +14,16 @@ describe("AgentSoul v2 Gateway server shell", () => {
     const rootPackage = readJson(join(root, "package.json"));
     const gatewayPackage = readJson(join(root, "packages", "gateway", "package.json"));
 
-    assert.equal(rootPackage.workspaces.includes("packages/gateway"), true);
-    assert.equal(rootPackage.scripts["gateway:test"], "npm --workspace @agentsoul/gateway run test");
-    assert.equal(
-      rootPackage.scripts["gateway:typecheck"],
-      "npm --workspace @agentsoul/gateway run typecheck",
-    );
-    assert.equal(gatewayPackage.name, "@agentsoul/gateway");
-    assert.equal(gatewayPackage.dependencies["@agentsoul/provider"], "2.0.0-alpha.0");
+    expect(rootPackage.workspaces.includes("packages/gateway")).toBe(true);
+    expect(rootPackage.scripts["gateway:test"]).toMatch(/vitest run/);
+    expect(rootPackage.scripts["gateway:typecheck"]).toMatch(/typecheck/);
+    expect(gatewayPackage.name).toBe("@agentsoul/gateway");
+    expect(gatewayPackage.dependencies["@agentsoul/provider"]).toBe("2.0.0-alpha.0");
 
     const source = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
-    assert.match(source, /startLocalGateway/);
-    assert.match(source, /getActiveProviderProfile/);
-    assert.doesNotMatch(source, /hardcodedCredential|sk-|apiKey/i);
+    expect(source).toMatch(/startLocalGateway/);
+    expect(source).toMatch(/getActiveProviderProfile/);
+    expect(source).not.toMatch(/hardcodedCredential|sk-|apiKey/i);
   });
 
   it("verifies startup, health, and no-profile behavior", () => {
@@ -36,7 +32,7 @@ describe("AgentSoul v2 Gateway server shell", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Gateway server shell/);
+    expect(output).toMatch(/Gateway server shell/);
   });
 
   it("typechecks the gateway package through the root workspace script", () => {
@@ -45,6 +41,6 @@ describe("AgentSoul v2 Gateway server shell", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /@agentsoul\/gateway@2\.0\.0-alpha\.0 typecheck/);
+    expect(output).toMatch(/@agentsoul\/gateway@2\.0\.0-alpha\.0 typecheck/);
   });
 });

@@ -12,7 +12,7 @@ import socket
 import time
 from typing import Any
 import pytest
-from src.desktop_pet.ipc_server import IpcServer
+from desktop_pet.ipc_server import IpcServer
 
 
 def test_ipc_server_lifecycle_and_messages():

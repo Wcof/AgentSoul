@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,12 +13,12 @@ describe("AgentSoul v2 runtime", () => {
       try {
         const state = runtime.getCompanionRuntimeState();
 
-        assert.equal(state.companion.id, "active-companion");
-        assert.equal(state.companion.soulId, state.soul.id);
-        assert.equal(state.companion.vitals.level, 1);
-        assert.equal(state.companion.vitals.companionEnergy, 100);
-        assert.equal(state.companion.petAppearance.kind, "slime");
-        assert.equal(state.providerProfile.activationMode, "gateway-route");
+        expect(state.companion.id).toBe("active-companion");
+        expect(state.companion.soulId).toBe(state.soul.id);
+        expect(state.companion.vitals.level).toBe(1);
+        expect(state.companion.vitals.companionEnergy).toBe(100);
+        expect(state.companion.petAppearance.kind).toBe("slime");
+        expect(state.providerProfile.activationMode).toBe("gateway-route");
       } finally {
         runtime.close();
       }
@@ -46,12 +45,12 @@ describe("AgentSoul v2 runtime", () => {
       try {
         const state = reopened.getCompanionRuntimeState();
 
-        assert.equal(state.companion.vitals.level, 2);
-        assert.equal(state.companion.vitals.xp, 15);
-        assert.equal(state.companion.vitals.companionEnergy, 76);
-        assert.equal(state.companion.vitals.hunger, 64);
-        assert.equal(state.companion.vitals.intimacy, 28);
-        assert.equal(state.companion.mood, "positive");
+        expect(state.companion.vitals.level).toBe(2);
+        expect(state.companion.vitals.xp).toBe(15);
+        expect(state.companion.vitals.companionEnergy).toBe(76);
+        expect(state.companion.vitals.hunger).toBe(64);
+        expect(state.companion.vitals.intimacy).toBe(28);
+        expect(state.companion.mood).toBe("positive");
       } finally {
         reopened.close();
       }
@@ -71,11 +70,11 @@ describe("AgentSoul v2 runtime", () => {
           animationStyle: "thinking",
         });
 
-        assert.equal(after.companion.id, before.companion.id);
-        assert.equal(after.companion.soulId, before.companion.soulId);
-        assert.deepEqual(after.soul, before.soul);
-        assert.deepEqual(after.providerProfile, before.providerProfile);
-        assert.deepEqual(after.companion.petAppearance, {
+        expect(after.companion.id).toBe(before.companion.id);
+        expect(after.companion.soulId).toBe(before.companion.soulId);
+        expect(after.soul).toEqual(before.soul);
+        expect(after.providerProfile).toEqual(before.providerProfile);
+        expect(after.companion.petAppearance).toEqual({
           kind: "cat",
           skin: "calico",
           outfit: "hoodie",
@@ -100,43 +99,40 @@ describe("Companion Growth interactions", () => {
         });
 
         const feed = runtime.performCompanionInteraction("feed");
-        assert.equal(feed.outcome, "applied");
-        assert.equal(feed.state.companion.vitals.hunger, 80);
-        assert.equal(feed.state.companion.vitals.intimacy, 15);
+        expect(feed.outcome).toBe("applied");
+        expect(feed.state.companion.vitals.hunger).toBe(80);
+        expect(feed.state.companion.vitals.intimacy).toBe(15);
 
         const play = runtime.performCompanionInteraction("play");
-        assert.equal(play.outcome, "applied");
-        assert.equal(play.state.companion.vitals.companionEnergy, 10);
-        assert.equal(play.state.companion.vitals.intimacy, 30);
-        assert.equal(play.state.companion.vitals.xp, 15);
-        assert.equal(play.state.companion.mood, "positive");
+        expect(play.outcome).toBe("applied");
+        expect(play.state.companion.vitals.companionEnergy).toBe(10);
+        expect(play.state.companion.vitals.intimacy).toBe(30);
+        expect(play.state.companion.vitals.xp).toBe(15);
+        expect(play.state.companion.mood).toBe("positive");
 
         const blockedPlay = runtime.performCompanionInteraction("play");
-        assert.equal(blockedPlay.outcome, "blocked-low-energy");
-        assert.equal(blockedPlay.state.companion.vitals.companionEnergy, 10);
-        assert.equal(blockedPlay.state.companion.vitals.xp, 15);
+        expect(blockedPlay.outcome).toBe("blocked-low-energy");
+        expect(blockedPlay.state.companion.vitals.companionEnergy).toBe(10);
+        expect(blockedPlay.state.companion.vitals.xp).toBe(15);
 
         const pet = runtime.performCompanionInteraction("pet");
-        assert.equal(pet.outcome, "applied");
-        assert.equal(pet.state.companion.vitals.intimacy, 40);
-        assert.equal(pet.state.companion.vitals.xp, 20);
+        expect(pet.outcome).toBe("applied");
+        expect(pet.state.companion.vitals.intimacy).toBe(40);
+        expect(pet.state.companion.vitals.xp).toBe(20);
 
         const sleep = runtime.performCompanionInteraction("sleep");
-        assert.equal(sleep.outcome, "applied");
-        assert.equal(sleep.state.companion.vitals.companionEnergy, 50);
-        assert.equal(sleep.state.companion.mood, "sleeping");
+        expect(sleep.outcome).toBe("applied");
+        expect(sleep.state.companion.vitals.companionEnergy).toBe(50);
+        expect(sleep.state.companion.mood).toBe("sleeping");
 
         const events = runtime.listGrowthEvents();
-        assert.deepEqual(
-          events.map((event) => [event.interaction, event.outcome]),
-          [
+        expect(events.map((event) => [event.interaction, event.outcome])).toEqual([
             ["feed", "applied"],
             ["play", "applied"],
             ["play", "blocked-low-energy"],
             ["pet", "applied"],
             ["sleep", "applied"],
-          ],
-        );
+          ]);
       } finally {
         runtime.close();
       }
@@ -154,7 +150,7 @@ describe("Derived Hunger", () => {
         runtime.updateCompanionVitalsAndMood({ vitals: { hunger: 80 } });
         now = new Date("2026-05-28T03:00:00.000Z");
 
-        assert.equal(runtime.getCompanionRuntimeState().companion.vitals.hunger, 77);
+        expect(runtime.getCompanionRuntimeState().companion.vitals.hunger).toBe(77);
       } finally {
         runtime.close();
       }
@@ -170,7 +166,7 @@ describe("Derived Hunger", () => {
         runtime.updateCompanionVitalsAndMood({ vitals: { hunger: 80 } });
         now = new Date("2026-06-01T00:00:00.000Z");
 
-        assert.equal(runtime.getCompanionRuntimeState().companion.vitals.hunger, 60);
+        expect(runtime.getCompanionRuntimeState().companion.vitals.hunger).toBe(60);
       } finally {
         runtime.close();
       }
@@ -185,10 +181,10 @@ describe("Derived Hunger", () => {
       try {
         runtime.updateCompanionVitalsAndMood({ vitals: { hunger: 80 } });
         now = new Date("2026-05-27T23:00:00.000Z");
-        assert.equal(runtime.getCompanionRuntimeState().companion.vitals.hunger, 80);
+        expect(runtime.getCompanionRuntimeState().companion.vitals.hunger).toBe(80);
 
         now = new Date("2026-07-15T00:00:00.000Z");
-        assert.equal(runtime.getCompanionRuntimeState().companion.vitals.hunger, 80);
+        expect(runtime.getCompanionRuntimeState().companion.vitals.hunger).toBe(80);
       } finally {
         runtime.close();
       }
@@ -209,10 +205,10 @@ describe("Companion Energy behavior", () => {
 
         const work = runtime.applyWorkGrowth({ tokenCount: 1000, sourceId: "req-1" });
 
-        assert.equal(work.outcome, "fatigued-dampened");
-        assert.equal(work.state.companion.mood, "fatigued");
-        assert.equal(work.state.companion.vitals.xp, 1);
-        assert.equal(work.state.companion.vitals.companionEnergy, 14);
+        expect(work.outcome).toBe("fatigued-dampened");
+        expect(work.state.companion.mood).toBe("fatigued");
+        expect(work.state.companion.vitals.xp).toBe(1);
+        expect(work.state.companion.vitals.companionEnergy).toBe(14);
       } finally {
         runtime.close();
       }
@@ -232,12 +228,12 @@ describe("Companion Energy behavior", () => {
         now = new Date("2026-05-28T04:00:00.000Z");
 
         const rested = runtime.applyRestRecovery();
-        assert.equal(rested.companion.vitals.companionEnergy, 32);
-        assert.equal(rested.companion.mood, "neutral");
+        expect(rested.companion.vitals.companionEnergy).toBe(32);
+        expect(rested.companion.mood).toBe("neutral");
 
         const slept = runtime.performCompanionInteraction("sleep");
-        assert.equal(slept.state.companion.vitals.companionEnergy, 72);
-        assert.equal(slept.state.companion.mood, "sleeping");
+        expect(slept.state.companion.vitals.companionEnergy).toBe(72);
+        expect(slept.state.companion.mood).toBe("sleeping");
       } finally {
         runtime.close();
       }
@@ -262,14 +258,14 @@ describe("Gateway Events to Growth Events", () => {
           outputTokens: 500,
         });
 
-        assert.equal(growth.outcome, "applied");
-        assert.equal(growth.state.companion.vitals.xp, 3);
-        assert.equal(growth.state.companion.vitals.companionEnergy, 98);
+        expect(growth.outcome).toBe("applied");
+        expect(growth.state.companion.vitals.xp).toBe(3);
+        expect(growth.state.companion.vitals.companionEnergy).toBe(98);
 
         const [event] = runtime.listGrowthEvents();
-        assert.equal(event.sourceType, "gateway-event");
-        assert.equal(event.sourceId, "gateway-success-1");
-        assert.equal(event.growthRuleVersion, "gateway-traffic-v1");
+        expect(event.sourceType).toBe("gateway-event");
+        expect(event.sourceId).toBe("gateway-success-1");
+        expect(event.growthRuleVersion).toBe("gateway-traffic-v1");
       } finally {
         runtime.close();
       }
@@ -288,13 +284,13 @@ describe("Gateway Events to Growth Events", () => {
           outputTokens: 500,
         });
 
-        assert.equal(growth.outcome, "failed-no-xp");
-        assert.equal(growth.state.companion.vitals.xp, 0);
+        expect(growth.outcome).toBe("failed-no-xp");
+        expect(growth.state.companion.vitals.xp).toBe(0);
 
         const [event] = runtime.listGrowthEvents();
-        assert.equal(event.sourceType, "gateway-event");
-        assert.equal(event.sourceId, "gateway-failed-1");
-        assert.equal(event.after.xp, 0);
+        expect(event.sourceType).toBe("gateway-event");
+        expect(event.sourceId).toBe("gateway-failed-1");
+        expect(event.after.xp).toBe(0);
       } finally {
         runtime.close();
       }
@@ -326,11 +322,11 @@ describe("Growth Profile parameters", () => {
           outputTokens: 1000,
         });
 
-        assert.equal(gateway.outcome, "applied");
-        assert.equal(gateway.state.growthProfile.version, "focused-growth-v2");
-        assert.equal(gateway.event.growthRuleVersion, "focused-growth-v2");
-        assert.equal(gateway.state.companion.vitals.xp, 3);
-        assert.equal(gateway.state.companion.vitals.companionEnergy, 98);
+        expect(gateway.outcome).toBe("applied");
+        expect(gateway.state.growthProfile.version).toBe("focused-growth-v2");
+        expect(gateway.event.growthRuleVersion).toBe("focused-growth-v2");
+        expect(gateway.state.companion.vitals.xp).toBe(3);
+        expect(gateway.state.companion.vitals.companionEnergy).toBe(98);
 
         runtime.updateCompanionVitalsAndMood({
           vitals: {
@@ -344,10 +340,10 @@ describe("Growth Profile parameters", () => {
           sourceId: "work-profile-1",
         });
 
-        assert.equal(work.outcome, "fatigued-dampened");
-        assert.equal(work.event.growthRuleVersion, "focused-growth-v2");
-        assert.equal(work.state.companion.vitals.xp, 1);
-        assert.equal(work.state.companion.mood, "fatigued");
+        expect(work.outcome).toBe("fatigued-dampened");
+        expect(work.event.growthRuleVersion).toBe("focused-growth-v2");
+        expect(work.state.companion.vitals.xp).toBe(1);
+        expect(work.state.companion.mood).toBe("fatigued");
       } finally {
         runtime.close();
       }
@@ -369,12 +365,12 @@ describe("Soul and Affective State baseline", () => {
           affectiveEnergy: -0.5,
         });
 
-        assert.equal(after.soul.id, before.soul.id);
-        assert.equal(after.soul.personaName, before.soul.personaName);
-        assert.deepEqual(after.companion.vitals, before.companion.vitals);
-        assert.equal(after.companion.mood, before.companion.mood);
-        assert.deepEqual(after.companion.petAppearance, before.companion.petAppearance);
-        assert.deepEqual(after.soul.affectiveState, {
+        expect(after.soul.id).toBe(before.soul.id);
+        expect(after.soul.personaName).toBe(before.soul.personaName);
+        expect(after.companion.vitals).toEqual(before.companion.vitals);
+        expect(after.companion.mood).toBe(before.companion.mood);
+        expect(after.companion.petAppearance).toEqual(before.companion.petAppearance);
+        expect(after.soul.affectiveState).toEqual({
           pleasure: 0.8,
           arousal: -0.4,
           dominance: 0.2,
@@ -394,10 +390,10 @@ describe("Soul and Affective State baseline", () => {
         const before = runtime.getCompanionRuntimeState();
         const after = runtime.updateSoulPersona({ personaName: "Pairing Companion" });
 
-        assert.equal(after.companion.id, before.companion.id);
-        assert.equal(after.companion.soulId, before.companion.soulId);
-        assert.deepEqual(after.providerProfile, before.providerProfile);
-        assert.equal(after.soul.personaName, "Pairing Companion");
+        expect(after.companion.id).toBe(before.companion.id);
+        expect(after.companion.soulId).toBe(before.companion.soulId);
+        expect(after.providerProfile).toEqual(before.providerProfile);
+        expect(after.soul.personaName).toBe("Pairing Companion");
       } finally {
         runtime.close();
       }

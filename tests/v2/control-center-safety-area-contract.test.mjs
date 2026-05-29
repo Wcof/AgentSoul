@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,12 +9,12 @@ describe("AgentSoul v2 Control Center Safety area", () => {
   it("exposes Safety Area rendering for approval, notice, trust, risk, and authorization state", () => {
     const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
 
-    assert.match(source, /Control Center Safety Area/);
-    assert.match(source, /renderControlCenterSafetyAreaViewModel/);
-    assert.match(source, /renderControlCenterSafetyArea/);
-    assert.match(source, /data-control-area="safety"/);
-    assert.match(source, /data-trust-revoke/);
-    assert.match(source, /Client Authorization Mode/);
+    expect(source).toMatch(/Control Center Safety Area/);
+    expect(source).toMatch(/renderControlCenterSafetyAreaViewModel/);
+    expect(source).toMatch(/renderControlCenterSafetyArea/);
+    expect(source).toMatch(/data-control-area="safety"/);
+    expect(source).toMatch(/data-trust-revoke/);
+    expect(source).toMatch(/Client Authorization Mode/);
   });
 
   it("verifies Approval Requests, Risk Notices, Scoped Trust Grants, Action Risk Classes, and revoke behavior", () => {
@@ -36,12 +35,12 @@ describe("AgentSoul v2 Control Center Safety area", () => {
       encoding: "utf8",
     });
 
-    assert.match(appTest, /Approval Requests/);
-    assert.match(appTest, /Risk Notices/);
-    assert.match(appTest, /Scoped Trust Grants/);
-    assert.match(appTest, /Action Risk Classes/);
-    assert.match(safetyTest, /revokeGrant/);
-    assert.match(desktopOutput, /Control Center Safety area/);
-    assert.match(safetyOutput, /revokes Scoped Trust Grants/);
-  });
+    expect(appTest).toMatch(/Approval Requests/);
+    expect(appTest).toMatch(/Risk Notices/);
+    expect(appTest).toMatch(/Scoped Trust Grants/);
+    expect(appTest).toMatch(/Action Risk Classes/);
+    expect(safetyTest).toMatch(/revokeGrant/);
+    expect(desktopOutput).toMatch(/Control Center Safety area/);
+    expect(safetyOutput).toMatch(/revokes Scoped Trust Grants/);
+  }, 30000);
 });

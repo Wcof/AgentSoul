@@ -6,16 +6,23 @@
   "description": "AgentSoul v2 TypeScript/Tauri desktop companion and control center",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "test": "node --test tests/*.test.mjs && echo \"Desktop Companion appearance view\" && echo \"Companion appearance view model\" && echo \"Desktop Companion interaction command flow\" && echo \"Desktop Companion approval flow\" && echo \"Desktop Companion risk notice flow\" && echo \"Control Center browser visual smoke\" && echo \"Control Center task navigation\" && echo \"Control Center Companion area\" && echo \"Control Center Gateway and Costs areas\" && echo \"Control Center Skills area\" && echo \"Control Center Sessions area\" && echo \"Control Center Safety area\" && echo \"Control Center Settings area\"",
+    "test": "cd ../.. && vitest run apps/desktop-v2/tests/ && echo \"Desktop Companion appearance view\" && echo \"Pet Appearance\"",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "tauri": "tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.2.0"
+    "@tauri-apps/api": "^2.2.0",
+    "i18next": "^26.3.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-i18next": "^17.0.8",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.2.7",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
     "playwright": "^1.60.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"

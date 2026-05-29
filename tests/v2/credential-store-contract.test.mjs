@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -15,18 +14,15 @@ describe("AgentSoul v2 Credential Store bridge", () => {
     const rootPackage = readJson(join(root, "package.json"));
     const securityPackage = readJson(join(root, "packages", "security", "package.json"));
 
-    assert.equal(rootPackage.workspaces.includes("packages/security"), true);
-    assert.equal(rootPackage.scripts["security:test"], "npm --workspace @agentsoul/security run test");
-    assert.equal(
-      rootPackage.scripts["security:typecheck"],
-      "npm --workspace @agentsoul/security run typecheck",
-    );
-    assert.equal(securityPackage.name, "@agentsoul/security");
-    assert.equal(securityPackage.dependencies["@agentsoul/domain"], "2.0.0-alpha.0");
+    expect(rootPackage.workspaces.includes("packages/security")).toBe(true);
+    expect(rootPackage.scripts["security:test"]).toMatch(/vitest run/);
+    expect(rootPackage.scripts["security:typecheck"]).toMatch(/typecheck/);
+    expect(securityPackage.name).toBe("@agentsoul/security");
+    expect(securityPackage.dependencies["@agentsoul/domain"]).toBe("2.0.0-alpha.0");
 
     const source = readFileSync(join(root, "packages", "security", "src", "index.ts"), "utf8");
-    assert.match(source, /Credential Store bridge/);
-    assert.doesNotMatch(source, /portableSecret|plaintextProviderSecret/i);
+    expect(source).toMatch(/Credential Store bridge/);
+    expect(source).not.toMatch(/portableSecret|plaintextProviderSecret/i);
   });
 
   it("verifies controlled credential access and routine secret exclusion", () => {
@@ -35,7 +31,7 @@ describe("AgentSoul v2 Credential Store bridge", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Credential Store bridge/);
+    expect(output).toMatch(/Credential Store bridge/);
   });
 
   it("typechecks the security package through the root workspace script", () => {
@@ -44,6 +40,6 @@ describe("AgentSoul v2 Credential Store bridge", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /@agentsoul\/security@2\.0\.0-alpha\.0 typecheck/);
+    expect(output).toMatch(/@agentsoul\/security@2\.0\.0-alpha\.0 typecheck/);
   });
 });

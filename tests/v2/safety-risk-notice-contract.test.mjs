@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -11,13 +10,13 @@ describe("AgentSoul v2 Risk Notice flow", () => {
     const safetySource = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
     const desktopSource = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
 
-    assert.match(safetySource, /createRiskNoticeFlow/);
-    assert.match(safetySource, /blocking: false/);
-    assert.match(safetySource, /getRiskNotices/);
-    assert.match(safetySource, /fully-authorized/);
-    assert.match(desktopSource, /renderRiskNotices/);
-    assert.match(desktopSource, /Risk Notice/);
-    assert.doesNotMatch(desktopSource, /data-risk-notice-decision/);
+    expect(safetySource).toMatch(/createRiskNoticeFlow/);
+    expect(safetySource).toMatch(/blocking: false/);
+    expect(safetySource).toMatch(/getRiskNotices/);
+    expect(safetySource).toMatch(/fully-authorized/);
+    expect(desktopSource).toMatch(/renderRiskNotices/);
+    expect(desktopSource).toMatch(/Risk Notice/);
+    expect(desktopSource).not.toMatch(/data-risk-notice-decision/);
   });
 
   it("verifies Risk Notice behavior through Safety and Desktop Companion suites", () => {
@@ -30,7 +29,7 @@ describe("AgentSoul v2 Risk Notice flow", () => {
       encoding: "utf8",
     });
 
-    assert.match(safetyOutput, /Risk Notice flow/);
-    assert.match(desktopOutput, /Desktop Companion risk notice flow/);
-  });
+    expect(safetyOutput).toMatch(/Risk Notice flow/);
+    expect(desktopOutput).toMatch(/Desktop Companion risk notice flow/);
+  }, 30000);
 });

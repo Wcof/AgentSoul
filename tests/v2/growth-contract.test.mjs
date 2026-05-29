@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,9 +9,9 @@ describe("AgentSoul v2 Companion Growth interactions", () => {
   it("exposes interaction behavior from the runtime package without old state dependencies", () => {
     const source = readFileSync(join(root, "packages", "runtime", "src", "index.ts"), "utf8");
 
-    assert.match(source, /performCompanionInteraction/);
-    assert.match(source, /listGrowthEvents/);
-    assert.doesNotMatch(source, /persona\\.ya?ml|src\/agentsoul\/config|python/i);
+    expect(source).toMatch(/performCompanionInteraction/);
+    expect(source).toMatch(/listGrowthEvents/);
+    expect(source).not.toMatch(/persona\\.ya?ml|src\/agentsoul\/config|python/i);
   });
 
   it("updates Runtime State and persists Growth Events for Feed, Play, Pet, and Sleep", () => {
@@ -21,6 +20,6 @@ describe("AgentSoul v2 Companion Growth interactions", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Companion Growth interactions/);
+    expect(output).toMatch(/Companion Growth interactions/);
   });
 });

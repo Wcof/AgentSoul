@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,14 +9,14 @@ describe("AgentSoul v2 Project Skill Activation", () => {
   it("exposes project-scoped activation query behavior with Global Skill Default override", () => {
     const source = readFileSync(join(root, "packages", "skills", "src", "index.ts"), "utf8");
 
-    assert.match(source, /setProjectSkillActivation/);
-    assert.match(source, /listProjectSkillActivations/);
-    assert.match(source, /getEffectiveSkillActivation/);
-    assert.match(source, /globalDefaultEnabled/);
-    assert.match(source, /source: "project"/);
-    assert.match(source, /source: "global-default"/);
-    assert.match(source, /workspaceRuleDeploymentsCreated: false/);
-    assert.doesNotMatch(source, /managed_rule_files.*INSERT/is);
+    expect(source).toMatch(/setProjectSkillActivation/);
+    expect(source).toMatch(/listProjectSkillActivations/);
+    expect(source).toMatch(/getEffectiveSkillActivation/);
+    expect(source).toMatch(/globalDefaultEnabled/);
+    expect(source).toMatch(/source: "project"/);
+    expect(source).toMatch(/source: "global-default"/);
+    expect(source).toMatch(/workspaceRuleDeploymentsCreated: false/);
+    expect(source).not.toMatch(/managed_rule_files.*INSERT/is);
   });
 
   it("verifies project precedence and install-vs-activate separation", () => {
@@ -26,6 +25,6 @@ describe("AgentSoul v2 Project Skill Activation", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Project Skill Activation/);
+    expect(output).toMatch(/Project Skill Activation/);
   });
 });

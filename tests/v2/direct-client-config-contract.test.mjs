@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,16 +9,16 @@ describe("AgentSoul v2 Direct Client Config fallback", () => {
   it("exposes fallback metadata without Gateway Route guarantees", () => {
     const source = readFileSync(join(root, "packages", "provider", "src", "index.ts"), "utf8");
 
-    assert.match(source, /createDirectClientConfigFallback/);
-    assert.match(source, /getProviderActivationSupportMatrix/);
-    assert.match(source, /Claude Code/);
-    assert.match(source, /Cursor/);
-    assert.match(source, /Codex/);
-    assert.match(source, /Trae/);
-    assert.match(source, /direct-client-config/);
-    assert.match(source, /fullAudit: false/);
-    assert.match(source, /growthConversion: false/);
-    assert.match(source, /approvalControl: false/);
+    expect(source).toMatch(/createDirectClientConfigFallback/);
+    expect(source).toMatch(/getProviderActivationSupportMatrix/);
+    expect(source).toMatch(/Claude Code/);
+    expect(source).toMatch(/Cursor/);
+    expect(source).toMatch(/Codex/);
+    expect(source).toMatch(/Trae/);
+    expect(source).toMatch(/direct-client-config/);
+    expect(source).toMatch(/fullAudit: false/);
+    expect(source).toMatch(/growthConversion: false/);
+    expect(source).toMatch(/approvalControl: false/);
   });
 
   it("verifies fallback activation status and limitations", () => {
@@ -28,6 +27,6 @@ describe("AgentSoul v2 Direct Client Config fallback", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Direct Client Config fallback/);
+    expect(output).toMatch(/Direct Client Config fallback/);
   });
 });

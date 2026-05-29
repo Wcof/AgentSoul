@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -12,17 +11,17 @@ describe("AgentSoul v2 Control Center shell navigation", () => {
     const css = readFileSync(join(root, "apps", "desktop-v2", "src", "styles.css"), "utf8");
 
     for (const area of ["companion", "gateway", "skills", "sessions", "costs", "safety", "settings"]) {
-      assert.match(source, new RegExp(`data-nav-target="${area}"`));
-      assert.match(source, new RegExp(`data-control-area="${area}"`));
+      expect(source).toMatch(new RegExp(`data-nav-target="${area}"`));
+      expect(source).toMatch(new RegExp(`data-control-area="${area}"`));
     }
 
-    assert.match(source, /Control Center task navigation/);
-    assert.match(source, /Local-first/);
-    assert.match(source, /cloud login not required/i);
-    assert.match(css, /overflow-wrap:\s*anywhere/);
-    assert.match(css, /@media \(max-width: 640px\)/);
-    assert.match(readFileSync(join(root, "apps", "desktop-v2", "tests", "browser-visual.test.mjs"), "utf8"), /horizontal overflow/);
-    assert.match(readFileSync(join(root, "apps", "desktop-v2", "tests", "browser-visual.test.mjs"), "utf8"), /screenshot/);
+    expect(source).toMatch(/Control Center task navigation/);
+    expect(source).toMatch(/Local-first/);
+    expect(source).toMatch(/cloud login not required/i);
+    expect(css).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(css).toMatch(/@media \(max-width: 640px\)/);
+    expect(readFileSync(join(root, "apps", "desktop-v2", "tests", "browser-visual.test.mjs"), "utf8")).toMatch(/horizontal overflow/);
+    expect(readFileSync(join(root, "apps", "desktop-v2", "tests", "browser-visual.test.mjs"), "utf8")).toMatch(/screenshot/);
   });
 
   it("verifies the desktop app shell tests cover task navigation and settings", () => {
@@ -31,8 +30,8 @@ describe("AgentSoul v2 Control Center shell navigation", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Control Center task navigation/);
-    assert.match(output, /Control Center Settings area/);
-    assert.match(output, /Control Center browser visual smoke/);
+    expect(output).toMatch(/Control Center task navigation/);
+    expect(output).toMatch(/Control Center Settings area/);
+    expect(output).toMatch(/Control Center browser visual smoke/);
   });
 });

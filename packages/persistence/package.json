@@ -20,7 +20,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "test": "node --test --import tsx tests/*.test.ts",
+    "test": "cd ../.. && vitest run packages/persistence/tests/ && echo \"persistence foundation\"",
     "typecheck": "tsc --noEmit"
   }
 }

@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -11,13 +10,13 @@ describe("AgentSoul v2 Skill Source Store and Installation", () => {
     const source = readFileSync(join(root, "packages", "skills", "src", "index.ts"), "utf8");
     const packageJson = readFileSync(join(root, "package.json"), "utf8");
 
-    assert.match(packageJson, /@agentsoul\/skills|skills:test/);
-    assert.match(source, /createSkillSourceStore/);
-    assert.match(source, /installSkillPack/);
-    assert.match(source, /importLocalSkillPack/);
-    assert.match(source, /listSkillPacks/);
-    assert.match(source, /SkillSourceMetadata/);
-    assert.match(source, /workspaceRuleDeploymentsCreated: false/);
+    expect(packageJson).toMatch(/@agentsoul\/skills|skills:test/);
+    expect(source).toMatch(/createSkillSourceStore/);
+    expect(source).toMatch(/installSkillPack/);
+    expect(source).toMatch(/importLocalSkillPack/);
+    expect(source).toMatch(/listSkillPacks/);
+    expect(source).toMatch(/SkillSourceMetadata/);
+    expect(source).toMatch(/workspaceRuleDeploymentsCreated: false/);
   });
 
   it("verifies install, list, source metadata, and no-deploy behavior", () => {
@@ -26,6 +25,6 @@ describe("AgentSoul v2 Skill Source Store and Installation", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Skill Source Store and Installation/);
+    expect(output).toMatch(/Skill Source Store and Installation/);
   });
 });

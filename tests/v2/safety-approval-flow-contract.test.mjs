@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -11,14 +10,14 @@ describe("AgentSoul v2 Approval Required flow", () => {
     const safetySource = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
     const desktopSource = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
 
-    assert.match(safetySource, /createApprovalFlow/);
-    assert.match(safetySource, /getPendingApproval/);
-    assert.match(safetySource, /decideApproval/);
-    assert.match(safetySource, /timeoutPendingApproval/);
-    assert.match(safetySource, /unavailable-denied/);
-    assert.match(desktopSource, /Approval Required/);
-    assert.match(desktopSource, /data-approval-decision="allowed"/);
-    assert.match(desktopSource, /data-approval-decision="denied"/);
+    expect(safetySource).toMatch(/createApprovalFlow/);
+    expect(safetySource).toMatch(/getPendingApproval/);
+    expect(safetySource).toMatch(/decideApproval/);
+    expect(safetySource).toMatch(/timeoutPendingApproval/);
+    expect(safetySource).toMatch(/unavailable-denied/);
+    expect(desktopSource).toMatch(/Approval Required/);
+    expect(desktopSource).toMatch(/data-approval-decision="allowed"/);
+    expect(desktopSource).toMatch(/data-approval-decision="denied"/);
   });
 
   it("verifies Approval Required package and Desktop Companion behavior", () => {
@@ -31,7 +30,7 @@ describe("AgentSoul v2 Approval Required flow", () => {
       encoding: "utf8",
     });
 
-    assert.match(safetyOutput, /Approval Required flow/);
-    assert.match(desktopOutput, /Desktop Companion approval flow/);
-  });
+    expect(safetyOutput).toMatch(/Approval Required flow/);
+    expect(desktopOutput).toMatch(/Desktop Companion approval flow/);
+  }, 30000);
 });

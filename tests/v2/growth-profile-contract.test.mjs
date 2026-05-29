@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,22 +9,22 @@ describe("AgentSoul v2 Growth Profile", () => {
   it("exposes user-adjustable Growth Rule parameters in Runtime State", () => {
     const source = readFileSync(join(root, "packages", "runtime", "src", "index.ts"), "utf8");
 
-    assert.match(source, /GrowthProfile/);
-    assert.match(source, /updateGrowthProfile/);
-    assert.match(source, /xpMultiplier/);
-    assert.match(source, /energyCostMultiplier/);
-    assert.match(source, /fatigueThreshold/);
-    assert.match(source, /maxXpPerEvent/);
-    assert.match(source, /maxEnergyCostPerEvent/);
+    expect(source).toMatch(/GrowthProfile/);
+    expect(source).toMatch(/updateGrowthProfile/);
+    expect(source).toMatch(/xpMultiplier/);
+    expect(source).toMatch(/energyCostMultiplier/);
+    expect(source).toMatch(/fatigueThreshold/);
+    expect(source).toMatch(/maxXpPerEvent/);
+    expect(source).toMatch(/maxEnergyCostPerEvent/);
   });
 
   it("surfaces Growth Profile parameters in the Control Center Settings Area", () => {
     const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
 
-    assert.match(source, /Growth Profile/);
-    assert.match(source, /XP multiplier/);
-    assert.match(source, /Fatigue threshold/);
-    assert.match(source, /Growth Cap/);
+    expect(source).toMatch(/Growth Profile/);
+    expect(source).toMatch(/XP multiplier/);
+    expect(source).toMatch(/Fatigue threshold/);
+    expect(source).toMatch(/Growth Cap/);
   });
 
   it("verifies Growth Profile affects Gateway and Work Growth behavior", () => {
@@ -34,6 +33,6 @@ describe("AgentSoul v2 Growth Profile", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /Growth Profile parameters/);
+    expect(output).toMatch(/Growth Profile parameters/);
   });
 });

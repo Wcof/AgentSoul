@@ -18,7 +18,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "test": "node --test --import tsx tests/*.test.ts && echo \"Safety Policy decision engine\" && echo \"Approval Required flow\" && echo \"Risk Notice flow\" && echo \"Scoped Trust Grants\" && echo \"revokes Scoped Trust Grants\"",
+    "test": "cd ../.. && vitest run packages/safety/tests/ && echo \"Safety Policy decision engine\" && echo \"Approval Required flow\" && echo \"Risk Notice flow\" && echo \"Scoped Trust Grants\" && echo \"revokes Scoped Trust Grants\"",
     "typecheck": "tsc --noEmit"
   }
 }

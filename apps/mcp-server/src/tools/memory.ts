@@ -10,6 +10,16 @@ import { triggerEvent } from './subscription.js';
 
 const storage = new StorageManager();
 
+/** Auto-index memory after write (graceful degradation) */
+async function autoIndexMemory(memoryId: string, content: string, metadata: Record<string, unknown> = {}): Promise<void> {
+  try {
+    const { handleIndexMemory } = await import('./semantic.js');
+    await handleIndexMemory({ memory_id: memoryId, content, metadata });
+  } catch (_e) {
+    // Silent degradation: indexing failure must not block memory writes
+  }
+}
+
 /**
  * 通用读取响应生成函数，消除重复代码
  * @param found - 是否找到对应记忆内容
@@ -117,6 +127,7 @@ export async function handleWriteMemoryDay(
   const success = storage.writeDailyMemory(date, fullContent);
   if (success) {
     triggerEvent('memory_written', { type: 'day', identifier: date });
+    autoIndexMemory(`day-${date}`, fullContent, { type: 'day', date }).catch(() => {});
   }
   return makeWriteResponse(success, 'date', date, append);
 }
@@ -158,6 +169,7 @@ export async function handleWriteMemoryWeek(
   const success = storage.writeWeeklyMemory(year_week, fullContent);
   if (success) {
     triggerEvent('memory_written', { type: 'week', identifier: year_week });
+    autoIndexMemory(`week-${year_week}`, fullContent, { type: 'week', year_week: year_week }).catch(() => {});
   }
   return makeWriteResponse(success, 'year_week', year_week, append);
 }
@@ -199,6 +211,7 @@ export async function handleWriteMemoryMonth(
   const success = storage.writeMonthlyMemory(year_month, fullContent);
   if (success) {
     triggerEvent('memory_written', { type: 'month', identifier: year_month });
+    autoIndexMemory(`month-${year_month}`, fullContent, { type: 'month', year_month: year_month }).catch(() => {});
   }
   return makeWriteResponse(success, 'year_month', year_month, append);
 }
@@ -240,6 +253,7 @@ export async function handleWriteMemoryYear(
   const success = storage.writeYearlyMemory(year, fullContent);
   if (success) {
     triggerEvent('memory_written', { type: 'year', identifier: year });
+    autoIndexMemory(`year-${year}`, fullContent, { type: 'year', year }).catch(() => {});
   }
   return makeWriteResponse(success, 'year', year, append);
 }
@@ -281,6 +295,7 @@ export async function handleWriteMemoryTopic(
   const success = storage.writeTopicMemory(topic, fullContent);
   if (success) {
     triggerEvent('memory_written', { type: 'topic', identifier: topic });
+    autoIndexMemory(`topic-${topic}`, fullContent, { type: 'topic', topic }).catch(() => {});
   }
   return makeWriteResponse(success, 'topic', topic, append);
 }

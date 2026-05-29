@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -12,14 +11,14 @@ describe("AgentSoul v2 User-managed Export", () => {
       "utf8",
     );
 
-    assert.ok(rootPackage.workspaces.includes("packages/export"));
-    assert.match(source, /createUserManagedExportService/);
-    assert.match(source, /createPortableDataExport/);
-    assert.match(source, /createSensitiveExport/);
-    assert.match(source, /agentsoul-export-v1/);
-    assert.match(source, /schemaVersion/);
-    assert.match(source, /export-secret/);
-    assert.match(source, /decideSafetyPolicy/);
+    expect(rootPackage.workspaces.includes("packages/export")).toBeTruthy();
+    expect(source).toMatch(/createUserManagedExportService/);
+    expect(source).toMatch(/createPortableDataExport/);
+    expect(source).toMatch(/createSensitiveExport/);
+    expect(source).toMatch(/agentsoul-export-v1/);
+    expect(source).toMatch(/schemaVersion/);
+    expect(source).toMatch(/export-secret/);
+    expect(source).toMatch(/decideSafetyPolicy/);
   });
 
   it("verifies inclusion, exclusion, and explicit sensitive confirmation behavior", () => {
@@ -28,8 +27,8 @@ describe("AgentSoul v2 User-managed Export", () => {
       encoding: "utf8",
     });
 
-    assert.match(output, /User-managed Export/);
-    assert.match(output, /Portable Data boundaries/);
-    assert.match(output, /Sensitive Export confirmation/);
+    expect(output).toMatch(/User-managed Export/);
+    expect(output).toMatch(/Portable Data boundaries/);
+    expect(output).toMatch(/Sensitive Export confirmation/);
   });
 });

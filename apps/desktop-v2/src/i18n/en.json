@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "companion": "Companion",
+    "gateway": "Gateway",
+    "skills": "Skills",
+    "sessions": "Sessions",
+    "costs": "Costs",
+    "safety": "Safety",
+    "settings": "Settings"
+  },
+  "companion": {
+    "title": "Companion Area",
+    "vitals": "Vitals",
+    "mood": "Mood",
+    "level": "Level",
+    "xp": "XP",
+    "energy": "Energy",
+    "hunger": "Hunger",
+    "intimacy": "Intimacy",
+    "growthHistory": "Growth History",
+    "emotionTrajectory": "Emotion Trajectory",
+    "appearance": "Appearance"
+  },
+  "gateway": {
+    "title": "Gateway Area",
+    "providerProfiles": "Provider Profiles",
+    "routingHealth": "Routing Health",
+    "adapterStatus": "Adapter Status",
+    "activeProvider": "Active Provider"
+  },
+  "skills": {
+    "title": "Skills Area",
+    "installed": "Installed Skill Packs",
+    "projectActivation": "Project Activation",
+    "managedFiles": "Managed Rule Files"
+  },
+  "sessions": {
+    "title": "Sessions Area",
+    "searchable": "Searchable",
+    "resumable": "Resumable",
+    "launch": "Launch Session"
+  },
+  "costs": {
+    "title": "Costs Area",
+    "estimatedCost": "Estimated Cost",
+    "providerUsage": "Provider Usage",
+    "modelMix": "Model Mix",
+    "latency": "Latency",
+    "trends": "Trends"
+  },
+  "safety": {
+    "title": "Safety Area",
+    "approvalHistory": "Approval History",
+    "riskNotices": "Risk Notices",
+    "trustGrants": "Trust Grants",
+    "actionRiskClasses": "Action Risk Classes"
+  },
+  "settings": {
+    "title": "Settings",
+    "persona": "Persona Configuration",
+    "locale": "Language",
+    "appearance": "Appearance Settings",
+    "health": "Health Diagnostics"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "deny": "Deny",
+    "approve": "Approve",
+    "loading": "Loading..."
+  }
+}

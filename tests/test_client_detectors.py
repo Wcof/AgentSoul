@@ -8,10 +8,10 @@ and DetectorRegistry) correctly calculate confidence scores.
 from __future__ import annotations
 
 import pytest
-from src.gateway.detectors import identify_client
-from src.gateway.detectors.base import BaseClientDetector
-from src.gateway.detectors.claude import ClaudeCodeDetector
-from src.gateway.detectors.cursor import CursorDetector
+from gateway.detectors import identify_client
+from gateway.detectors.base import BaseClientDetector
+from gateway.detectors.claude import ClaudeCodeDetector
+from gateway.detectors.cursor import CursorDetector
 
 
 def test_claude_code_detector():

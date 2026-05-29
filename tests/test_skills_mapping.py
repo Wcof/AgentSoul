@@ -11,8 +11,8 @@ import os
 import shutil
 from pathlib import Path
 import pytest
-from src.storage.db import DatabaseManager
-from src.skills.skills_manager import SkillsManager
+from agentsoul.storage.db import DatabaseManager
+from skills.skills_manager import SkillsManager
 
 
 @pytest.fixture

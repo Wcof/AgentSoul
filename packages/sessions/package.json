@@ -23,7 +23,7 @@
     "typescript": "^5.7.3"
   },
   "scripts": {
-    "test": "node --test --import tsx tests/*.test.ts && echo \"Session Source scanning\"",
+    "test": "cd ../.. && vitest run packages/sessions/tests/ && echo \"Session Source scanning\"",
     "typecheck": "tsc --noEmit"
   }
 }

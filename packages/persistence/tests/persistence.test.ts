@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,8 +17,8 @@ describe("AgentSoul v2 persistence", () => {
     try {
       const initialized = initializeV2Database(dbPath);
 
-      assert.equal(initialized.schemaVersion, V2_SCHEMA_VERSION);
-      assert.deepEqual(initialized.tables, REQUIRED_V2_TABLES);
+      expect(initialized.schemaVersion).toBe(V2_SCHEMA_VERSION);
+      expect(initialized.tables).toEqual(REQUIRED_V2_TABLES);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -34,8 +33,8 @@ describe("AgentSoul v2 persistence", () => {
       initializeV2Database(dbPath);
       const inspected = inspectV2Database(dbPath);
 
-      assert.equal(inspected.schemaVersion, V2_SCHEMA_VERSION);
-      assert.deepEqual(inspected.tables, REQUIRED_V2_TABLES);
+      expect(inspected.schemaVersion).toBe(V2_SCHEMA_VERSION);
+      expect(inspected.tables).toEqual(REQUIRED_V2_TABLES);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

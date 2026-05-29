@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,13 +9,13 @@ describe("AgentSoul v2 Control Center Sessions area", () => {
   it("exposes Sessions Area rendering for Work Session search and safety-gated launching", () => {
     const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
 
-    assert.match(source, /Control Center Sessions Area/);
-    assert.match(source, /renderControlCenterSessionsAreaViewModel/);
-    assert.match(source, /renderControlCenterSessionsArea/);
-    assert.match(source, /data-control-area="sessions"/);
-    assert.match(source, /data-session-search/);
-    assert.match(source, /data-session-launch/);
-    assert.match(source, /launch-session/);
+    expect(source).toMatch(/Control Center Sessions Area/);
+    expect(source).toMatch(/renderControlCenterSessionsAreaViewModel/);
+    expect(source).toMatch(/renderControlCenterSessionsArea/);
+    expect(source).toMatch(/data-control-area="sessions"/);
+    expect(source).toMatch(/data-session-search/);
+    expect(source).toMatch(/data-session-launch/);
+    expect(source).toMatch(/launch-session/);
   });
 
   it("verifies Work Session search, Session Source, resumable state, and Session Launcher UI coverage", () => {
@@ -29,10 +28,10 @@ describe("AgentSoul v2 Control Center Sessions area", () => {
       encoding: "utf8",
     });
 
-    assert.match(appTest, /Work Session search/);
-    assert.match(appTest, /Session Source/);
-    assert.match(appTest, /Session Resume Command/);
-    assert.match(appTest, /safety-gated/);
-    assert.match(output, /Control Center Sessions area/);
+    expect(appTest).toMatch(/Work Session search/);
+    expect(appTest).toMatch(/Session Source/);
+    expect(appTest).toMatch(/Session Resume Command/);
+    expect(appTest).toMatch(/safety-gated/);
+    expect(output).toMatch(/Control Center Sessions area/);
   });
 });

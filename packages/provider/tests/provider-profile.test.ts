@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,8 +29,8 @@ describe("Provider Profile service", () => {
 
       try {
         const created = service.createProviderProfile(input);
-        assert.equal(created.credentialRef, credentialRef);
-        assert.deepEqual(service.listProviderProfiles().map((profile) => profile.id), [
+        expect(created.credentialRef).toBe(credentialRef);
+        expect(service.listProviderProfiles().map((profile) => profile.id)).toEqual([
           "anthropic-primary",
         ]);
 
@@ -42,9 +41,9 @@ describe("Provider Profile service", () => {
         service.selectActiveProviderProfile("anthropic-primary");
 
         const active = service.getActiveProviderProfile();
-        assert.equal(active?.name, "Anthropic Work");
-        assert.equal(active?.targetModel, "claude-opus-4");
-        assert.equal(active?.credentialRef, credentialRef);
+        expect(active?.name).toBe("Anthropic Work");
+        expect(active?.targetModel).toBe("claude-opus-4");
+        expect(active?.credentialRef).toBe(credentialRef);
       } finally {
         service.close();
       }
@@ -70,8 +69,8 @@ describe("Provider Profile service", () => {
         });
 
         const serialized = JSON.stringify(service.listProviderProfiles());
-        assert.match(serialized, /credential:openai:primary/);
-        assert.doesNotMatch(serialized, /sk-|api[_-]?key|secret/i);
+        expect(serialized).toMatch(/credential:openai:primary/);
+        expect(serialized).not.toMatch(/sk-|api[_-]?key|secret/i);
       } finally {
         service.close();
       }
@@ -102,17 +101,17 @@ describe("Direct Client Config fallback", () => {
           targetConfigPath: "/Users/dev/.codex/config.toml",
         });
 
-        assert.equal(fallback.activationMode, "direct-client-config");
-        assert.equal(fallback.providerProfileId, "codex-direct");
-        assert.equal(fallback.client, "codex");
-        assert.equal(fallback.targetConfigPath, "/Users/dev/.codex/config.toml");
-        assert.deepEqual(fallback.guarantees, {
+        expect(fallback.activationMode).toBe("direct-client-config");
+        expect(fallback.providerProfileId).toBe("codex-direct");
+        expect(fallback.client).toBe("codex");
+        expect(fallback.targetConfigPath).toBe("/Users/dev/.codex/config.toml");
+        expect(fallback.guarantees).toEqual({
           providerSwitching: true,
           fullAudit: false,
           growthConversion: false,
           approvalControl: false,
         });
-        assert.match(fallback.notice, /does not guarantee full audit, growth, or approval control/i);
+        expect(fallback.notice).toMatch(/does not guarantee full audit/);
       } finally {
         service.close();
       }
@@ -122,8 +121,7 @@ describe("Direct Client Config fallback", () => {
   it("documents Gateway Route support or Direct Client Config fallback for target clients", () => {
     const matrix = getProviderActivationSupportMatrix();
 
-    assert.deepEqual(
-      matrix.map((entry) => ({
+    expect(matrix.map((entry) => ({
         client: entry.client,
         defaultActivationMode: entry.defaultActivationMode,
         clientProtocol: entry.clientProtocol,
@@ -131,8 +129,7 @@ describe("Direct Client Config fallback", () => {
         directClientConfigFallback: entry.directClientConfigFallback,
         fullAuditGuaranteed: entry.fullAuditGuaranteed,
         approvalControlGuaranteed: entry.approvalControlGuaranteed,
-      })),
-      [
+      }))).toEqual([
         {
           client: "Claude Code",
           defaultActivationMode: "gateway-route",
@@ -169,9 +166,8 @@ describe("Direct Client Config fallback", () => {
           fullAuditGuaranteed: false,
           approvalControlGuaranteed: false,
         },
-      ],
-    );
-    assert.match(matrix[3]?.fallbackNotice ?? "", /reduced guarantees/i);
+      ]);
+    expect(matrix[3]?.fallbackNotice ?? "").toMatch(/reduced guarantees/i);
   });
 });
 

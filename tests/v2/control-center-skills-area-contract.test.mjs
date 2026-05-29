@@ -1,5 +1,4 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -10,12 +9,12 @@ describe("AgentSoul v2 Control Center Skills area", () => {
   it("exposes Skills Area rendering for installation, activation, and workspace deployment state", () => {
     const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
 
-    assert.match(source, /Control Center Skills Area/);
-    assert.match(source, /renderControlCenterSkillsAreaViewModel/);
-    assert.match(source, /renderControlCenterSkillsArea/);
-    assert.match(source, /data-control-area="skills"/);
-    assert.match(source, /data-skill-activation/);
-    assert.match(source, /data-safety-action/);
+    expect(source).toMatch(/Control Center Skills Area/);
+    expect(source).toMatch(/renderControlCenterSkillsAreaViewModel/);
+    expect(source).toMatch(/renderControlCenterSkillsArea/);
+    expect(source).toMatch(/data-control-area="skills"/);
+    expect(source).toMatch(/data-skill-activation/);
+    expect(source).toMatch(/data-safety-action/);
   });
 
   it("verifies Skill Installation, Project Skill Activation, Workspace Rule Deployment, Managed Rule File, and Safety Policy UI coverage", () => {
@@ -28,11 +27,11 @@ describe("AgentSoul v2 Control Center Skills area", () => {
       encoding: "utf8",
     });
 
-    assert.match(appTest, /Skill Installation/);
-    assert.match(appTest, /Project Skill Activation/);
-    assert.match(appTest, /Workspace Rule Deployment/);
-    assert.match(appTest, /Managed Rule File/);
-    assert.match(appTest, /Safety Policy/);
-    assert.match(output, /Control Center Skills area/);
+    expect(appTest).toMatch(/Skill Installation/);
+    expect(appTest).toMatch(/Project Skill Activation/);
+    expect(appTest).toMatch(/Workspace Rule Deployment/);
+    expect(appTest).toMatch(/Managed Rule File/);
+    expect(appTest).toMatch(/Safety Policy/);
+    expect(output).toMatch(/Control Center Skills area/);
   });
 });
