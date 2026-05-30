@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startLocalGateway } from "@agentsoul/gateway";
+import { startLocalGateway, createCostTracker, createGatewayAuditRepository, createChannelStore } from "@agentsoul/gateway";
 import { createProviderProfileService } from "@agentsoul/provider";
 
 // ─── Fetch mock helper ───
@@ -250,6 +250,51 @@ describe("Direct call endpoints", () => {
           expect(mock.calls[0].body).toBeDefined();
         } finally {
           await gateway.close();
+          providerProfiles.close();
+        }
+      });
+    } finally {
+      mock.restore();
+    }
+  });
+
+  it("records audit record on successful direct call", async () => {
+    const mock = mockFetch({
+      choices: [{ message: { content: "ok" } }],
+      usage: { prompt_tokens: 50, completion_tokens: 20, total_tokens: 70 },
+    });
+
+    try {
+      await withGateway(async (dbPath) => {
+        const providerProfiles = createProviderProfileService({ dbPath });
+        providerProfiles.createProviderProfile({
+          id: "openai", name: "OpenAI", activationMode: "gateway-route",
+          credentialRef: "credential:openai:primary", clientProtocol: "openai-chat",
+          providerProtocol: "openai-chat", targetModel: "gpt-4",
+          endpoint: "https://api.openai.com/v1",
+        });
+        providerProfiles.selectActiveProviderProfile("openai");
+
+        const audit = createGatewayAuditRepository({ dbPath });
+        const gateway = await startLocalGateway({ providerProfiles, audit, port: 0 });
+
+        try {
+          const response = await fetch(gateway.url("/v1/direct/chat/completions"), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ model: "gpt-4", messages: [{ role: "user", content: "hello" }] }),
+          });
+
+          expect(response.status).toBe(200);
+
+          // Verify audit was recorded
+          const records = audit.listAuditRecords();
+          expect(records.length).toBeGreaterThanOrEqual(1);
+          const last = records[records.length - 1];
+          expect(last.outcome).toBe("direct-call");
+        } finally {
+          await gateway.close();
+          audit.close();
           providerProfiles.close();
         }
       });

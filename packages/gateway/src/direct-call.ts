@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 import type { StoredProviderProfile } from "@agentsoul/provider";
 import { translateGatewayRoute, type GatewayClientRequest } from "./providers";
+import type { GatewayAuditRepository } from "./audit/repository";
 
 /**
  * Direct-call mode: Gateway receives a request, translates it via provider adapters,
@@ -11,6 +13,7 @@ import { translateGatewayRoute, type GatewayClientRequest } from "./providers";
 
 export interface DirectCallOptions {
   providerProfiles: { getActiveProviderProfile(): StoredProviderProfile | null };
+  audit?: GatewayAuditRepository;
 }
 
 export async function handleDirectCall(
@@ -19,6 +22,7 @@ export async function handleDirectCall(
   protocol: "openai-chat" | "claude-messages" | "codex-responses",
   options: DirectCallOptions,
 ): Promise<void> {
+  const startedAt = Date.now();
   const body = (await readJsonBody(request)) as Record<string, unknown>;
   const active = options.providerProfiles.getActiveProviderProfile();
 
@@ -52,9 +56,47 @@ export async function handleDirectCall(
     });
 
     const llmBody = await llmResponse.json();
+
+    // Record audit
+    options.audit?.recordAudit({
+      trafficMetadata: {
+        gatewayEventId: randomUUID(),
+        clientProtocol: protocol,
+        providerProtocol: active.providerProtocol,
+        providerProfileId: String(active.id),
+        model: active.targetModel,
+        route: `${protocol} -> ${active.providerProtocol}`,
+        inputTokens: clientRequest.tokenUsage?.inputTokens ?? 0,
+        outputTokens: clientRequest.tokenUsage?.outputTokens ?? 0,
+        latencyMs: Math.max(0, Date.now() - startedAt),
+        outcome: "direct-call",
+      },
+      estimatedCost: 0,
+      outcome: "direct-call",
+    });
+
     sendJson(response, llmResponse.status, llmBody);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
+
+    // Record failed audit
+    options.audit?.recordAudit({
+      trafficMetadata: {
+        gatewayEventId: randomUUID(),
+        clientProtocol: protocol,
+        providerProtocol: active.providerProtocol,
+        providerProfileId: String(active.id),
+        model: active.targetModel,
+        route: `${protocol} -> ${active.providerProtocol}`,
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: Math.max(0, Date.now() - startedAt),
+        outcome: "provider-call-failed",
+      },
+      estimatedCost: 0,
+      outcome: "provider-call-failed",
+    });
+
     sendJson(response, 502, { error: "provider-call-failed", message });
   }
 }
