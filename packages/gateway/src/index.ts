@@ -158,15 +158,15 @@ function routeHttp(
   // ─── Direct-call endpoints (Gateway actually calls the LLM) ───
 
   if (request.method === "POST" && url === "/v1/direct/chat/completions") {
-    void handleDirectCall(request, response, "openai-chat");
+    void handleDirectCall(request, response, "openai-chat", { providerProfiles: options.providerProfiles });
     return;
   }
   if (request.method === "POST" && url === "/v1/direct/messages") {
-    void handleDirectCall(request, response, "claude-messages");
+    void handleDirectCall(request, response, "claude-messages", { providerProfiles: options.providerProfiles });
     return;
   }
   if (request.method === "POST" && url === "/v1/direct/responses") {
-    void handleDirectCall(request, response, "codex-responses");
+    void handleDirectCall(request, response, "codex-responses", { providerProfiles: options.providerProfiles });
     return;
   }
 
