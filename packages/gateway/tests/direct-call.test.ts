@@ -74,6 +74,55 @@ describe("Direct call endpoints", () => {
       }
     });
   });
+
+  it("returns 401 without proxyAccessKey when key is configured", async () => {
+    await withGateway(async (dbPath) => {
+      const providerProfiles = createProviderProfileService({ dbPath });
+      const gateway = await startLocalGateway({ providerProfiles, proxyAccessKey: "secret-key", port: 0 });
+
+      try {
+        const response = await fetch(gateway.url("/v1/direct/chat/completions"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model: "gpt-4",
+            messages: [{ role: "user", content: "hello" }],
+          }),
+        });
+
+        expect(response.status).toBe(401);
+      } finally {
+        await gateway.close();
+        providerProfiles.close();
+      }
+    });
+  });
+
+  it("returns 200 with valid proxyAccessKey", async () => {
+    await withGateway(async (dbPath) => {
+      const providerProfiles = createProviderProfileService({ dbPath });
+      const gateway = await startLocalGateway({ providerProfiles, proxyAccessKey: "secret-key", port: 0 });
+
+      try {
+        const response = await fetch(gateway.url("/v1/direct/chat/completions"), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": "secret-key",
+          },
+          body: JSON.stringify({
+            model: "gpt-4",
+            messages: [{ role: "user", content: "hello" }],
+          }),
+        });
+
+        expect(response.status).toBe(200);
+      } finally {
+        await gateway.close();
+        providerProfiles.close();
+      }
+    });
+  });
 });
 
 // ─── Test helpers ───
