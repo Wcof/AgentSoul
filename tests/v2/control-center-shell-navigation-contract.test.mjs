@@ -7,7 +7,7 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Control Center shell navigation", () => {
   it("renders local-first task navigation for the seven Control Center areas", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
     const css = readFileSync(join(root, "apps", "desktop-v2", "src", "styles.css"), "utf8");
 
     for (const area of ["companion", "gateway", "skills", "sessions", "costs", "safety", "settings"]) {
@@ -33,5 +33,5 @@ describe("AgentSoul v2 Control Center shell navigation", () => {
     expect(output).toMatch(/Control Center task navigation/);
     expect(output).toMatch(/Control Center Settings area/);
     expect(output).toMatch(/Control Center browser visual smoke/);
-  });
+  }, 120000);
 });

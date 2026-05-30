@@ -1,7 +1,6 @@
-// i18n 初始化 — 基于 i18next 的中英双语支持
+// i18n 初始化 — 基于 i18next 的中英双语支持（纯 vanilla，不依赖 React）
 // 系统 UI 文案走 i18n，人格对话走 persona config (ADR-0007)
 import i18n from "i18next";
-import { initReactI18next } from "react-i18next";
 import en from "./en.json";
 import zh from "./zh.json";
 
@@ -14,7 +13,7 @@ export const resources = {
 
 export type Locale = keyof typeof resources;
 
-i18n.use(initReactI18next).init({
+i18n.init({
   resources,
   lng: defaultLocale,
   fallbackLng: "en",

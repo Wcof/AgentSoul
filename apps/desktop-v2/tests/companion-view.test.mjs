@@ -89,37 +89,54 @@ describe("Control Center Companion area", () => {
 });
 
 describe("Control Center task navigation", () => {
-  it("renders seven task navigation targets and local-first shell copy", () => {
+  it("renders seven task navigation targets and data attributes for all areas", () => {
     const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
 
     expect(renderersSource).toMatch(/Control Center task navigation/);
-    expect(renderersSource).toMatch(/cloud login not required/i);
+    expect(renderersSource).toMatch(/data-nav-target/);
     for (const area of ["companion", "gateway", "skills", "sessions", "costs", "safety", "settings"]) {
-      expect(renderersSource).toMatch(new RegExp(`data-nav-target="${area}"`));
       expect(renderersSource).toMatch(new RegExp(`data-control-area="${area}"`));
     }
   });
 });
 
-describe("Control Center Gateway and Costs areas", () => {
-  it("renders Gateway Route health, active provider, adapter support, fallback status, and cost summaries", () => {
+describe("Control Center Gateway area", () => {
+  it("renders channel orchestration with channel cards, add/edit/delete controls, and route health", () => {
     const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
 
     expect(renderersSource).toMatch(/Control Center Gateway Area/);
-    expect(renderersSource).toMatch(/Control Center Costs Area/);
     expect(renderersSource).toMatch(/renderControlCenterGatewayArea/);
-    expect(renderersSource).toMatch(/renderControlCenterCostsArea/);
+    expect(renderersSource).toMatch(/channel-orchestration/);
+    expect(renderersSource).toMatch(/channel-card/);
+    expect(renderersSource).toMatch(/data-channel-action/);
+    expect(renderersSource).toMatch(/data-channel-edit/);
+    expect(renderersSource).toMatch(/data-channel-delete/);
+    expect(renderersSource).toMatch(/data-channel-ping/);
+    expect(renderersSource).toMatch(/data-control-area="gateway"/);
+    expect(renderersSource).toMatch(/Failover Sequence/);
+    expect(renderersSource).toMatch(/Route Health/);
     expect(renderersSource).toMatch(/Active Provider Profile/);
     expect(renderersSource).toMatch(/Gateway Route Health/);
     expect(renderersSource).toMatch(/Provider Adapter Support/);
-    expect(renderersSource).toMatch(/Direct Client Config fallback/);
-    expect(renderersSource).toMatch(/Estimated Cost/);
-    expect(renderersSource).toMatch(/Provider Usage/);
-    expect(renderersSource).toMatch(/Token Usage/);
+    expect(renderersSource).toMatch(/Target Model/);
     expect(renderersSource).toMatch(/Latency/);
-    expect(renderersSource).toMatch(/Model Mix/);
+    expect(renderersSource).toMatch(/Provider Usage/);
+  });
+});
+
+describe("Control Center Costs area", () => {
+  it("renders cost breakdown with per-channel data and dashboard stats", () => {
+    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+
+    expect(renderersSource).toMatch(/Control Center Costs Area/);
+    expect(renderersSource).toMatch(/renderControlCenterCostsArea/);
+    expect(renderersSource).toMatch(/cost-breakdown/);
+    expect(renderersSource).toMatch(/cost-table/);
+    expect(renderersSource).toMatch(/Per-Channel Costs/);
+    expect(renderersSource).toMatch(/Estimated Cost/);
+    expect(renderersSource).toMatch(/Token Usage/);
     expect(renderersSource).toMatch(/Provider Mix/);
-    expect(renderersSource).toMatch(/data-control-area="gateway"/);
+    expect(renderersSource).toMatch(/Model Mix/);
     expect(renderersSource).toMatch(/data-control-area="costs"/);
   });
 });
@@ -130,14 +147,15 @@ describe("Control Center Skills area", () => {
 
     expect(renderersSource).toMatch(/Control Center Skills Area/);
     expect(renderersSource).toMatch(/renderControlCenterSkillsArea/);
+    expect(renderersSource).toMatch(/installedSkillPacks/);
     expect(renderersSource).toMatch(/Skill Installation/);
+    expect(renderersSource).toMatch(/Managed Rule File/);
+    expect(renderersSource).toMatch(/Safety Policy/);
     expect(renderersSource).toMatch(/Project Skill Activation/);
     expect(renderersSource).toMatch(/Workspace Rule Deployment/);
-    expect(renderersSource).toMatch(/Managed Rule File/);
-    expect(renderersSource).toMatch(/deploy-workspace-rules/);
-    expect(renderersSource).toMatch(/Safety Policy/);
     expect(renderersSource).toMatch(/data-control-area="skills"/);
     expect(renderersSource).toMatch(/data-skill-activation/);
+    expect(renderersSource).toMatch(/data-safety-action/);
   });
 });
 
@@ -149,10 +167,10 @@ describe("Control Center Sessions area", () => {
     expect(renderersSource).toMatch(/renderControlCenterSessionsArea/);
     expect(renderersSource).toMatch(/Work Session search/);
     expect(renderersSource).toMatch(/Session Source/);
-    expect(renderersSource).toMatch(/Search Index/);
     expect(renderersSource).toMatch(/Session Resume Command/);
+    expect(renderersSource).toMatch(/resumable/);
+    expect(renderersSource).toMatch(/Search Index/);
     expect(renderersSource).toMatch(/Session Launcher/);
-    expect(renderersSource).toMatch(/safety-gated/);
     expect(renderersSource).toMatch(/data-control-area="sessions"/);
     expect(renderersSource).toMatch(/data-session-search/);
     expect(renderersSource).toMatch(/data-session-launch/);
@@ -161,34 +179,34 @@ describe("Control Center Sessions area", () => {
 });
 
 describe("Control Center Safety area", () => {
-  it("renders Approval Requests, Risk Notices, Scoped Trust Grants, Action Risk Classes, Client Authorization Mode, and revoke controls", () => {
+  it("renders Approval Requests, Risk Notices, Scoped Trust Grants, Action Risk Classes, and revoke controls", () => {
     const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
 
     expect(renderersSource).toMatch(/Control Center Safety Area/);
     expect(renderersSource).toMatch(/renderControlCenterSafetyArea/);
     expect(renderersSource).toMatch(/Approval Requests/);
-    expect(renderersSource).toMatch(/Approval Required/);
     expect(renderersSource).toMatch(/Risk Notices/);
-    expect(renderersSource).toMatch(/Scoped Trust Grants/);
+    expect(renderersSource).toMatch(/Trust Grants/);
     expect(renderersSource).toMatch(/Action Risk Classes/);
-    expect(renderersSource).toMatch(/Client Authorization Mode/);
+    expect(renderersSource).toMatch(/Client Auth/);
     expect(renderersSource).toMatch(/data-control-area="safety"/);
     expect(renderersSource).toMatch(/data-trust-revoke/);
-    expect(renderersSource).toMatch(/revokedAt/);
+    expect(renderersSource).toMatch(/data-approval-action/);
   });
 });
 
 describe("Control Center Settings area", () => {
-  it("renders Local-first, export, cloud login, and remote sync settings", () => {
+  it("renders persona templates, locale switching, and growth profile settings", () => {
     const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
 
     expect(renderersSource).toMatch(/Control Center Settings Area/);
     expect(renderersSource).toMatch(/renderControlCenterSettingsArea/);
+    expect(renderersSource).toMatch(/Persona Configuration/);
+    expect(renderersSource).toMatch(/persona-grid/);
+    expect(renderersSource).toMatch(/persona-card/);
+    expect(renderersSource).toMatch(/data-persona-select/);
+    expect(renderersSource).toMatch(/data-locale/);
     expect(renderersSource).toMatch(/Local-first/);
-    expect(renderersSource).toMatch(/cloud login not required/i);
-    expect(renderersSource).toMatch(/User-managed Export/);
-    expect(renderersSource).toMatch(/Sensitive Export/);
-    expect(renderersSource).toMatch(/Remote Sync/);
     expect(renderersSource).toMatch(/Growth Profile/);
     expect(renderersSource).toMatch(/XP multiplier/);
     expect(renderersSource).toMatch(/Fatigue threshold/);

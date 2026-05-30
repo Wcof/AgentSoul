@@ -343,7 +343,10 @@ function upsertWorkSession(
 function listWorkSessions(repo: SessionRepository): ScannedWorkSession[] {
   const rows = repo.listWorkSessions() as WorkSessionRow[];
 
-  return rows.map((row) => {
+  return rows
+    .slice()
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((row) => {
     const sessionJson = parseSessionJson(row.session_json);
 
     return {
@@ -359,7 +362,7 @@ function listWorkSessions(repo: SessionRepository): ScannedWorkSession[] {
       sourcePath: sessionJson.sourcePath,
       resumeCommand: row.resumable === 1 ? sessionJson.resumeCommand : undefined,
     };
-  });
+    });
 }
 
 function searchWorkSessions(

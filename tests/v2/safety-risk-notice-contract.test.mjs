@@ -8,7 +8,7 @@ const root = process.cwd();
 describe("AgentSoul v2 Risk Notice flow", () => {
   it("exposes Risk Notice as readable non-blocking state, separate from Approval Required", () => {
     const safetySource = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
-    const desktopSource = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const desktopSource = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(safetySource).toMatch(/createRiskNoticeFlow/);
     expect(safetySource).toMatch(/blocking: false/);

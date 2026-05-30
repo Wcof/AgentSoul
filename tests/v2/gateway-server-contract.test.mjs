@@ -23,7 +23,8 @@ describe("AgentSoul v2 Gateway server shell", () => {
     const source = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
     expect(source).toMatch(/startLocalGateway/);
     expect(source).toMatch(/getActiveProviderProfile/);
-    expect(source).not.toMatch(/hardcodedCredential|sk-|apiKey/i);
+    expect(source).not.toMatch(/hardcodedCredential|sk-[a-zA-Z0-9]{20,}|api[_-]?key[_-]?=.*["'][a-zA-Z0-9]{20,}/i);
+    // Field names like apiKeys are allowed; only hardcoded credential values are forbidden
   });
 
   it("verifies startup, health, and no-profile behavior", () => {

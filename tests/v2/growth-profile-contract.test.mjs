@@ -19,7 +19,7 @@ describe("AgentSoul v2 Growth Profile", () => {
   });
 
   it("surfaces Growth Profile parameters in the Control Center Settings Area", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(source).toMatch(/Growth Profile/);
     expect(source).toMatch(/XP multiplier/);

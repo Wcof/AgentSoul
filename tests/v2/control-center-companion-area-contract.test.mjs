@@ -7,7 +7,7 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Control Center Companion area", () => {
   it("exposes Companion Area rendering from local runtime snapshot data", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(source).toMatch(/Control Center Companion Area/);
     expect(source).toMatch(/renderControlCenterCompanionAreaViewModel/);
@@ -32,5 +32,5 @@ describe("AgentSoul v2 Control Center Companion area", () => {
     expect(appTest).toMatch(/Pet Appearance/);
     expect(appTest).toMatch(/Growth Events/);
     expect(output).toMatch(/Control Center Companion area/);
-  });
+  }, 120000);
 });

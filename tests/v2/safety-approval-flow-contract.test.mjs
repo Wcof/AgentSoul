@@ -8,7 +8,7 @@ const root = process.cwd();
 describe("AgentSoul v2 Approval Required flow", () => {
   it("exposes pending approval, explicit decision, timeout, and unavailable-denied boundaries", () => {
     const safetySource = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
-    const desktopSource = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const desktopSource = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(safetySource).toMatch(/createApprovalFlow/);
     expect(safetySource).toMatch(/getPendingApproval/);

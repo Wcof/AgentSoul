@@ -7,8 +7,41 @@
     "costs": "成本",
     "safety": "安全",
     "settings": "设置",
+    "settingsFull": "完整设置",
     "title": "控制中心任务导航",
-    "note": "本地优先配置界面；无需云端登录。"
+    "note": "本地优先配置界面；无需云端登录。",
+    "providers": "供应商",
+    "sessionsMgr": "会话管理",
+    "conversations": "会话驾驶舱",
+    "mcp": "MCP 服务",
+    "prompts": "提示词"
+  },
+  "cockpit": {
+    "searchPlaceholder": "搜索会话...",
+    "active": "活跃",
+    "override": "覆盖",
+    "empty": "暂无活跃会话",
+    "openConversation": "打开会话",
+    "filter": {
+      "all": "全部",
+      "messages": "消息",
+      "chat": "对话",
+      "images": "图像",
+      "responses": "响应",
+      "gemini": "Gemini"
+    },
+    "status": {
+      "online": "在线",
+      "degraded": "降级",
+      "offline": "离线"
+    },
+    "kind": {
+      "messages": "消息",
+      "chat": "对话",
+      "images": "图像",
+      "responses": "响应",
+      "gemini": "Gemini"
+    }
   },
   "companion": {
     "title": "伙伴区域",
@@ -26,7 +59,10 @@
       "interaction": "互动",
       "gateway": "网关",
       "work-session": "工作会话"
-    }
+    },
+    "displayName": "显示名称",
+    "kind": "外观类型",
+    "skin": "皮肤"
   },
   "gateway": {
     "title": "网关区域",
@@ -50,7 +86,26 @@
       "not-needed": "不需要",
       "available": "可用",
       "active": "活跃"
-    }
+    },
+    "channels": {
+      "total": "总渠道数",
+      "active": "活跃渠道"
+    },
+    "requests": {
+      "total": "总请求数"
+    },
+    "successRate": "成功率",
+    "latency": "延迟",
+    "tokens": "Token",
+    "channel": "渠道",
+    "edit": "编辑",
+    "ping": "测试",
+    "delete": "删除",
+    "consecutiveFailures": "连续失败",
+    "addChannel": "添加渠道",
+    "pingAll": "全部测试",
+    "failoverSequence": "故障转移顺序",
+    "noChannels": "暂无渠道"
   },
   "skills": {
     "title": "技能区域",
@@ -78,7 +133,9 @@
     "source": {
       "project": "项目",
       "global-default": "全局默认"
-    }
+    },
+    "activationToggled": "技能激活状态已切换",
+    "deployTriggered": "部署操作已触发"
   },
   "sessions": {
     "title": "会话区域",
@@ -96,7 +153,36 @@
     "searchDesc": "根据会话来源元数据和凭证进行搜索检索。",
     "safetyPolicyNote": "在终端执行前使用安全策略。",
     "launcherNote": "会话启动器操作使用",
-    "launcherNoteSuffix": "且仅适用于可恢复的工作会话。"
+    "launcherNoteSuffix": "且仅适用于可恢复的工作会话。",
+    "mgrTitle": "会话管理",
+    "mgrSubtitle": "浏览与恢复本地会话",
+    "searchPlaceholder": "搜索会话...",
+    "messages": "条消息",
+    "notResumable": "不可恢复",
+    "resumed": "会话已恢复",
+    "resumeFailed": "恢复失败",
+    "notAvailable": "本地模式下暂不支持会话恢复",
+    "resuming": "正在恢复会话...",
+    "deleted": "会话已删除",
+    "confirmDelete": "确定要删除此会话吗？",
+    "confirmLaunch": "确认启动",
+    "confirmLaunchMessage": "确定要恢复此会话吗？",
+    "searchResult": "搜索结果",
+    "noSessions": "暂无会话",
+    "resumeReason": {
+      "notFound": "会话不存在",
+      "notResumable": "会话不可恢复",
+      "noCommand": "缺少恢复命令",
+      "timeout": "恢复命令执行超时",
+      "commandMissing": "本机缺少恢复命令所需 CLI",
+      "execFailed": "恢复命令执行失败"
+    },
+    "resumeHint": {
+      "refresh": "请刷新会话列表后重试",
+      "reScan": "请重新扫描会话来源并更新恢复命令模板",
+      "retry": "请稍后重试",
+      "installCli": "请先安装并验证对应 CLI 可用"
+    }
   },
   "costs": {
     "title": "成本区域",
@@ -112,7 +198,9 @@
     "total": "总计",
     "input": "输入",
     "output": "输出",
-    "average": "平均"
+    "average": "平均",
+    "breakdown": "成本明细",
+    "perChannel": "各渠道成本"
   },
   "safety": {
     "title": "安全区域",
@@ -136,7 +224,14 @@
     "action": {
       "revokedAt": "已撤销于",
       "expires": "过期时间"
-    }
+    },
+    "notAvailable": "本地模式下暂不支持安全管理",
+    "approved": "审批已同意",
+    "confirmRevoke": "确认撤销",
+    "confirmRevokeMessage": "确定要撤销此信任授权吗？",
+    "denied": "审批已拒绝",
+    "grantRevoked": "信任授权已撤销",
+    "updateFailed": "安全审批更新失败"
   },
   "settings": {
     "title": "设置区域",
@@ -168,7 +263,70 @@
     "remoteSyncStatus": {
       "out-of-core-scope": "非核心范围",
       "disabled": "已禁用"
-    }
+    },
+    "fullTitle": "设置",
+    "fullSubtitle": "应用配置",
+    "tabGeneral": "通用",
+    "tabAppearance": "外观",
+    "tabTerminal": "终端",
+    "tabProxy": "代理",
+    "tabFailover": "故障转移",
+    "tabPrivacy": "隐私",
+    "tabBackup": "备份",
+    "general": "通用设置",
+    "startupBehavior": "启动行为",
+    "restoreLast": "恢复上次会话",
+    "freshStart": "全新启动",
+    "minimized": "最小化启动",
+    "closeBehavior": "关闭行为",
+    "closeWindow": "关闭窗口",
+    "minimizeToTray": "最小化到托盘",
+    "quitApp": "退出应用",
+    "checkUpdates": "检查更新",
+    "theme": "主题",
+    "dark": "深色",
+    "light": "浅色",
+    "system": "跟随系统",
+    "fontSize": "字体大小",
+    "accentColor": "强调色",
+    "glassOpacity": "玻璃透明度",
+    "terminal": "终端设置",
+    "defaultTerminal": "默认终端",
+    "systemDefault": "系统默认",
+    "shellPath": "Shell 路径",
+    "terminalFontSize": "终端字体大小",
+    "proxy": "代理设置",
+    "enableProxy": "启用代理",
+    "proxyUrl": "代理地址",
+    "proxyHint": "支持 HTTP/HTTPS/SOCKS5",
+    "gatewayAccessKey": "网关访问密钥",
+    "gatewayAccessKeyPlaceholder": "可选：网关/控制面 API 的 Bearer 令牌",
+    "gatewayAccessKeyHint": "用于本地网关 API 的 Authorization Bearer 鉴权",
+    "failover": "故障转移设置",
+    "autoFailover": "自动故障转移",
+    "failoverThreshold": "失败阈值",
+    "failoverThresholdHint": "连续失败多少次后切换供应商",
+    "circuitBreakerTimeout": "断路器超时 (秒)",
+    "privacy": "隐私设置",
+    "telemetry": "启用遥测",
+    "crashReporting": "崩溃报告",
+    "sessionRetention": "会话保留天数",
+    "backup": "备份与恢复",
+    "autoBackup": "自动备份",
+    "backupInterval": "备份间隔 (小时)",
+    "lastBackup": "上次备份",
+    "exportConfig": "导出配置",
+    "importConfig": "导入配置",
+    "createBackup": "创建备份",
+    "saved": "设置已保存",
+    "saveFailed": "设置保存失败",
+    "exported": "配置已复制到剪贴板",
+    "import": "导入",
+    "imported": "配置已导入",
+    "importFailed": "导入失败",
+    "pasteConfig": "粘贴配置 JSON",
+    "personaApplied": "人格模板已应用",
+    "language": "语言"
   },
   "common": {
     "save": "保存",
@@ -179,6 +337,8 @@
     "loading": "加载中...",
     "feed": "喂食",
     "play": "玩耍",
+    "refreshRuntime": "刷新运行时",
+    "openControlCenter": "打开控制中心",
     "pet": "抚摸",
     "sleep": "睡觉",
     "controlCenter": "控制中心",
@@ -188,7 +348,12 @@
     "enabled": "已启用",
     "disabled": "已禁用",
     "yes": "是",
-    "no": "否"
+    "no": "否",
+    "delete": "删除",
+    "on": "开启",
+    "off": "关闭",
+    "add": "添加",
+    "more": "更多"
   },
   "mood": {
     "neutral": "中性",
@@ -203,5 +368,280 @@
     "default": "默认",
     "tabby": "斑纹",
     "black": "黑色"
+  },
+  "addChannel": {
+    "editTitle": "编辑渠道",
+    "createTitle": "添加新渠道",
+    "editSubtitle": "修改渠道配置信息",
+    "quickSubtitle": "快速批量添加 API 密钥",
+    "fullSubtitle": "配置 API 渠道信息和密钥",
+    "detailedMode": "详细配置",
+    "quickMode": "快速添加",
+    "quickInputLabel": "输入内容",
+    "quickInputPlaceholder": "每行输入一个 API Key 或 Base URL\n\n示例:\nsk-xxx-your-api-key\nsk-yyy-another-key\nhttps://api.example.com/v1",
+    "baseUrl": "Base URL",
+    "enterValidUrl": "请输入有效的 URL (https://...)",
+    "apiKeys": "API 密钥",
+    "detectedKeys": "已检测到 {count} 个密钥",
+    "enterApiKey": "请至少输入一个 API Key",
+    "channelName": "渠道名称",
+    "channelType": "渠道类型",
+    "nameLabel": "渠道名称 *",
+    "namePlaceholder": "例如：GPT-4 渠道",
+    "serviceTypeLabel": "服务类型 *",
+    "baseUrlLabel": "基础 URL *",
+    "baseUrlPlaceholder": "https://api.openai.com/v1",
+    "descriptionLabel": "描述 (可选)",
+    "descriptionHint": "可选的渠道描述...",
+    "apiKeyRequired": "至少需要一个密钥",
+    "apiKeyLoadBalance": "可添加多个密钥用于负载均衡",
+    "addNewApiKey": "添加新的 API 密钥",
+    "addNewApiKeyPlaceholder": "输入完整的 API 密钥",
+    "deleteKey": "删除",
+    "createChannel": "创建渠道",
+    "updateChannel": "更新渠道",
+    "fieldRequired": "此字段为必填项",
+    "invalidUrl": "请输入有效的 URL",
+    "advancedOptions": "高级选项",
+    "priorityLabel": "优先级",
+    "priorityHint": "数字越小优先级越高",
+    "proxyUrlLabel": "代理 URL (可选)",
+    "proxyUrlPlaceholder": "http://127.0.0.1:7890",
+    "customHeadersLabel": "自定义请求头",
+    "supportedModelsLabel": "支持的模型 (可选)",
+    "supportedModelsPlaceholder": "gpt-4*, *image*, !*image*",
+    "supportedModelsHint": "留空表示支持所有模型"
+  },
+  "app": {
+    "actions": {
+      "cancel": "取消",
+      "add": "添加",
+      "confirm": "确认",
+      "delete": "删除",
+      "launch": "启动",
+      "revoke": "撤销"
+    },
+    "dialog": {
+      "confirmTitle": "请确认"
+    }
+  },
+  "store": {
+    "channel": {
+      "added": "渠道添加成功",
+      "updated": "渠道更新成功",
+      "deleted": "渠道删除成功",
+      "pinging": "正在测试中",
+      "created": "渠道创建成功",
+      "createFailed": "渠道创建失败",
+      "updateFailed": "渠道更新失败",
+      "deleteFailed": "渠道删除失败",
+      "pingComplete": "批量测试完成",
+      "pingNotAvailable": "当前模式下暂不可测试连通性"
+    }
+  },
+  "toast": {
+    "confirmDeleteChannel": "确定要删除这个渠道吗？"
+  },
+  "providers": {
+    "title": "供应商管理",
+    "subtitle": "API 供应商健康与故障转移",
+    "latency": "延迟",
+    "uptime": "可用率",
+    "cost": "本月成本"
+  },
+  "mcp": {
+    "title": "MCP 服务",
+    "subtitle": "模型上下文协议服务",
+    "tools": "工具",
+    "start": "启动",
+    "stop": "停止",
+    "notAvailable": "本地模式下暂不支持 MCP 管理",
+    "statusToggled": "MCP 服务状态已切换",
+    "serverAdded": "MCP 服务已添加",
+    "serverDeleted": "MCP 服务已删除",
+    "fillRequired": "请填写必填字段",
+    "addServer": "添加 MCP 服务",
+    "serverName": "服务名称",
+    "command": "命令",
+    "args": "参数",
+    "confirmDelete": "确定要删除此 MCP 服务吗？",
+    "delete": "删除",
+    "noServers": "暂无 MCP 服务"
+  },
+  "prompt": {
+    "notAvailable": "本地模式下暂不支持提示词管理",
+    "addPrompt": "添加提示词模板",
+    "name": "名称",
+    "nameZh": "中文名称",
+    "content": "内容",
+    "category": "分类",
+    "tags": "标签",
+    "fillRequired": "请填写名称和内容",
+    "added": "提示词模板已添加",
+    "deleted": "提示词模板已删除",
+    "confirmDelete": "确定要删除此提示词模板吗？",
+    "favToggled": "收藏状态已更新",
+    "noPrompts": "暂无提示词模板"
+  },
+  "backup": {
+    "notAvailable": "本地模式下暂不支持备份操作",
+    "title": "备份",
+    "create": "创建备份",
+    "createBackup": "创建备份",
+    "name": "备份名称",
+    "description": "描述",
+    "created": "备份已创建",
+    "deleted": "备份已删除",
+    "restore": "恢复",
+    "restored": "备份已恢复",
+    "restoreFailed": "恢复失败",
+    "confirmRestore": "确认恢复",
+    "confirmRestoreMessage": "将覆盖当前设置，是否继续？",
+    "confirmDelete": "确认删除",
+    "confirmDeleteMessage": "该备份将永久删除，是否继续？",
+    "autoBackup": "自动备份",
+    "autoBackupToggled": "自动备份",
+    "interval": "间隔",
+    "maxBackups": "最大备份数",
+    "storagePath": "存储路径",
+    "empty": "暂无备份",
+    "auto": "自动",
+    "useBackupSection": "请使用备份管理区域创建备份",
+    "delete": "删除"
+  },
+  "remote": {
+    "notAvailable": "本地模式暂不支持远程同步，请使用本地备份。"
+  },
+  "prompts": {
+    "title": "提示词模板",
+    "subtitle": "可复用提示词库"
+  },
+  "channelLogs": {
+    "title": "渠道日志",
+    "autoRefresh": "自动刷新",
+    "empty": "暂无日志",
+    "retry": "重试",
+    "sourceCapabilityTest": "能力测试",
+    "duration": {
+      "connect": "连接",
+      "firstByte": "首字节",
+      "total": "总计"
+    }
+  },
+  "capability": {
+    "title": "能力测试",
+    "progressSummary": "模型已完成",
+    "success": "成功",
+    "failed": "失败",
+    "supported": "支持",
+    "unsupported": "不支持",
+    "testedAt": "测试时间",
+    "table": {
+      "protocol": "协议",
+      "status": "状态",
+      "latency": "延迟",
+      "streaming": "流式"
+    }
+  },
+  "chart": {
+    "traffic": "流量",
+    "tokens": "Token",
+    "successRate": "成功率",
+    "requestUnit": "请求",
+    "modelStats": "热门模型",
+    "durationChanged": "时间范围已切换",
+    "viewChanged": "图表视图已切换",
+    "refreshing": "正在刷新图表数据...",
+    "refreshFailed": "图表刷新失败",
+    "refresh": "刷新",
+    "requests": "请求数",
+    "totalRequests": "总请求数",
+    "inputTokens": "输入 Token",
+    "outputTokens": "输出 Token",
+    "cacheRw": "缓存读写",
+    "model": "模型",
+    "avgLatency": "平均延迟",
+    "noData": "当前时间范围无数据",
+    "noModelData": "当前时间范围无模型数据"
+  },
+  "webdav": {
+    "title": "WebDAV 同步",
+    "notConfigured": "WebDAV 未配置",
+    "serverUrl": "服务地址",
+    "username": "用户名",
+    "remotePath": "远程路径",
+    "configure": "保存配置",
+    "autoSync": "自动同步",
+    "syncInterval": "同步间隔",
+    "minutes": "分钟",
+    "lastSync": "上次同步",
+    "syncError": "同步异常",
+    "syncing": "同步中...",
+    "syncNow": "立即同步",
+    "reset": "重置配置",
+    "status": {
+      "idle": "空闲",
+      "syncing": "同步中",
+      "error": "异常",
+      "success": "成功"
+    },
+    "fillRequired": "请填写 WebDAV 必填项",
+    "configured": "WebDAV 配置已保存",
+    "syncSuccess": "同步完成",
+    "resetDone": "WebDAV 配置已重置"
+  },
+  "deeplink": {
+    "title": "导入配置",
+    "subtitle": "深链导入",
+    "openDialog": "打开导入面板",
+    "placeholder": "粘贴配置链接（每行一个）...",
+    "parse": "解析",
+    "import": "全部导入",
+    "importing": "导入中...",
+    "parsed": "链接解析完成",
+    "noLinks": "没有可导入的链接",
+    "importSuccess": "导入完成",
+    "imported": "已导入"
+  },
+  "usage": {
+    "refreshing": "正在刷新用量...",
+    "refreshed": "用量已刷新",
+    "refreshFailed": "用量刷新失败",
+    "current": "当前",
+    "fetchFailed": "用量获取失败",
+    "lastQueried": "最近查询",
+    "refresh": "刷新",
+    "resets": "重置时间"
+  },
+  "appSwitcher": {
+    "switched": "已切换应用"
+  },
+  "update": {
+    "title": "发现新版本",
+    "current": "当前版本",
+    "latest": "最新版本",
+    "releaseNotes": "更新说明",
+    "publishedAt": "发布时间",
+    "mandatory": "强制更新",
+    "later": "稍后",
+    "download": "下载更新",
+    "ok": "知道了"
+  },
+  "orchestration": {
+    "copied": "已复制",
+    "moveTop": "置顶",
+    "moveBottom": "置底",
+    "pause": "暂停",
+    "resume": "恢复"
+  },
+  "apps": {
+    "claude": "Claude",
+    "claudeDesktop": "Claude 桌面版",
+    "codex": "Codex",
+    "gemini": "Gemini",
+    "opencode": "OpenCode",
+    "openclaw": "OpenClaw",
+    "hermes": "Hermes",
+    "agentsoul": "AgentSoul"
   }
 }

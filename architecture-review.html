@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — AgentSoul v2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      
+      <header class="border-b border-stone-200 pb-8">
+        <h1 class="text-4xl font-serif font-semibold text-slate-900">Architecture Review: AgentSoul v2</h1>
+        <p class="text-stone-500 mt-2">Date: May 30, 2026</p>
+        
+        <div class="mt-6 flex flex-wrap gap-4 text-xs font-mono">
+          <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-stone-200">
+            <span class="inline-block w-3 h-3 bg-slate-900 border border-slate-700 rounded"></span>
+            <span>Solid Box = Module</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-stone-200">
+            <span class="inline-block w-3 h-3 border border-slate-400 border-dashed rounded"></span>
+            <span>Dashed Line = Seam</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-stone-200">
+            <span class="inline-block w-3 h-3 bg-red-100 border border-red-500 rounded"></span>
+            <span class="text-red-600">Red Arrow = Leakage</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-slate-900 text-white bg-slate-900">
+            <span class="inline-block w-3 h-3 bg-gradient-to-br from-slate-800 to-slate-950 rounded"></span>
+            <span>Dark Gradient = Deep Module</span>
+          </div>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-12">
+        
+        <!-- Candidate 1 -->
+        <article class="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden p-6 md:p-8 space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-serif font-bold text-slate-900">1. Decompose the Monolithic Front-End into Cohesive Area Modules</h2>
+              <p class="text-sm font-mono text-stone-500 mt-1">
+                apps/desktop-v2/src/renderers.ts &middot; apps/desktop-v2/src/controller.ts &middot; apps/desktop-v2/src/styles.css &middot; apps/desktop-v2/src/types.ts
+              </p>
+            </div>
+            <div class="flex gap-2 self-start md:self-center">
+              <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-full">Strong</span>
+              <span class="bg-slate-100 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-full font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 bg-stone-50 p-4 rounded-lg">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">Before: Monolithic Front-End</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[280px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    subgraph Monolithic CC App
+                      R[renderers.ts<br/>2,255 lines<br/>39 Render Functions]
+                      C[controller.ts<br/>2,027 lines<br/>22 Bind Functions]
+                      S[styles.css<br/>4,764 lines]
+                      T[types.ts<br/>879 lines]
+                    end
+                    C -->|Hydrate / Re-render| R
+                    C -->|Style application| S
+                    C -.leak.->|Local duplicates| T
+                    R -.leak.->|Local duplicates| T
+                    classDef leak stroke:#dc2626,stroke-width:2px;
+                    class T leak
+                </pre>
+              </div>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">After: Modular Area Structure</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[280px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    subgraph Main App
+                      M[main.ts<br/>Registry]
+                      AC[AreaContext<br/>Interface]
+                    end
+                    subgraph areas/companion/
+                      RC[render.ts]
+                      BC[bind.ts]
+                      SC[style.css]
+                    end
+                    subgraph areas/gateway/
+                      RG[render.ts]
+                      BG[bind.ts]
+                      SG[style.css]
+                    end
+                    M -->|Initializes| RC
+                    M -->|Initializes| RG
+                    BC -->|Satisfies| AC
+                    BG -->|Satisfies| AC
+                    areas/gateway/ -.->|Types| D[@agentsoul/domain]
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <p><strong class="text-red-600">Problem:</strong> Four monolithic flat files hold all desktop frontend responsibilities, resulting in low locality; adding a single UI tab requires modifying all four files, while domain package types are completely duplicated instead of imported.</p>
+            <p><strong class="text-emerald-700">Solution:</strong> Decompose files into self-contained feature subfolders under `src/areas/<area-name>/` (e.g. `companion`, `gateway`, `skills`), using a standardized `AreaContext` interface and direct type reuse from the domain package.</p>
+            <div>
+              <h4 class="text-sm font-semibold text-slate-900 mb-2">Wins:</h4>
+              <ul class="list-disc pl-5 space-y-1 text-sm text-stone-600">
+                <li>Locality: All code for one area resides in a single folder.</li>
+                <li>Leverage: A uniform initialization interface drives all areas dynamically.</li>
+                <li>Deletion test: Deleting a feature requires dropping only its directory.</li>
+                <li>Locality: Zero type duplication between front-end and packages.</li>
+              </ul>
+            </div>
+            <div class="bg-amber-50 border border-amber-200 rounded p-4 text-sm text-amber-800">
+              <strong>ADR Note:</strong> Aligns with ADR-0010 (Tab switching via CSS display toggle is preserved; DOM nodes remain mounted).
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 2 -->
+        <article class="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden p-6 md:p-8 space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-serif font-bold text-slate-900">2. Collapse Shallow Packages into Core and Memory Modules</h2>
+              <p class="text-sm font-mono text-stone-500 mt-1">
+                packages/runtime &middot; packages/config &middot; packages/health &middot; packages/pad-engine &middot; packages/security &middot; packages/entity &middot; packages/semantic &middot; packages/memory
+              </p>
+            </div>
+            <div class="flex gap-2 self-start md:self-center">
+              <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-full">Strong</span>
+              <span class="bg-slate-100 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-full font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 bg-stone-50 p-4 rounded-lg">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">Before: Fragmented Packages</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[280px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    subgraph Packages Workspace
+                      R[runtime] -->|Re-exports| CO[config]
+                      R -->|Re-exports| H[health]
+                      R -->|Re-exports| P[pad-engine]
+                      R -->|Re-exports| CP[companion]
+                      E[entity]
+                      S[semantic]
+                      M[memory]
+                    end
+                    classDef shallow fill:#fff,stroke:#cbd5e1,stroke-width:1px;
+                    class R,CO,H,P,E,S,M shallow
+                </pre>
+              </div>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">After: Deep Consolidated Modules</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[280px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    subgraph Core Package [core]
+                      C[config]
+                      HE[health]
+                      PA[pad-engine]
+                      SEC[security]
+                    end
+                    subgraph Memory Package [memory]
+                      ME[memory]
+                      EN[entity]
+                      SE[semantic]
+                    end
+                    classDef deep fill:#0f172a,stroke:#1e293b,stroke-width:2px,color:#fff;
+                    class CorePackage,MemoryPackage deep
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <p><strong class="text-red-600">Problem:</strong> 18 workspace packages introduce significant coordination overhead. 6 of these are shallow modules (&lt;150 lines) and `runtime` is a vestigial 28-line pass-through re-export shim.</p>
+            <p><strong class="text-emerald-700">Solution:</strong> Merge `runtime`, `config`, `health`, `pad-engine`, and `security` into a single deep `@agentsoul/core` package. Consolidate `memory`, `entity`, and `semantic` into `@agentsoul/memory`.</p>
+            <div>
+              <h4 class="text-sm font-semibold text-slate-900 mb-2">Wins:</h4>
+              <ul class="list-disc pl-5 space-y-1 text-sm text-stone-600">
+                <li>Deletion test: Remove vestigial runtime package entirely.</li>
+                <li>Locality: Keep related mathematical/utility domains grouped close together.</li>
+                <li>Locality: Reduce workspaces count from 18 to 12.</li>
+                <li>Leverage: Unified tests and simpler configuration surface.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 3 -->
+        <article class="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden p-6 md:p-8 space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-serif font-bold text-slate-900">3. Partition the God Gateway Module</h2>
+              <p class="text-sm font-mono text-stone-500 mt-1">
+                packages/gateway/src/index.ts
+              </p>
+            </div>
+            <div class="flex gap-2 self-start md:self-center">
+              <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-full">Strong</span>
+              <span class="bg-slate-100 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-full font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 bg-stone-50 p-4 rounded-lg">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">Before: Monolithic God Gateway</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[280px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    subgraph Monolithic Gateway
+                      G[gateway/index.ts<br/>2,488 lines]
+                    end
+                    G -.->|Creates SQL Schema| DB[(SQLite DB)]
+                    classDef leak stroke:#dc2626,stroke-width:2px;
+                    class G leak
+                </pre>
+              </div>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">After: Decoupled Gateway Packages</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[280px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    subgraph Gateway Server [gateway-server]
+                      S[Router & Providers]
+                    end
+                    subgraph Gateway Channels [gateway-channels]
+                      C[ChannelStore & Breaker]
+                    end
+                    subgraph Gateway Cost [gateway-cost]
+                      CO[CostTracker]
+                    end
+                    subgraph Gateway Audit [gateway-audit]
+                      A[AuditRepository]
+                    end
+                    S -->|Requires| C
+                    S -->|Requires| CO
+                    S -->|Requires| A
+                    C -.->|Uses schema initialized in| P[persistence]
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <p><strong class="text-red-600">Problem:</strong> The `gateway` package is a monolithic file (2,488 lines) handling routing, provider adaptation, channel storage, cost metrics, circuit breaker logic, security audits, backups, and MCP servers. It also violates database boundaries by initializing its own SQLite tables inline.</p>
+            <p><strong class="text-emerald-700">Solution:</strong> Separate the god module into four distinct packages: `@agentsoul/gateway-server` (handles routing & adapters), `@agentsoul/gateway-channels` (channel CRUD & circuit breaker), `@agentsoul/gateway-cost` (estimated costs), and `@agentsoul/gateway-audit` (traffic metadata auditing). Consolidate all database tables under `@agentsoul/persistence` schema control.</p>
+            <div>
+              <h4 class="text-sm font-semibold text-slate-900 mb-2">Wins:</h4>
+              <ul class="list-disc pl-5 space-y-1 text-sm text-stone-600">
+                <li>Locality: DB schema definitions are centralized back to persistence.</li>
+                <li>Locality: Domain logic (costing, failover policies) is isolated from the HTTP server routing shell.</li>
+                <li>Leverage: Reusable gateway channel libraries that can run independently in testing.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <!-- Candidate 4 -->
+        <article class="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden p-6 md:p-8 space-y-6">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-2xl font-serif font-bold text-slate-900">4. Unify the Duplicate Daily Memory Channels</h2>
+              <p class="text-sm font-mono text-stone-500 mt-1">
+                packages/mcp-adapter/src/index.ts &middot; packages/memory/src/index.ts
+              </p>
+            </div>
+            <div class="flex gap-2 self-start md:self-center">
+              <span class="bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-1 rounded-full">Worth exploring</span>
+              <span class="bg-slate-100 text-slate-800 text-xs font-semibold px-2.5 py-1 rounded-full font-mono">in-process</span>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 bg-stone-50 p-4 rounded-lg">
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">Before: Parallel Write Channels</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[200px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    MCP[mcp-adapter] -->|Writes to| T1[mcp_memory_records Table]
+                    MEM[memory] -->|Writes to| T2[memory_entries Table]
+                    classDef leak stroke:#dc2626,stroke-width:2px;
+                    class T1,T2 leak
+                </pre>
+              </div>
+            </div>
+            <div>
+              <h3 class="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2 text-center">After: Consolidated Memory Sink</h3>
+              <div class="bg-white rounded-lg border border-slate-200 p-4 h-[200px] flex items-center justify-center">
+                <pre class="mermaid">
+                  flowchart TD
+                    MCP[mcp-adapter] -->|MemoryStore Interface| MEM[memory]
+                    MEM -->|Writes to| T2[memory_entries Table]
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <p><strong class="text-red-600">Problem:</strong> Dual storage schemas exist for daily topic memory. `mcp-adapter` writes directly to `mcp_memory_records` using its own logic, completely bypassing `@agentsoul/memory`'s `memory_entries` system, creating invisible silos of duplicate data.</p>
+            <p><strong class="text-emerald-700">Solution:</strong> Eliminate `McpMemoryStore` and its SQLite table. Connect the MCP memory tools directly to the unified `MemoryStore` interface exposed by `@agentsoul/memory`.</p>
+            <div>
+              <h4 class="text-sm font-semibold text-slate-900 mb-2">Wins:</h4>
+              <ul class="list-disc pl-5 space-y-1 text-sm text-stone-600">
+                <li>Locality: Memory reads and writes funnel through a single module.</li>
+                <li>Locality: Unified database schema removes redundant tables.</li>
+                <li>Leverage: Simple protocol translation inside the MCP adapter.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+      </section>
+
+      <section id="top-recommendation" class="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-xl shadow-lg p-8 space-y-4">
+        <h2 class="text-3xl font-serif font-bold">Top Recommendation</h2>
+        <p class="text-slate-300">
+          We recommend executing <strong class="text-emerald-400">Candidate 1: Front-end Area Decomposition</strong> first. The monolithic 2000+ line UI files represent the largest cognitive friction for developers, and breaking them apart creates clean, independent feature directories immediately ready for further packaging and extension.
+        </p>
+      </section>
+
+    </main>
+  </body>
+</html>

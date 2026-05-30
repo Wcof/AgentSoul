@@ -1,18 +1,25 @@
-<!-- BEGIN AGENTSOUL STARTUP -->
-# AgentSoul Startup Rules (Codex)
+<!-- BEGIN AGENTSOUL V2 STARTUP -->
+# AgentSoul v2 Project Context
 
-Before answering any user request in this project, run this MCP startup sequence first:
+This is an AgentSoul v2 project — a local-first AI Agent Companion built with TypeScript + Tauri.
 
-1. `mcp__agentsoul__mcp_tool_index()`
-2. `mcp__agentsoul__get_persona_config()`
-3. `mcp__agentsoul__get_soul_state()`
-4. `mcp__agentsoul__get_base_rules(name="SKILL")`
-5. `mcp__agentsoul__get_base_rules(name="memory_base")`
-6. `mcp__agentsoul__get_mcp_usage_guide()`
-7. `mcp__agentsoul__list_memory_topics()`
+## Project Structure
 
-Then:
-- Respond with the loaded persona, tone, and safety rules.
-- Persist memory updates via MCP write tools (`write_memory_day`, `write_memory_topic`, `update_soul_state`).
-- Do not claim persistence if MCP write calls were not executed.
-<!-- END AGENTSOUL STARTUP -->
+- `apps/desktop-v2/` — Tauri desktop app (companion + control center)
+- `packages/` — npm workspace packages (domain, gateway, persistence, safety, etc.)
+- `tests/v2/` — cross-package contract tests
+- `docs/adr/` — architecture decision records
+
+## Key Commands
+
+- `npm run v2:dev` — start Vite dev server
+- `npm run v2:test` — run contract tests
+- `npm run v2:tauri dev` — run native Tauri desktop
+
+## Architecture Notes
+
+- CSS tab routing via `data-active-tab` attribute on `.shell` element
+- Tauri commands in `src-tauri/src/lib.rs` exposed via `invoke()`
+- Window auto-snap on drag near screen edges (30px threshold)
+- Bilingual i18n (zh/en) via i18next
+<!-- END AGENTSOUL V2 STARTUP -->

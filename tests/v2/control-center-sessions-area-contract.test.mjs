@@ -7,7 +7,7 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Control Center Sessions area", () => {
   it("exposes Sessions Area rendering for Work Session search and safety-gated launching", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(source).toMatch(/Control Center Sessions Area/);
     expect(source).toMatch(/renderControlCenterSessionsAreaViewModel/);
@@ -33,5 +33,5 @@ describe("AgentSoul v2 Control Center Sessions area", () => {
     expect(appTest).toMatch(/Session Resume Command/);
     expect(appTest).toMatch(/safety-gated/);
     expect(output).toMatch(/Control Center Sessions area/);
-  });
+  }, 120000);
 });

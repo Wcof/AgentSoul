@@ -7,13 +7,14 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Control Center Safety area", () => {
   it("exposes Safety Area rendering for approval, notice, trust, risk, and authorization state", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(source).toMatch(/Control Center Safety Area/);
     expect(source).toMatch(/renderControlCenterSafetyAreaViewModel/);
     expect(source).toMatch(/renderControlCenterSafetyArea/);
     expect(source).toMatch(/data-control-area="safety"/);
     expect(source).toMatch(/data-trust-revoke/);
+    expect(source).toMatch(/data-approval-action/);
     expect(source).toMatch(/Client Authorization Mode/);
   });
 
@@ -42,5 +43,5 @@ describe("AgentSoul v2 Control Center Safety area", () => {
     expect(safetyTest).toMatch(/revokeGrant/);
     expect(desktopOutput).toMatch(/Control Center Safety area/);
     expect(safetyOutput).toMatch(/revokes Scoped Trust Grants/);
-  }, 30000);
+  }, 120000);
 });

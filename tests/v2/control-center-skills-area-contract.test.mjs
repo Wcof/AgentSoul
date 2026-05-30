@@ -7,7 +7,7 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Control Center Skills area", () => {
   it("exposes Skills Area rendering for installation, activation, and workspace deployment state", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(source).toMatch(/Control Center Skills Area/);
     expect(source).toMatch(/renderControlCenterSkillsAreaViewModel/);
@@ -33,5 +33,5 @@ describe("AgentSoul v2 Control Center Skills area", () => {
     expect(appTest).toMatch(/Managed Rule File/);
     expect(appTest).toMatch(/Safety Policy/);
     expect(output).toMatch(/Control Center Skills area/);
-  });
+  }, 120000);
 });

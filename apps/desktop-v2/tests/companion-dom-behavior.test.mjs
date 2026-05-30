@@ -132,6 +132,30 @@ describe("Desktop Companion DOM rendering behavior", () => {
     expect(target.innerHTML).toMatch(/Client Authorization Mode: elevated/);
   });
 
+  it("renders actionable approval buttons in Safety area for Approval Required requests", () => {
+    const target = createMockTarget();
+    const snapshot = buildSnapshot({
+      safety: {
+        approvalRequests: [
+          {
+            id: "approval-req-1",
+            title: "Write config file",
+            message: "Need explicit confirmation",
+            actionRiskClass: "high-risk",
+            createdAt: "2025-01-01T00:00:00Z",
+            status: "Approval Required",
+          },
+        ],
+      },
+    });
+    fns.renderAgentSoulShell(target, snapshot);
+
+    expect(target.innerHTML).toMatch(/data-control-area="safety"/);
+    expect(target.innerHTML).toMatch(/data-approval-action="allow"/);
+    expect(target.innerHTML).toMatch(/data-approval-action="deny"/);
+    expect(target.innerHTML).toMatch(/data-approval-id="approval-req-1"/);
+  });
+
   it("omits risk notices section when no notices", () => {
     const target = createMockTarget();
     const snapshot = buildSnapshot();
@@ -147,7 +171,7 @@ describe("Desktop Companion DOM rendering behavior", () => {
     const snapshot = buildSnapshot();
     fns.renderAgentSoulShell(target, snapshot);
 
-    const areas = ["companion", "gateway", "costs", "skills", "sessions", "safety", "settings"];
+    const areas = ["companion", "gateway", "costs", "skills", "sessions", "conversations", "safety", "settings"];
     for (const area of areas) {
       expect(target.innerHTML).toMatch(new RegExp(`data-control-area="${area}"`));
     }
@@ -158,10 +182,53 @@ describe("Desktop Companion DOM rendering behavior", () => {
     const snapshot = buildSnapshot();
     fns.renderAgentSoulShell(target, snapshot);
 
-    const areas = ["companion", "gateway", "skills", "sessions", "costs", "safety", "settings"];
+    const areas = ["companion", "gateway", "skills", "sessions", "conversations", "costs", "safety", "settings"];
     for (const area of areas) {
       expect(target.innerHTML).toMatch(new RegExp(`data-nav-target="${area}"`));
     }
+  });
+
+  it("renders conversation dashboard area and interactive controls", () => {
+    const target = createMockTarget();
+    const snapshot = buildSnapshot({
+      conversationDashboard: {
+        conversations: [
+          {
+            id: "conv-1",
+            kind: "chat",
+            title: "Claude coding chat",
+            channelName: "claude-code",
+            status: "active",
+            messageCount: 18,
+            lastActivityAt: "2026-05-30T10:00:00Z",
+            startedAt: "2026-05-30T09:00:00Z",
+          },
+        ],
+        activeFilter: "",
+        searchQuery: "",
+        systemStatus: "online",
+        overrideCount: 0,
+      },
+    });
+    fns.renderAgentSoulShell(target, snapshot);
+
+    expect(target.innerHTML).toMatch(/data-control-area="conversations"/);
+    expect(target.innerHTML).toMatch(/data-kind-filter="chat"/);
+    expect(target.innerHTML).toMatch(/data-conversation-search/);
+    expect(target.innerHTML).toMatch(/data-conversation-id="conv-1"/);
+  });
+
+  it("renders advanced center modules (charts, backup, webdav, deeplink, usage footer)", () => {
+    const target = createMockTarget();
+    const snapshot = buildSnapshot();
+    fns.renderAgentSoulShell(target, snapshot);
+
+    expect(target.innerHTML).toMatch(/data-chart-type="key-trend"/);
+    expect(target.innerHTML).toMatch(/data-chart-type="model-stats"/);
+    expect(target.innerHTML).toMatch(/data-control-area="backup"/);
+    expect(target.innerHTML).toMatch(/data-control-area="webdav"/);
+    expect(target.innerHTML).toMatch(/data-dialog="deeplink-import"/);
+    expect(target.innerHTML).toMatch(/class="usage-footer/);
   });
 
   it("escapes HTML in companion name and approval messages", () => {

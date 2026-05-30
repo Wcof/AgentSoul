@@ -5,8 +5,6 @@
   "description": "AgentSoul v2 local-first AI Agent Companion workspace",
   "workspaces": [
     "apps/desktop-v2",
-    "apps/web",
-    "apps/mcp-server",
     "packages/domain",
     "packages/persistence",
     "packages/runtime",
@@ -28,7 +26,7 @@
   ],
   "scripts": {
     "v2:dev": "npm --workspace @agentsoul/desktop-v2 run dev",
-    "v2:test": "(vitest run apps/desktop-v2/tests/ || true) && echo \"Desktop Companion appearance view\" && echo \"Pet Appearance\" && echo \"Control Center Companion area\" && echo \"Control Center Gateway and Costs areas\" && echo \"Control Center Sessions area\" && echo \"Control Center Skills area\" && echo \"Control Center Safety area\" && echo \"Control Center Settings area\" && echo \"Control Center task navigation\" && echo \"Desktop Companion interaction command flow\" && echo \"Desktop Companion approval flow\" && echo \"Desktop Companion risk notice flow\" && echo \"Control Center browser visual smoke\"",
+    "v2:test": "vitest run apps/desktop-v2/tests/ && echo \"Desktop Companion appearance view\" && echo \"Pet Appearance\" && echo \"Control Center Companion area\" && echo \"Control Center Gateway and Costs areas\" && echo \"Control Center Sessions area\" && echo \"Control Center Skills area\" && echo \"Control Center Safety area\" && echo \"Control Center Settings area\" && echo \"Control Center task navigation\" && echo \"Desktop Companion interaction command flow\" && echo \"Desktop Companion approval flow\" && echo \"Desktop Companion risk notice flow\" && echo \"Control Center browser visual smoke\"",
     "v2:typecheck": "npm --workspace @agentsoul/desktop-v2 run typecheck",
     "v2:build": "npm --workspace @agentsoul/desktop-v2 run build",
     "v2:tauri": "npm --workspace @agentsoul/desktop-v2 run tauri",

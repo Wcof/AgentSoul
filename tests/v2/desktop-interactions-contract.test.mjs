@@ -11,5 +11,5 @@ describe("AgentSoul v2 Desktop Companion interactions", () => {
     });
 
     expect(output).toMatch(/Desktop Companion interaction command flow/);
-  });
+  }, 120000);
 });

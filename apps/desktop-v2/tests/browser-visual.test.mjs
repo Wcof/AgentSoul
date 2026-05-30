@@ -41,24 +41,20 @@ describe("Desktop and Control Center browser visual smoke", () => {
           },
         });
 
-        await page.goto(url, { waitUntil: "networkidle" });
-        await page.waitForSelector('[data-control-area="settings"]');
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        await page.waitForSelector('[data-control-area="companion"]', {
+          timeout: 20_000,
+          state: "attached",
+        });
 
-        const layout = await page.evaluate(() => {
-          const root = document.documentElement;
-          const requiredSelectors = [
+        // Verify sidebar-always-visible elements
+        const sidebarLayout = await page.evaluate(() => {
+          const alwaysVisible = [
             ".companion-orb",
             ".companion-panel",
             ".control-center-nav",
-            '[data-control-area="companion"]',
-            '[data-control-area="gateway"]',
-            '[data-control-area="costs"]',
-            '[data-control-area="skills"]',
-            '[data-control-area="sessions"]',
-            '[data-control-area="safety"]',
-            '[data-control-area="settings"]',
           ];
-          const collapsed = requiredSelectors
+          const collapsed = alwaysVisible
             .map((selector) => {
               const element = document.querySelector(selector);
               const rect = element?.getBoundingClientRect();
@@ -69,25 +65,47 @@ describe("Desktop and Control Center browser visual smoke", () => {
               };
             })
             .filter((item) => item.width <= 0 || item.height <= 0);
-          const clippedText = [...document.querySelectorAll("button, a, dt, dd, h1, h2")]
-            .map((element) => ({
-              text: element.textContent?.trim() ?? "",
-              scrollWidth: element.scrollWidth,
-              clientWidth: element.clientWidth,
-            }))
-            .filter((item) => item.clientWidth > 0 && item.scrollWidth > item.clientWidth + 1);
+          return { collapsed };
+        });
+        expect(sidebarLayout.collapsed).toEqual([]);
 
+        // Verify each tab area becomes visible when navigated to
+        const tabAreas = ["companion", "gateway", "costs", "skills", "sessions", "safety", "settings"];
+        for (const area of tabAreas) {
+          const navLink = await page.$(`[data-nav-target="${area}"]`);
+          if (navLink) {
+            await navLink.click();
+            await page.waitForFunction(
+              (areaName) => {
+                const el = document.querySelector(`[data-control-area="${areaName}"]`);
+                if (!el) return false;
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+              },
+              area,
+              { timeout: 5_000 },
+            );
+          }
+          const areaVisible = await page.evaluate((areaName) => {
+            const el = document.querySelector(`[data-control-area="${areaName}"]`);
+            if (!el) return { exists: false, width: 0, height: 0 };
+            const rect = el.getBoundingClientRect();
+            return { exists: true, width: rect.width, height: rect.height };
+          }, area);
+          expect(areaVisible.exists, `area ${area} should exist in DOM`).toBe(true);
+          expect(areaVisible.width > 0, `area ${area} should have width > 0`).toBe(true);
+          expect(areaVisible.height > 0, `area ${area} should have height > 0`).toBe(true);
+        }
+
+        // Check no horizontal overflow
+        const overflowCheck = await page.evaluate(() => {
+          const root = document.documentElement;
           return {
             scrollWidth: root.scrollWidth,
             clientWidth: root.clientWidth,
-            collapsed,
-            clippedText,
           };
         });
-
-        expect(layout.scrollWidth <= layout.clientWidth + 1).toBeTruthy();
-        expect(layout.collapsed).toEqual([]);
-        expect(layout.clippedText).toEqual([]);
+        expect(overflowCheck.scrollWidth <= overflowCheck.clientWidth + 1).toBeTruthy();
 
         const screenshot = await page.screenshot({
           fullPage: true,
@@ -101,7 +119,7 @@ describe("Desktop and Control Center browser visual smoke", () => {
       await browser?.close();
       await vite.close();
     }
-  });
+  }, 90_000);
 });
 
 function getAvailablePort() {

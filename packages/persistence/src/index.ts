@@ -1,5 +1,7 @@
 import Database from "better-sqlite3";
 
+export * from "./control-plane-store";
+
 export const V2_SCHEMA_VERSION = 1;
 
 export const REQUIRED_V2_TABLES = [
@@ -439,8 +441,20 @@ export class SessionRepository {
     return this.db.prepare(
       `SELECT id, source, project_path, searchable, resumable, session_json, last_active_at
        FROM work_sessions
-       ORDER BY last_active_at ASC, id ASC`,
+       ORDER BY last_active_at DESC, id ASC`,
     ).all();
+  }
+
+  getWorkSession(id: string): any {
+    return this.db.prepare(
+      `SELECT id, source, project_path, searchable, resumable, session_json, last_active_at
+       FROM work_sessions WHERE id = ?`,
+    ).get(id);
+  }
+
+  deleteWorkSession(id: string): boolean {
+    const result = this.db.prepare("DELETE FROM work_sessions WHERE id = ?").run(id);
+    return result.changes > 0;
   }
 
   runTransaction<T>(fn: () => T): T {

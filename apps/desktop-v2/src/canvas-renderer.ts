@@ -1,5 +1,6 @@
 // Canvas 2D 动画引擎
-import type { CompanionVisualState, PetAppearanceSnapshot } from "./types";
+import type { CompanionVisualState, FrameRect, PetAppearanceSnapshot, PetAssetPackManifest, PetStateName } from "./types";
+import { normalizePetAssetPack } from "./utils/petAssetPack";
 
 export interface CanvasRenderer {
   canvas: HTMLCanvasElement;
@@ -12,12 +13,18 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): CanvasRenderer 
   if (!ctx) {
     throw new Error("Could not get 2D context from canvas");
   }
+  const loadedImages = new Map<string, HTMLImageElement>();
+  const chromaProcessed = new Map<string, HTMLCanvasElement>();
+  const startTime = performance.now();
 
   return {
     canvas,
     ctx,
     draw(appearance, state) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (drawFromAssetPack(ctx, canvas, appearance, state, loadedImages, chromaProcessed, startTime)) {
+        return;
+      }
 
       if (appearance.kind === "slime") {
         drawSlime(ctx, state);
@@ -29,10 +36,162 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): CanvasRenderer 
         ctx.fillRect(50, 50, 100, 100);
       }
 
-      drawStatusBubble(ctx, state);
-      drawInteractionButtons(ctx);
+      if (!canvas.classList.contains("clean-avatar")) {
+        drawStatusBubble(ctx, state);
+        drawInteractionButtons(ctx);
+      }
     },
   };
+}
+
+function drawFromAssetPack(
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  appearance: PetAppearanceSnapshot,
+  state: CompanionVisualState,
+  loadedImages: Map<string, HTMLImageElement>,
+  chromaProcessed: Map<string, HTMLCanvasElement>,
+  startTime: number,
+): boolean {
+  const assetPackPath = appearance.assetPackPath;
+  const spritePath = appearance.spritesheetPath;
+  if (!spritePath || !assetPackPath) {
+    return false;
+  }
+
+  const normalized = normalizePetAssetPack(appearance.assetManifest, assetPackPath);
+  let image = loadedImages.get(spritePath);
+  if (!image) {
+    image = new Image();
+    image.decoding = "async";
+    image.src = spritePath;
+    loadedImages.set(spritePath, image);
+    return false;
+  }
+
+  if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+    return false;
+  }
+
+  const stateName = toPetState(state);
+  const sequence = normalized.states[stateName] ?? normalized.states.idle;
+  const frameRect = pickFrameRect(normalized.manifest.frame, sequence, image, startTime);
+  const elapsed = (performance.now() - startTime) / 1000;
+  const bounce = state === "positive" || state === "attention" ? Math.sin(elapsed * 6) * 6 : Math.sin(elapsed * 2) * 2;
+  const scale = state === "sleep" ? 0.95 : 1;
+  const maxWidth = canvas.width * 0.9;
+  const maxHeight = canvas.height * 0.9;
+  const ratio = Math.min(maxWidth / frameRect.w, maxHeight / frameRect.h);
+  const drawWidth = frameRect.w * ratio * scale;
+  const drawHeight = frameRect.h * ratio * scale;
+  const x = (canvas.width - drawWidth) / 2;
+  const y = (canvas.height - drawHeight) / 2 + bounce;
+  const source = normalized.manifest.chromaKey
+    ? getChromaProcessedCanvas(spritePath, image, normalized.manifest.chromaKey, chromaProcessed)
+    : image;
+
+  ctx.save();
+  ctx.globalAlpha = state === "fatigue" ? 0.8 : 1;
+  ctx.drawImage(source, frameRect.x, frameRect.y, frameRect.w, frameRect.h, x, y, drawWidth, drawHeight);
+  ctx.restore();
+  return true;
+}
+
+function toPetState(state: CompanionVisualState): PetStateName {
+  if (state === "positive") return "happy";
+  if (state === "fatigue") return "degraded";
+  if (state === "sleep") return "sleep";
+  if (state === "attention") return "attention";
+  return "idle";
+}
+
+function pickFrameRect(
+  frameConfig: PetAssetPackManifest["frame"] | undefined,
+  sequence: { frames?: number[]; rects?: FrameRect[]; fps?: number },
+  image: HTMLImageElement,
+  startTime: number,
+): FrameRect {
+  const fps = sequence.fps && sequence.fps > 0 ? sequence.fps : 8;
+  const frameIndex = Math.floor((performance.now() - startTime) / (1000 / fps));
+  if (sequence.rects && sequence.rects.length > 0) {
+    return sequence.rects[frameIndex % sequence.rects.length];
+  }
+  const frameNumber = sequence.frames && sequence.frames.length > 0
+    ? sequence.frames[frameIndex % sequence.frames.length]
+    : 0;
+  const fallbackGrid = guessGrid(image);
+  const frameW = frameConfig?.width ?? fallbackGrid.width;
+  const frameH = frameConfig?.height ?? fallbackGrid.height;
+  const columns = Math.max(1, Math.floor(image.naturalWidth / frameW));
+  const x = (frameNumber % columns) * frameW;
+  const y = Math.floor(frameNumber / columns) * frameH;
+  return {
+    x: clamp(x, 0, Math.max(0, image.naturalWidth - frameW)),
+    y: clamp(y, 0, Math.max(0, image.naturalHeight - frameH)),
+    w: Math.max(1, Math.min(frameW, image.naturalWidth)),
+    h: Math.max(1, Math.min(frameH, image.naturalHeight)),
+  };
+}
+
+function guessGrid(image: HTMLImageElement): { width: number; height: number } {
+  const candidates = [256, 192, 160, 128, 96, 80, 64];
+  for (const size of candidates) {
+    if (image.naturalWidth % size === 0 && image.naturalHeight >= size * 4) {
+      return { width: size, height: size };
+    }
+  }
+  return {
+    width: Math.max(64, Math.floor(image.naturalWidth / 6)),
+    height: Math.max(64, Math.floor(image.naturalHeight / 8)),
+  };
+}
+
+function getChromaProcessedCanvas(
+  key: string,
+  image: HTMLImageElement,
+  chromaKey: string,
+  cache: Map<string, HTMLCanvasElement>,
+): HTMLCanvasElement {
+  const cacheKey = `${key}::${chromaKey}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const offscreen = document.createElement("canvas");
+  offscreen.width = image.naturalWidth;
+  offscreen.height = image.naturalHeight;
+  const octx = offscreen.getContext("2d");
+  if (!octx) return offscreen;
+  octx.drawImage(image, 0, 0);
+  const imageData = octx.getImageData(0, 0, offscreen.width, offscreen.height);
+  const [kr, kg, kb] = hexToRgb(chromaKey) ?? [0, 255, 0];
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const r = imageData.data[i];
+    const g = imageData.data[i + 1];
+    const b = imageData.data[i + 2];
+    if (colorDistance(r, g, b, kr, kg, kb) < 72) {
+      imageData.data[i + 3] = 0;
+    }
+  }
+  octx.putImageData(imageData, 0, 0);
+  cache.set(cacheKey, offscreen);
+  return offscreen;
+}
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const normalized = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return null;
+  const value = Number.parseInt(normalized, 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function colorDistance(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {
+  const dr = r1 - r2;
+  const dg = g1 - g2;
+  const db = b1 - b2;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 export function startAnimationLoop(
@@ -139,4 +298,3 @@ export function drawInteractionButtons(ctx: CanvasRenderingContext2D): void {
 
 // Dummy comments for static test assertions:
 // idle positive fatigue sleep attention
-

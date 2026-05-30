@@ -15,13 +15,14 @@
         "label": "desktop-companion",
         "title": "AgentSoul Desktop Companion",
         "url": "index.html",
-        "width": 420,
-        "height": 560,
-        "minWidth": 320,
-        "minHeight": 420,
+        "width": 280,
+        "height": 320,
+        "minWidth": 220,
+        "minHeight": 220,
         "alwaysOnTop": true,
-        "transparent": false,
-        "decorations": true
+        "transparent": true,
+        "decorations": false,
+        "resizable": false
       },
       {
         "label": "control-center",

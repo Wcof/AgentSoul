@@ -15,7 +15,7 @@ export type Mood = Brand<MoodValue, "Mood">;
 
 export type PetAppearanceKind = "slime" | "cat" | "custom";
 export type ProviderActivationMode = "gateway-route" | "direct-client-config";
-export type ClientProtocol = "claude-messages" | "openai-chat" | "codex-responses" | "gemini";
+export type ClientProtocol = "claude-messages" | "openai-chat" | "codex-responses" | "openai-images" | "gemini";
 export type ProviderProtocol = "anthropic" | "openai-chat" | "openai-responses" | "gemini";
 export type ClientAuthorizationMode = "normal" | "elevated" | "fully-authorized";
 export type ActionRiskClass = "safe" | "sensitive" | "high-risk" | "critical";

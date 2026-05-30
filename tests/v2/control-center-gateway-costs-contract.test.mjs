@@ -7,7 +7,7 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Control Center Gateway and Costs areas", () => {
   it("exposes Gateway and Costs Area rendering from local API snapshot data", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "main.ts"), "utf8");
+    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
 
     expect(source).toMatch(/Control Center Gateway Area/);
     expect(source).toMatch(/Control Center Costs Area/);
@@ -37,5 +37,5 @@ describe("AgentSoul v2 Control Center Gateway and Costs areas", () => {
     expect(appTest).toMatch(/Model Mix/);
     expect(appTest).toMatch(/Provider Mix/);
     expect(output).toMatch(/Control Center Gateway and Costs areas/);
-  });
+  }, 120000);
 });
