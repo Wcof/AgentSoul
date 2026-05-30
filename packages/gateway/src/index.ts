@@ -1,16 +1,45 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
-import Database from "better-sqlite3";
-import { initializeV2Database, createControlPlaneStore, type ControlPlaneStore, SessionRepository } from "@agentsoul/persistence";
 import type { ProviderProfileService, StoredProviderProfile } from "@agentsoul/provider";
-import { pingUrlHead } from "./http-ping";
+import type { ControlPlaneStore } from "@agentsoul/persistence";
+import { SessionRepository } from "@agentsoul/sessions";
+
+// ─── Internal module imports ───
+
+import { pingUrlHead } from "./channels/ping";
+import { loadFailoverPolicy, routeThroughChannels } from "./channels/failover";
+import { normalizeTokenCount, estimateTrafficCost } from "./cost/tracker";
+import { translateGatewayRoute } from "./providers";
+import { handleDirectCall } from "./direct-call";
+
+// ─── Re-exports: providers ───
+
+export type { ProviderAdapter, GatewayClientRequest, GatewayRouteResult, UnsupportedRouteResult } from "./providers";
+export { OpenAICompatibleAdapter, CodexResponsesCompatibleAdapter, OpenAIImagesCompatibleAdapter, AnthropicMessagesCompatibleAdapter, translateGatewayRoute } from "./providers";
+
+// ─── Re-exports: channels ───
+
+export type { ChannelType, ChannelStatus, Channel, ChannelMetrics, ChannelCreateInput, ChannelUpdateInput, ChannelStore } from "./channels/store";
+export { createChannelStore } from "./channels/store";
+
+// ─── Re-exports: audit ───
+
+export type { TrafficMetadata, GatewayAuditRecord, GatewayAuditRepository, GatewayCostTrends, DailyCostTrend, CostMixEntry, ProviderCostMixEntry } from "./audit/repository";
+export { createGatewayAuditRepository } from "./audit/repository";
+
+// ─── Re-exports: cost ───
+
+export type { CostSummary, CostTracker } from "./cost/tracker";
+export { createCostTracker, estimateTrafficCost, normalizeTokenCount } from "./cost/tracker";
+
+// ─── Gateway entry-point types ───
 
 export interface LocalGatewayOptions {
   providerProfiles: Pick<ProviderProfileService, "getActiveProviderProfile">;
-  audit?: GatewayAuditRepository;
-  channelStore?: ChannelStore;
-  costTracker?: CostTracker;
+  audit?: import("./audit/repository").GatewayAuditRepository;
+  channelStore?: import("./channels/store").ChannelStore;
+  costTracker?: import("./cost/tracker").CostTracker;
   controlPlaneStore?: ControlPlaneStore;
   sessionRepository?: SessionRepository;
   proxyAccessKey?: string;
@@ -44,219 +73,7 @@ export interface LocalGateway {
   close(): Promise<void>;
 }
 
-export interface GatewayClientRequest {
-  clientProtocol: string;
-  requestedModel?: string;
-  messages?: Array<{ role: string; content: string }>;
-  adapterMetadata?: Record<string, unknown>;
-  tokenUsage?: {
-    inputTokens?: number;
-    outputTokens?: number;
-  };
-}
-
-export interface GatewayRouteResult {
-  status: "translated";
-  adapter: string;
-  liveProviderCallRequired: false;
-  providerRequest: {
-    method: "POST";
-    url: string;
-    headers: Record<string, string>;
-    body: Record<string, unknown>;
-  };
-}
-
-export interface UnsupportedRouteResult {
-  status: "unsupported-route";
-  reason: string;
-  liveProviderCallRequired: false;
-}
-
-export interface TrafficMetadata {
-  gatewayEventId: string;
-  clientProtocol: string;
-  providerProtocol?: string;
-  providerProfileId?: string;
-  model?: string;
-  route: string;
-  inputTokens: number;
-  outputTokens: number;
-  latencyMs: number;
-  outcome: string;
-}
-
-export interface GatewayAuditRecord {
-  id: string;
-  gatewayEventId: string;
-  trafficMetadata: TrafficMetadata;
-  estimatedCost: number;
-  outcome: string;
-  evidenceHash?: string;
-  occurredAt: string;
-}
-
-export interface GatewayAuditRepository {
-  recordAudit(input: {
-    trafficMetadata: TrafficMetadata;
-    estimatedCost: number;
-    outcome: string;
-    evidenceHash?: string;
-    occurredAt?: string;
-  }): GatewayAuditRecord;
-  listAuditRecords(): GatewayAuditRecord[];
-  summarizeCostTrends(input: {
-    from: string;
-    to: string;
-  }): GatewayCostTrends;
-  close(): void;
-}
-
-export interface GatewayCostTrends {
-  dailyCosts: DailyCostTrend[];
-  modelMix: CostMixEntry[];
-  providerMix: ProviderCostMixEntry[];
-}
-
-export interface DailyCostTrend {
-  date: string;
-  estimatedCost: number;
-  inputTokens: number;
-  outputTokens: number;
-  requestCount: number;
-  averageLatencyMs: number;
-}
-
-export interface CostMixEntry {
-  model: string;
-  requestCount: number;
-  estimatedCost: number;
-}
-
-export interface ProviderCostMixEntry {
-  providerProfileId: string;
-  requestCount: number;
-  estimatedCost: number;
-}
-
-export interface ProviderAdapter {
-  name: string;
-  supports(profile: StoredProviderProfile, request: GatewayClientRequest): boolean;
-  translate(profile: StoredProviderProfile, request: GatewayClientRequest): GatewayRouteResult;
-}
-
-export const OpenAICompatibleAdapter: ProviderAdapter = {
-  name: "openai-chat",
-  supports(profile, request) {
-    return request.clientProtocol === "openai-chat" && profile.providerProtocol === "openai-chat";
-  },
-  translate(profile, request) {
-    return {
-      status: "translated",
-      adapter: this.name,
-      liveProviderCallRequired: false,
-      providerRequest: {
-        method: "POST",
-        url: `${profile.endpoint.replace(/\/$/, "")}/chat/completions`,
-        headers: {
-          "content-type": "application/json",
-          authorization: `Credential ${String(profile.credentialRef ?? "")}`,
-        },
-        body: {
-          model: profile.targetModel,
-          messages: request.messages ?? [],
-        },
-      },
-    };
-  },
-};
-
-export const CodexResponsesCompatibleAdapter: ProviderAdapter = {
-  name: "codex-responses",
-  supports(profile, request) {
-    return request.clientProtocol === "codex-responses" && profile.providerProtocol === "openai-chat";
-  },
-  translate(profile, request) {
-    return {
-      status: "translated",
-      adapter: this.name,
-      liveProviderCallRequired: false,
-      providerRequest: {
-        method: "POST",
-        url: `${profile.endpoint.replace(/\/$/, "")}/responses`,
-        headers: {
-          "content-type": "application/json",
-          authorization: `Credential ${String(profile.credentialRef ?? "")}`,
-        },
-        body: {
-          model: profile.targetModel,
-          input: request.messages ?? [],
-        },
-      },
-    };
-  },
-};
-
-export const OpenAIImagesCompatibleAdapter: ProviderAdapter = {
-  name: "openai-images",
-  supports(profile, request) {
-    return request.clientProtocol === "openai-images" && profile.providerProtocol === "openai-chat";
-  },
-  translate(profile, request) {
-    const operation = (request.adapterMetadata?.operation as string | undefined) ?? "generations";
-    return {
-      status: "translated",
-      adapter: this.name,
-      liveProviderCallRequired: false,
-      providerRequest: {
-        method: "POST",
-        url: `${profile.endpoint.replace(/\/$/, "")}/images/${operation}`,
-        headers: {
-          "content-type": "application/json",
-          authorization: `Credential ${String(profile.credentialRef ?? "")}`,
-        },
-        body: {
-          ...(request.adapterMetadata?.rawBody as Record<string, unknown> | undefined),
-          model: request.requestedModel ?? profile.targetModel,
-        },
-      },
-    };
-  },
-};
-
-export const AnthropicMessagesCompatibleAdapter: ProviderAdapter = {
-  name: "anthropic-messages",
-  supports(profile, request) {
-    return request.clientProtocol === "claude-messages" && profile.providerProtocol === "anthropic";
-  },
-  translate(profile, request) {
-    return {
-      status: "translated",
-      adapter: this.name,
-      liveProviderCallRequired: false,
-      providerRequest: {
-        method: "POST",
-        url: `${profile.endpoint.replace(/\/$/, "")}/v1/messages`,
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": `Credential ${String(profile.credentialRef ?? "")}`,
-          "anthropic-version": "2023-06-01",
-        },
-        body: {
-          model: profile.targetModel,
-          messages: request.messages ?? [],
-        },
-      },
-    };
-  },
-};
-
-const providerAdapters: ProviderAdapter[] = [
-  OpenAICompatibleAdapter,
-  CodexResponsesCompatibleAdapter,
-  OpenAIImagesCompatibleAdapter,
-  AnthropicMessagesCompatibleAdapter,
-];
+// ─── Gateway entry point ───
 
 export async function startLocalGateway(options: LocalGatewayOptions): Promise<LocalGateway> {
   const host = options.host ?? "127.0.0.1";
@@ -280,6 +97,8 @@ export async function startLocalGateway(options: LocalGatewayOptions): Promise<L
     },
   };
 }
+
+// ─── HTTP routing ───
 
 function routeHttp(
   options: Pick<LocalGatewayOptions, "providerProfiles" | "audit" | "channelStore" | "costTracker" | "controlPlaneStore" | "sessionRepository" | "proxyAccessKey" | "adminAccessKey">,
@@ -336,7 +155,22 @@ function routeHttp(
     return;
   }
 
-  // ─── 渠道管理 API ───
+  // ─── Direct-call endpoints (Gateway actually calls the LLM) ───
+
+  if (request.method === "POST" && url === "/v1/direct/chat/completions") {
+    void handleDirectCall(request, response, "openai-chat");
+    return;
+  }
+  if (request.method === "POST" && url === "/v1/direct/messages") {
+    void handleDirectCall(request, response, "claude-messages");
+    return;
+  }
+  if (request.method === "POST" && url === "/v1/direct/responses") {
+    void handleDirectCall(request, response, "codex-responses");
+    return;
+  }
+
+  // ─── Channel management API ───
   if (request.method === "GET" && url === "/channels") {
     handleListChannels(options, response);
     return;
@@ -386,7 +220,7 @@ function routeHttp(
     return;
   }
 
-  // ─── 应用设置 API ───
+  // ─── App settings API ───
   if (request.method === "GET" && url === "/settings") {
     handleGetAppSettings(options, response);
     return;
@@ -397,7 +231,7 @@ function routeHttp(
     return;
   }
 
-  // ─── Skills 状态 API ───
+  // ─── Skills state API ───
   if (request.method === "GET" && url === "/skills") {
     handleGetSkillsState(options, response);
     return;
@@ -407,7 +241,7 @@ function routeHttp(
     return;
   }
 
-  // ─── Prompt 模板 API ───
+  // ─── Prompt template API ───
   if (request.method === "GET" && url === "/prompts") {
     handleListPrompts(options, response);
     return;
@@ -427,7 +261,7 @@ function routeHttp(
     return;
   }
 
-  // ─── MCP 服务器管理 API ───
+  // ─── MCP server management API ───
   if (request.method === "GET" && url === "/mcp-servers") {
     handleListMcpServers(options, response);
     return;
@@ -450,7 +284,7 @@ function routeHttp(
     return;
   }
 
-  // ─── 会话管理 API ───
+  // ─── Session management API ───
   if (request.method === "GET" && url.startsWith("/sessions")) {
     handleListSessions(options, response);
     return;
@@ -468,7 +302,7 @@ function routeHttp(
     return;
   }
 
-  // ─── 安全审批 API ───
+  // ─── Safety approval API ───
   if (request.method === "GET" && url === "/approval-requests") {
     handleListApprovalRequests(options, response);
     return;
@@ -522,7 +356,7 @@ function routeHttp(
     return;
   }
 
-  // ─── 备份管理 API ───
+  // ─── Backup management API ───
   if (request.method === "GET" && url === "/backups") {
     handleListBackups(options, response);
     return;
@@ -547,6 +381,8 @@ function routeHttp(
 
   sendJson(response, 404, { status: "not-found" });
 }
+
+// ─── Auth helpers ───
 
 function requiresProxyAuth(url: string): boolean {
   return url.startsWith("/v1/") || url.startsWith("/v1beta/");
@@ -598,6 +434,57 @@ function headerValue(value: string | string[] | undefined): string | undefined {
   return undefined;
 }
 
+// ─── Health / profile helpers ───
+
+function createGatewayHealth(active: StoredProviderProfile | undefined): GatewayHealth {
+  return {
+    status: "ok",
+    routeReady: Boolean(active),
+    activeProviderProfile: active ? summarizeProviderProfile(active) : null,
+    liveProviderCallRequired: false,
+  };
+}
+
+function summarizeProviderProfile(profile: StoredProviderProfile): GatewayProviderProfileSummary {
+  return {
+    id: String(profile.id),
+    name: profile.name,
+    activationMode: profile.activationMode,
+    credentialRef: profile.credentialRef ? String(profile.credentialRef) : undefined,
+    clientProtocol: profile.clientProtocol,
+    providerProtocol: profile.providerProtocol,
+    targetModel: profile.targetModel,
+    endpoint: profile.endpoint,
+  };
+}
+
+function createTrafficMetadata(input: {
+  active: StoredProviderProfile | undefined;
+  clientRequest: import("./providers").GatewayClientRequest;
+  startedAt: number;
+  outcome: string;
+}): import("./audit/repository").TrafficMetadata {
+  const inputTokens = normalizeTokenCount(input.clientRequest.tokenUsage?.inputTokens);
+  const outputTokens = normalizeTokenCount(input.clientRequest.tokenUsage?.outputTokens);
+
+  return {
+    gatewayEventId: randomUUID(),
+    clientProtocol: input.clientRequest.clientProtocol,
+    providerProtocol: input.active?.providerProtocol,
+    providerProfileId: input.active ? String(input.active.id) : undefined,
+    model: input.active?.targetModel,
+    route: input.active
+      ? `${input.clientRequest.clientProtocol} -> ${input.active.providerProtocol}`
+      : `${input.clientRequest.clientProtocol} -> none`,
+    inputTokens,
+    outputTokens,
+    latencyMs: Math.max(0, Date.now() - input.startedAt),
+    outcome: input.outcome,
+  };
+}
+
+// ─── Model listing ───
+
 function handleListModels(
   options: Pick<LocalGatewayOptions, "providerProfiles" | "channelStore">,
   response: ServerResponse,
@@ -623,13 +510,15 @@ function handleListModels(
   });
 }
 
+// ─── Route handlers ───
+
 async function handleRouteFromOpenAIChat(
   options: Pick<LocalGatewayOptions, "providerProfiles" | "audit" | "channelStore" | "controlPlaneStore">,
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
   const body = (await readJsonBody(request)) as Record<string, unknown>;
-  const clientRequest: GatewayClientRequest = {
+  const clientRequest: import("./providers").GatewayClientRequest = {
     clientProtocol: "openai-chat",
     requestedModel: typeof body.model === "string" ? body.model : undefined,
     messages: Array.isArray(body.messages) ? (body.messages as Array<{ role: string; content: string }>) : [],
@@ -651,7 +540,7 @@ async function handleRouteFromCodexResponses(
   const messages = Array.isArray(rawInput)
     ? (rawInput as Array<{ role: string; content: string }>)
     : [];
-  const clientRequest: GatewayClientRequest = {
+  const clientRequest: import("./providers").GatewayClientRequest = {
     clientProtocol: "codex-responses",
     requestedModel: typeof body.model === "string" ? body.model : undefined,
     messages,
@@ -673,7 +562,7 @@ async function handleRouteFromClaudeMessages(
   const messages = Array.isArray(rawMessages)
     ? (rawMessages as Array<{ role: string; content: string }>)
     : [];
-  const clientRequest: GatewayClientRequest = {
+  const clientRequest: import("./providers").GatewayClientRequest = {
     clientProtocol: "claude-messages",
     requestedModel: typeof body.model === "string" ? body.model : undefined,
     messages,
@@ -692,7 +581,7 @@ async function handleRouteFromOpenAIImages(
   operation: "generations" | "edits" | "variations",
 ): Promise<void> {
   const body = (await readJsonBody(request)) as Record<string, unknown>;
-  const clientRequest: GatewayClientRequest = {
+  const clientRequest: import("./providers").GatewayClientRequest = {
     clientProtocol: "openai-images",
     requestedModel: typeof body.model === "string" ? body.model : undefined,
     messages: [],
@@ -713,13 +602,13 @@ async function handleRouteHttp(
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
-  const clientRequest = (await readJsonBody(request)) as GatewayClientRequest;
+  const clientRequest = (await readJsonBody(request)) as import("./providers").GatewayClientRequest;
   handleClientRoute(options, clientRequest, response);
 }
 
 function handleClientRoute(
   options: Pick<LocalGatewayOptions, "providerProfiles" | "audit" | "channelStore" | "controlPlaneStore">,
-  clientRequest: GatewayClientRequest,
+  clientRequest: import("./providers").GatewayClientRequest,
   response: ServerResponse,
 ): void {
   const startedAt = Date.now();
@@ -776,395 +665,7 @@ function handleClientRoute(
   sendJson(response, route.status === "translated" ? 200 : 422, route);
 }
 
-function routeThroughChannels(
-  channelStore: ChannelStore | undefined,
-  clientRequest: GatewayClientRequest,
-  failoverPolicy: FailoverPolicy,
-): { profile: StoredProviderProfile; route: GatewayRouteResult; channelId: string } | undefined {
-  if (!channelStore) {
-    return undefined;
-  }
-  const baseCandidates = channelStore
-    .listChannels()
-    .filter((channel) => channel.status === "active" || channel.status === "healthy")
-    .sort((left, right) => right.priority - left.priority);
-  const candidates = failoverPolicy.autoFailover
-    ? baseCandidates.filter((channel) => {
-        const metrics = channelStore.getChannelMetrics(channel.id);
-        if (!metrics || metrics.circuitState !== "open") {
-          return true;
-        }
-        const timeoutMs = failoverPolicy.circuitBreakerTimeoutSeconds * 1000;
-        const lastFailureAt = metrics.lastFailureAt ? Date.parse(metrics.lastFailureAt) : Number.NaN;
-        if (Number.isNaN(lastFailureAt)) {
-          return false;
-        }
-        return Date.now() - lastFailureAt >= timeoutMs;
-      })
-    : baseCandidates.slice(0, 1);
-
-  for (const channel of candidates) {
-    const profile = providerProfileFromChannel(channel, clientRequest);
-    if (!profile) {
-      continue;
-    }
-    const route = translateGatewayRoute(profile, clientRequest);
-    if (route.status === "translated") {
-      return { profile, route, channelId: channel.id };
-    }
-  }
-  return undefined;
-}
-
-function loadFailoverPolicy(controlPlaneStore: ControlPlaneStore | undefined): FailoverPolicy {
-  const settings = controlPlaneStore?.settings.load();
-  return {
-    autoFailover: settings?.autoFailover ?? true,
-    failoverThreshold: Math.max(1, Number(settings?.failoverThreshold ?? 5)),
-    circuitBreakerTimeoutSeconds: Math.max(1, Number(settings?.circuitBreakerTimeout ?? 60)),
-  };
-}
-
-function providerProfileFromChannel(
-  channel: Channel,
-  clientRequest: GatewayClientRequest,
-): StoredProviderProfile | undefined {
-  const protocol = providerProtocolForChannel(channel.type);
-  const compatibleClient = isClientProtocolCompatible(channel.type, clientRequest.clientProtocol);
-  if (!protocol || !compatibleClient) {
-    return undefined;
-  }
-  const mappedModel = resolveMappedModel(channel, clientRequest.requestedModel);
-  const endpoint = channel.baseUrl;
-  const credentialRef = channel.apiKeys[0] ?? `channel:${channel.id}:no-key`;
-  return {
-    id: `channel:${channel.id}`,
-    name: channel.name,
-    activationMode: "gateway-route",
-    credentialRef,
-    clientProtocol: compatibleClient,
-    providerProtocol: protocol,
-    targetModel: mappedModel,
-    endpoint,
-    adapterSettings: {},
-    updatedAt: channel.updatedAt,
-  };
-}
-
-function providerProtocolForChannel(type: ChannelType): "openai-chat" | "anthropic" | undefined {
-  if (type === "openai" || type === "codex" || type === "gemini") {
-    return "openai-chat";
-  }
-  if (type === "claude") {
-    return "anthropic";
-  }
-  return undefined;
-}
-
-function isClientProtocolCompatible(
-  type: ChannelType,
-  requested: string,
-): "openai-chat" | "codex-responses" | "openai-images" | "claude-messages" | undefined {
-  if (
-    (type === "openai" || type === "codex" || type === "gemini")
-    && (requested === "openai-chat" || requested === "codex-responses" || requested === "openai-images")
-  ) {
-    return requested as "openai-chat" | "codex-responses" | "openai-images";
-  }
-  if (type === "claude" && requested === "claude-messages") {
-    return "claude-messages";
-  }
-  return undefined;
-}
-
-function resolveMappedModel(channel: Channel, requestedModel: string | undefined): string {
-  const mapping = channel.modelMapping ?? {};
-  const supported = channel.supportedModels ?? [];
-  if (requestedModel && typeof mapping[requestedModel] === "string" && mapping[requestedModel].trim().length > 0) {
-    return mapping[requestedModel];
-  }
-  if (requestedModel && supported.includes(requestedModel)) {
-    return requestedModel;
-  }
-  if (supported.length > 0) {
-    return supported[0];
-  }
-  return requestedModel || "default-model";
-}
-
-export function createGatewayAuditRepository(options: { dbPath: string }): GatewayAuditRepository {
-  initializeV2Database(options.dbPath);
-
-  const db = new Database(options.dbPath);
-
-  return {
-    recordAudit(input) {
-      const record: GatewayAuditRecord = {
-        id: randomUUID(),
-        gatewayEventId: input.trafficMetadata.gatewayEventId,
-        trafficMetadata: input.trafficMetadata,
-        estimatedCost: input.estimatedCost,
-        outcome: input.outcome,
-        evidenceHash: input.evidenceHash,
-        occurredAt: input.occurredAt ?? new Date().toISOString(),
-      };
-
-      db.prepare(
-        `INSERT INTO audit_records (
-           id,
-           gateway_event_id,
-           traffic_metadata_json,
-           estimated_cost,
-           outcome,
-           evidence_hash,
-           occurred_at
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        record.id,
-        record.gatewayEventId,
-        JSON.stringify(record.trafficMetadata),
-        record.estimatedCost,
-        record.outcome,
-        record.evidenceHash,
-        record.occurredAt,
-      );
-
-      return record;
-    },
-    listAuditRecords() {
-      return readAuditRecords(db);
-    },
-    summarizeCostTrends(input) {
-      return summarizeCostTrends(readAuditRecords(db, input));
-    },
-    close() {
-      db.close();
-    },
-  };
-}
-
-export function translateGatewayRoute(
-  active: StoredProviderProfile,
-  request: GatewayClientRequest,
-): GatewayRouteResult | UnsupportedRouteResult {
-  const adapter = providerAdapters.find((candidate) => candidate.supports(active, request));
-
-  if (!adapter) {
-    return {
-      status: "unsupported-route",
-      reason: `${request.clientProtocol} -> ${active.providerProtocol} is not supported by an available Provider Adapter.`,
-      liveProviderCallRequired: false,
-    };
-  }
-
-  return adapter.translate(active, request);
-}
-
-function readAuditRecords(
-  db: Database.Database,
-  window?: { from: string; to: string },
-): GatewayAuditRecord[] {
-  const rows = window
-    ? db
-        .prepare(
-          `SELECT
-             id,
-             gateway_event_id,
-             traffic_metadata_json,
-             estimated_cost,
-             outcome,
-             evidence_hash,
-             occurred_at
-           FROM audit_records
-           WHERE occurred_at >= ? AND occurred_at < ?
-           ORDER BY occurred_at ASC, rowid ASC`,
-        )
-        .all(window.from, window.to)
-    : db
-        .prepare(
-          `SELECT
-             id,
-             gateway_event_id,
-             traffic_metadata_json,
-             estimated_cost,
-             outcome,
-             evidence_hash,
-             occurred_at
-           FROM audit_records
-           ORDER BY rowid ASC`,
-        )
-        .all();
-
-  return (rows as Array<{
-    id: string;
-    gateway_event_id: string;
-    traffic_metadata_json: string;
-    estimated_cost: number;
-    outcome: string;
-    evidence_hash: string | null;
-    occurred_at: string;
-  }>).map((row) => ({
-    id: row.id,
-    gatewayEventId: row.gateway_event_id,
-    trafficMetadata: JSON.parse(row.traffic_metadata_json) as TrafficMetadata,
-    estimatedCost: row.estimated_cost,
-    outcome: row.outcome,
-    evidenceHash: row.evidence_hash ?? undefined,
-    occurredAt: row.occurred_at,
-  }));
-}
-
-function summarizeCostTrends(records: GatewayAuditRecord[]): GatewayCostTrends {
-  const daily = new Map<
-    string,
-    {
-      estimatedCost: number;
-      inputTokens: number;
-      outputTokens: number;
-      requestCount: number;
-      latencyMs: number;
-    }
-  >();
-  const modelMix = new Map<string, { requestCount: number; estimatedCost: number }>();
-  const providerMix = new Map<string, { requestCount: number; estimatedCost: number }>();
-
-  for (const record of records) {
-    const date = record.occurredAt.slice(0, 10);
-    const dailyEntry = daily.get(date) ?? {
-      estimatedCost: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      requestCount: 0,
-      latencyMs: 0,
-    };
-    dailyEntry.estimatedCost += record.estimatedCost;
-    dailyEntry.inputTokens += record.trafficMetadata.inputTokens;
-    dailyEntry.outputTokens += record.trafficMetadata.outputTokens;
-    dailyEntry.requestCount += 1;
-    dailyEntry.latencyMs += record.trafficMetadata.latencyMs;
-    daily.set(date, dailyEntry);
-
-    const model = record.trafficMetadata.model ?? "unknown";
-    const modelEntry = modelMix.get(model) ?? { requestCount: 0, estimatedCost: 0 };
-    modelEntry.requestCount += 1;
-    modelEntry.estimatedCost += record.estimatedCost;
-    modelMix.set(model, modelEntry);
-
-    const providerProfileId = record.trafficMetadata.providerProfileId ?? "unknown";
-    const providerEntry = providerMix.get(providerProfileId) ?? {
-      requestCount: 0,
-      estimatedCost: 0,
-    };
-    providerEntry.requestCount += 1;
-    providerEntry.estimatedCost += record.estimatedCost;
-    providerMix.set(providerProfileId, providerEntry);
-  }
-
-  return {
-    dailyCosts: [...daily.entries()].map(([date, entry]) => ({
-      date,
-      estimatedCost: roundCost(entry.estimatedCost),
-      inputTokens: entry.inputTokens,
-      outputTokens: entry.outputTokens,
-      requestCount: entry.requestCount,
-      averageLatencyMs: Math.round(entry.latencyMs / entry.requestCount),
-    })),
-    modelMix: sortCostMix(
-      [...modelMix.entries()].map(([model, entry]) => ({
-        model,
-        requestCount: entry.requestCount,
-        estimatedCost: roundCost(entry.estimatedCost),
-      })),
-    ),
-    providerMix: sortCostMix(
-      [...providerMix.entries()].map(([providerProfileId, entry]) => ({
-        providerProfileId,
-        requestCount: entry.requestCount,
-        estimatedCost: roundCost(entry.estimatedCost),
-      })),
-    ),
-  };
-}
-
-function sortCostMix<T extends { estimatedCost: number }>(entries: T[]): T[] {
-  return entries.sort((left, right) => right.estimatedCost - left.estimatedCost);
-}
-
-function roundCost(value: number): number {
-  return Number(value.toFixed(8));
-}
-
-function createTrafficMetadata(input: {
-  active: StoredProviderProfile | undefined;
-  clientRequest: GatewayClientRequest;
-  startedAt: number;
-  outcome: string;
-}): TrafficMetadata {
-  const inputTokens = normalizeTokenCount(input.clientRequest.tokenUsage?.inputTokens);
-  const outputTokens = normalizeTokenCount(input.clientRequest.tokenUsage?.outputTokens);
-
-  return {
-    gatewayEventId: randomUUID(),
-    clientProtocol: input.clientRequest.clientProtocol,
-    providerProtocol: input.active?.providerProtocol,
-    providerProfileId: input.active ? String(input.active.id) : undefined,
-    model: input.active?.targetModel,
-    route: input.active
-      ? `${input.clientRequest.clientProtocol} -> ${input.active.providerProtocol}`
-      : `${input.clientRequest.clientProtocol} -> none`,
-    inputTokens,
-    outputTokens,
-    latencyMs: Math.max(0, Date.now() - input.startedAt),
-    outcome: input.outcome,
-  };
-}
-
-function estimateTrafficCost(
-  active: StoredProviderProfile | undefined,
-  clientRequest: GatewayClientRequest,
-): number {
-  const inputTokens = normalizeTokenCount(clientRequest.tokenUsage?.inputTokens);
-  const outputTokens = normalizeTokenCount(clientRequest.tokenUsage?.outputTokens);
-  const inputCost = inputTokens * (active?.pricing?.inputTokenUsd ?? 0);
-  const outputCost = outputTokens * (active?.pricing?.outputTokenUsd ?? 0);
-
-  return Number((inputCost + outputCost).toFixed(8));
-}
-
-function normalizeTokenCount(value: number | undefined): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.floor(value ?? 0));
-}
-
-function createGatewayHealth(active: StoredProviderProfile | undefined): GatewayHealth {
-  return {
-    status: "ok",
-    routeReady: Boolean(active),
-    activeProviderProfile: active ? summarizeProviderProfile(active) : null,
-    liveProviderCallRequired: false,
-  };
-}
-
-function summarizeProviderProfile(profile: StoredProviderProfile): GatewayProviderProfileSummary {
-  return {
-    id: String(profile.id),
-    name: profile.name,
-    activationMode: profile.activationMode,
-    credentialRef: profile.credentialRef ? String(profile.credentialRef) : undefined,
-    clientProtocol: profile.clientProtocol,
-    providerProtocol: profile.providerProtocol,
-    targetModel: profile.targetModel,
-    endpoint: profile.endpoint,
-  };
-}
-
-
-
-// ─── 渠道管理 HTTP 处理函数 ───
+// ─── Channel management HTTP handlers ───
 
 function handleListChannels(
   options: Pick<LocalGatewayOptions, "channelStore">,
@@ -1305,6 +806,8 @@ async function handlePingChannel(
   }
 }
 
+// ─── Cost summary HTTP handler ───
+
 function handleGetCostSummary(
   options: Pick<LocalGatewayOptions, "costTracker">,
   response: ServerResponse,
@@ -1333,6 +836,8 @@ function handleGetDashboard(
     gatewayHealth: health,
   });
 }
+
+// ─── App settings HTTP handlers ───
 
 function handleGetAppSettings(
   options: Pick<LocalGatewayOptions, "controlPlaneStore">,
@@ -1368,6 +873,45 @@ async function handleUpdateAppSettings(
     sendJson(response, 400, { error: String(error) });
   }
 }
+
+// ─── Skills state HTTP handlers ───
+
+function handleGetSkillsState(
+  options: Pick<LocalGatewayOptions, "controlPlaneStore">,
+  response: ServerResponse,
+): void {
+  if (!options.controlPlaneStore) {
+    sendJson(response, 503, { error: "Control plane store not configured" });
+    return;
+  }
+  const skills = options.controlPlaneStore.skillsState.load();
+  sendJson(response, 200, { skills });
+}
+
+async function handleUpdateSkillsState(
+  options: Pick<LocalGatewayOptions, "controlPlaneStore">,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  if (!options.controlPlaneStore) {
+    sendJson(response, 503, { error: "Control plane store not configured" });
+    return;
+  }
+  try {
+    const body = (await readJsonBody(request)) as Record<string, unknown>;
+    const skills = (body.skills ?? body) as Record<string, unknown>;
+    if (!skills || typeof skills !== "object" || Array.isArray(skills)) {
+      sendJson(response, 400, { error: "Invalid skills payload" });
+      return;
+    }
+    options.controlPlaneStore.skillsState.save(skills as any);
+    sendJson(response, 200, { skills });
+  } catch (error) {
+    sendJson(response, 400, { error: String(error) });
+  }
+}
+
+// ─── Prompt template HTTP handlers ───
 
 function handleListPrompts(
   options: Pick<LocalGatewayOptions, "controlPlaneStore">,
@@ -1464,42 +1008,7 @@ function handleDeletePrompt(
   sendJson(response, 204, null);
 }
 
-function handleGetSkillsState(
-  options: Pick<LocalGatewayOptions, "controlPlaneStore">,
-  response: ServerResponse,
-): void {
-  if (!options.controlPlaneStore) {
-    sendJson(response, 503, { error: "Control plane store not configured" });
-    return;
-  }
-  const skills = options.controlPlaneStore.skillsState.load();
-  sendJson(response, 200, { skills });
-}
-
-async function handleUpdateSkillsState(
-  options: Pick<LocalGatewayOptions, "controlPlaneStore">,
-  request: IncomingMessage,
-  response: ServerResponse,
-): Promise<void> {
-  if (!options.controlPlaneStore) {
-    sendJson(response, 503, { error: "Control plane store not configured" });
-    return;
-  }
-  try {
-    const body = (await readJsonBody(request)) as Record<string, unknown>;
-    const skills = (body.skills ?? body) as Record<string, unknown>;
-    if (!skills || typeof skills !== "object" || Array.isArray(skills)) {
-      sendJson(response, 400, { error: "Invalid skills payload" });
-      return;
-    }
-    options.controlPlaneStore.skillsState.save(skills as any);
-    sendJson(response, 200, { skills });
-  } catch (error) {
-    sendJson(response, 400, { error: String(error) });
-  }
-}
-
-// ─── MCP 服务器管理 HTTP 处理函数 ───
+// ─── MCP server management HTTP handlers ───
 
 function handleListMcpServers(
   options: Pick<LocalGatewayOptions, "controlPlaneStore">,
@@ -1577,7 +1086,7 @@ function handleDeleteMcpServer(
   sendJson(response, 204, null);
 }
 
-// ─── 会话管理 HTTP 处理函数 ───
+// ─── Session management HTTP handlers ───
 
 function handleListSessions(
   options: Pick<LocalGatewayOptions, "sessionRepository">,
@@ -1665,7 +1174,7 @@ function handleResumeSession(
   );
 }
 
-// ─── 安全审批 HTTP 处理函数 ───
+// ─── Safety approval HTTP handlers ───
 
 function handleListApprovalRequests(
   options: Pick<LocalGatewayOptions, "controlPlaneStore">,
@@ -1858,7 +1367,7 @@ function handleDeleteTrustGrant(
   sendJson(response, 204, null);
 }
 
-// ─── 备份管理 HTTP 处理函数 ───
+// ─── Backup management HTTP handlers ───
 
 function handleListBackups(
   options: Pick<LocalGatewayOptions, "controlPlaneStore">,
@@ -1980,6 +1489,8 @@ function handleDeleteBackup(
   sendJson(response, 204, null);
 }
 
+// ─── HTTP utilities ───
+
 function sendJson(response: ServerResponse, statusCode: number, body: unknown): void {
   response.writeHead(statusCode, {
     "content-type": "application/json; charset=utf-8",
@@ -2033,439 +1544,4 @@ function close(server: Server): Promise<void> {
       resolve();
     });
   });
-}
-
-// ─── 渠道管理 (仿照 CCX) ───
-
-export type ChannelType = "claude" | "codex" | "openai" | "gemini";
-export type ChannelStatus = "active" | "suspended" | "disabled" | "healthy" | "error";
-
-export interface Channel {
-  id: string;
-  name: string;
-  type: ChannelType;
-  baseUrl: string;
-  apiKeys: string[];
-  description?: string;
-  priority: number;
-  status: ChannelStatus;
-  supportedModels?: string[];
-  modelMapping?: Record<string, string>;
-  customHeaders?: Record<string, string>;
-  proxyUrl?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ChannelMetrics {
-  channelId: string;
-  requestCount: number;
-  successCount: number;
-  failureCount: number;
-  successRate: number;
-  averageLatencyMs: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  estimatedCost: number;
-  lastRequestAt?: string;
-  lastSuccessAt?: string;
-  lastFailureAt?: string;
-  circuitState: "closed" | "open" | "half_open";
-  consecutiveFailures: number;
-}
-
-export interface ChannelCreateInput {
-  name: string;
-  type: ChannelType;
-  baseUrl: string;
-  apiKeys: string[];
-  description?: string;
-  priority?: number;
-  supportedModels?: string[];
-  modelMapping?: Record<string, string>;
-  customHeaders?: Record<string, string>;
-  proxyUrl?: string;
-}
-
-export interface ChannelUpdateInput {
-  name?: string;
-  baseUrl?: string;
-  apiKeys?: string[];
-  description?: string;
-  priority?: number;
-  status?: ChannelStatus;
-  supportedModels?: string[];
-  modelMapping?: Record<string, string>;
-  customHeaders?: Record<string, string>;
-  proxyUrl?: string;
-}
-
-export interface ChannelStore {
-  createChannel(input: ChannelCreateInput): Channel;
-  getChannel(id: string): Channel | null;
-  listChannels(type?: ChannelType): Channel[];
-  updateChannel(id: string, input: ChannelUpdateInput): Channel;
-  deleteChannel(id: string): void;
-  getChannelMetrics(id: string): ChannelMetrics | null;
-  listChannelMetrics(): ChannelMetrics[];
-  recordRequest(channelId: string, input: {
-    success: boolean;
-    latencyMs: number;
-    inputTokens: number;
-    outputTokens: number;
-    estimatedCost: number;
-    failoverThreshold?: number;
-  }): void;
-  close(): void;
-}
-
-interface FailoverPolicy {
-  autoFailover: boolean;
-  failoverThreshold: number;
-  circuitBreakerTimeoutSeconds: number;
-}
-
-// ─── 成本统计 (多渠道聚合) ───
-
-export interface CostSummary {
-  totalEstimatedCost: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalRequests: number;
-  byChannel: Array<{
-    channelId: string;
-    channelName: string;
-    channelType: ChannelType;
-    estimatedCost: number;
-    inputTokens: number;
-    outputTokens: number;
-    requestCount: number;
-    successRate: number;
-  }>;
-  byModel: Array<{
-    model: string;
-    estimatedCost: number;
-    requestCount: number;
-  }>;
-  dailyTrend: Array<{
-    date: string;
-    estimatedCost: number;
-    requestCount: number;
-  }>;
-}
-
-export interface CostTracker {
-  getSummary(from?: string, to?: string): CostSummary;
-  getChannelSummary(channelId: string, from?: string, to?: string): CostSummary;
-  close(): void;
-}
-
-// ─── Channel Store 实现 ───
-
-function rowToChannel(row: any): Channel {
-  return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    baseUrl: row.base_url,
-    apiKeys: JSON.parse(row.api_keys || '[]'),
-    description: row.description,
-    priority: row.priority,
-    status: row.status,
-    supportedModels: JSON.parse(row.supported_models || '[]'),
-    modelMapping: JSON.parse(row.model_mapping || '{}'),
-    customHeaders: JSON.parse(row.custom_headers || '{}'),
-    proxyUrl: row.proxy_url,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function rowToMetrics(row: any): ChannelMetrics {
-  return {
-    channelId: row.channel_id,
-    requestCount: row.request_count,
-    successCount: row.success_count,
-    failureCount: row.failure_count,
-    successRate: row.request_count > 0 ? (row.success_count / row.request_count) * 100 : 0,
-    averageLatencyMs: row.request_count > 0 ? row.total_latency_ms / row.request_count : 0,
-    totalInputTokens: row.total_input_tokens,
-    totalOutputTokens: row.total_output_tokens,
-    estimatedCost: row.estimated_cost,
-    lastRequestAt: row.last_request_at,
-    lastSuccessAt: row.last_success_at,
-    lastFailureAt: row.last_failure_at,
-    circuitState: row.circuit_state,
-    consecutiveFailures: row.consecutive_failures,
-  };
-}
-
-export function createChannelStore(options: { dbPath: string }): ChannelStore {
-  initializeV2Database(options.dbPath);
-  const db = new Database(options.dbPath);
-
-  // 创建渠道表
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS channels (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      base_url TEXT NOT NULL,
-      api_keys TEXT NOT NULL,
-      description TEXT,
-      priority INTEGER DEFAULT 0,
-      status TEXT DEFAULT 'active',
-      supported_models TEXT,
-      model_mapping TEXT,
-      custom_headers TEXT,
-      proxy_url TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    )
-  `);
-
-  // 创建渠道指标表
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS channel_metrics (
-      channel_id TEXT PRIMARY KEY,
-      request_count INTEGER DEFAULT 0,
-      success_count INTEGER DEFAULT 0,
-      failure_count INTEGER DEFAULT 0,
-      total_latency_ms INTEGER DEFAULT 0,
-      total_input_tokens INTEGER DEFAULT 0,
-      total_output_tokens INTEGER DEFAULT 0,
-      estimated_cost REAL DEFAULT 0,
-      last_request_at TEXT,
-      last_success_at TEXT,
-      last_failure_at TEXT,
-      circuit_state TEXT DEFAULT 'closed',
-      consecutive_failures INTEGER DEFAULT 0,
-      FOREIGN KEY (channel_id) REFERENCES channels(id)
-    )
-  `);
-
-  return {
-    createChannel(input) {
-      const id = `ch-${randomUUID().slice(0, 8)}`;
-      const now = new Date().toISOString();
-      
-      db.prepare(`
-        INSERT INTO channels (id, name, type, base_url, api_keys, description, priority, status, supported_models, model_mapping, custom_headers, proxy_url, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
-      `).run(
-        id, input.name, input.type, input.baseUrl,
-        JSON.stringify(input.apiKeys), input.description || null,
-        input.priority || 0, JSON.stringify(input.supportedModels || []),
-        JSON.stringify(input.modelMapping || {}), JSON.stringify(input.customHeaders || {}),
-        input.proxyUrl || null, now, now
-      );
-
-      // 初始化指标
-      db.prepare(`
-        INSERT INTO channel_metrics (channel_id) VALUES (?)
-      `).run(id);
-
-      return this.getChannel(id)!;
-    },
-
-    getChannel(id) {
-      const row = db.prepare(`
-        SELECT * FROM channels WHERE id = ?
-      `).get(id);
-      
-      if (!row) return null;
-      return rowToChannel(row);
-    },
-
-    listChannels(type) {
-      let sql = 'SELECT * FROM channels';
-      if (type) {
-        sql += ' WHERE type = ?';
-        const rows = db.prepare(sql).all(type);
-        return rows.map(r => rowToChannel(r));
-      }
-      const rows = db.prepare(sql).all();
-      return rows.map(r => rowToChannel(r));
-    },
-
-    updateChannel(id, input) {
-      const channel = this.getChannel(id);
-      if (!channel) throw new Error('Channel not found');
-
-      const updates = [];
-      const params = [];
-
-      if (input.name !== undefined) { updates.push('name = ?'); params.push(input.name); }
-      if (input.baseUrl !== undefined) { updates.push('base_url = ?'); params.push(input.baseUrl); }
-      if (input.apiKeys !== undefined) { updates.push('api_keys = ?'); params.push(JSON.stringify(input.apiKeys)); }
-      if (input.description !== undefined) { updates.push('description = ?'); params.push(input.description); }
-      if (input.priority !== undefined) { updates.push('priority = ?'); params.push(input.priority); }
-      if (input.status !== undefined) { updates.push('status = ?'); params.push(input.status); }
-      if (input.supportedModels !== undefined) { updates.push('supported_models = ?'); params.push(JSON.stringify(input.supportedModels)); }
-      if (input.modelMapping !== undefined) { updates.push('model_mapping = ?'); params.push(JSON.stringify(input.modelMapping)); }
-      if (input.customHeaders !== undefined) { updates.push('custom_headers = ?'); params.push(JSON.stringify(input.customHeaders)); }
-      if (input.proxyUrl !== undefined) { updates.push('proxy_url = ?'); params.push(input.proxyUrl); }
-
-      updates.push('updated_at = ?');
-      params.push(new Date().toISOString());
-      params.push(id);
-
-      db.prepare(`UPDATE channels SET ${updates.join(', ')} WHERE id = ?`).run(...params);
-      return this.getChannel(id)!;
-    },
-
-    deleteChannel(id) {
-      db.prepare('DELETE FROM channel_metrics WHERE channel_id = ?').run(id);
-      db.prepare('DELETE FROM channels WHERE id = ?').run(id);
-    },
-
-    getChannelMetrics(id) {
-      const row = db.prepare('SELECT * FROM channel_metrics WHERE channel_id = ?').get(id);
-      if (!row) return null;
-      return rowToMetrics(row);
-    },
-
-    listChannelMetrics() {
-      const rows = db.prepare('SELECT * FROM channel_metrics').all();
-      return rows.map(r => rowToMetrics(r));
-    },
-
-    recordRequest(channelId, input) {
-      const now = new Date().toISOString();
-      const metrics = this.getChannelMetrics(channelId);
-      if (!metrics) return;
-      const failoverThreshold = Math.max(1, Number(input.failoverThreshold ?? 5));
-
-      const newRequestCount = metrics.requestCount + 1;
-      const newSuccessCount = metrics.successCount + (input.success ? 1 : 0);
-      const newFailureCount = metrics.failureCount + (input.success ? 0 : 1);
-      const newConsecutiveFailures = input.success ? 0 : metrics.consecutiveFailures + 1;
-      const newCircuitState = newConsecutiveFailures >= failoverThreshold ? 'open' : 'closed';
-
-      db.prepare(`
-        UPDATE channel_metrics SET
-          request_count = ?, success_count = ?, failure_count = ?,
-          total_latency_ms = total_latency_ms + ?,
-          total_input_tokens = total_input_tokens + ?,
-          total_output_tokens = total_output_tokens + ?,
-          estimated_cost = estimated_cost + ?,
-          last_request_at = ?,
-          last_${input.success ? 'success' : 'failure'}_at = ?,
-          circuit_state = ?, consecutive_failures = ?
-        WHERE channel_id = ?
-      `).run(
-        newRequestCount, newSuccessCount, newFailureCount,
-        input.latencyMs, input.inputTokens, input.outputTokens,
-        input.estimatedCost, now, now, newCircuitState, newConsecutiveFailures,
-        channelId
-      );
-    },
-
-
-
-    close() {
-      db.close();
-    },
-  };
-}
-
-// ─── Cost Tracker 实现 ───
-
-export function createCostTracker(options: {
-  channelStore: ChannelStore;
-  audit?: GatewayAuditRepository;
-}): CostTracker {
-  const getWindow = (from?: string, to?: string): { from: string; to: string } => ({
-    from: from ?? "1970-01-01T00:00:00.000Z",
-    to: to ?? "9999-12-31T23:59:59.999Z",
-  });
-
-  const getAuditTrends = (from?: string, to?: string): GatewayCostTrends => {
-    if (!options.audit) {
-      return { dailyCosts: [], modelMix: [], providerMix: [] };
-    }
-    const window = getWindow(from, to);
-    return options.audit.summarizeCostTrends(window);
-  };
-
-  return {
-    getSummary(from, to) {
-      const channels = options.channelStore.listChannels();
-      const metrics = options.channelStore.listChannelMetrics();
-      const trends = getAuditTrends(from, to);
-
-      const byChannel = channels.map(ch => {
-        const m = metrics.find(m => m.channelId === ch.id);
-        return {
-          channelId: ch.id,
-          channelName: ch.name,
-          channelType: ch.type,
-          estimatedCost: m?.estimatedCost || 0,
-          inputTokens: m?.totalInputTokens || 0,
-          outputTokens: m?.totalOutputTokens || 0,
-          requestCount: m?.requestCount || 0,
-          successRate: m?.successRate || 0,
-        };
-      });
-
-      const totalEstimatedCost = byChannel.reduce((sum, c) => sum + c.estimatedCost, 0);
-      const totalInputTokens = byChannel.reduce((sum, c) => sum + c.inputTokens, 0);
-      const totalOutputTokens = byChannel.reduce((sum, c) => sum + c.outputTokens, 0);
-      const totalRequests = byChannel.reduce((sum, c) => sum + c.requestCount, 0);
-
-      return {
-        totalEstimatedCost,
-        totalInputTokens,
-        totalOutputTokens,
-        totalRequests,
-        byChannel,
-        byModel: trends.modelMix.map((item) => ({
-          model: item.model,
-          estimatedCost: item.estimatedCost,
-          requestCount: item.requestCount,
-        })),
-        dailyTrend: trends.dailyCosts.map((item) => ({
-          date: item.date,
-          estimatedCost: item.estimatedCost,
-          requestCount: item.requestCount,
-        })),
-      };
-    },
-
-    getChannelSummary(channelId, from, to) {
-      const channel = options.channelStore.getChannel(channelId);
-      if (!channel) throw new Error('Channel not found');
-
-      const metrics = options.channelStore.getChannelMetrics(channelId);
-      const trends = getAuditTrends(from, to);
-      return {
-        totalEstimatedCost: metrics?.estimatedCost || 0,
-        totalInputTokens: metrics?.totalInputTokens || 0,
-        totalOutputTokens: metrics?.totalOutputTokens || 0,
-        totalRequests: metrics?.requestCount || 0,
-        byChannel: [{
-          channelId: channel.id,
-          channelName: channel.name,
-          channelType: channel.type,
-          estimatedCost: metrics?.estimatedCost || 0,
-          inputTokens: metrics?.totalInputTokens || 0,
-          outputTokens: metrics?.totalOutputTokens || 0,
-          requestCount: metrics?.requestCount || 0,
-          successRate: metrics?.successRate || 0,
-        }],
-        byModel: trends.modelMix.map((item) => ({
-          model: item.model,
-          estimatedCost: item.estimatedCost,
-          requestCount: item.requestCount,
-        })),
-        dailyTrend: trends.dailyCosts.map((item) => ({
-          date: item.date,
-          estimatedCost: item.estimatedCost,
-          requestCount: item.requestCount,
-        })),
-      };
-    },
-
-    close() {},
-  };
 }
