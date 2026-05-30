@@ -302,6 +302,120 @@ describe("Direct call endpoints", () => {
       mock.restore();
     }
   });
+
+  it("returns 502 when provider returns error", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("127.0.0.1") || url.includes("localhost")) return originalFetch(input, init);
+      return new Response(JSON.stringify({ error: { message: "Invalid API key" } }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      });
+    };
+
+    try {
+      await withGateway(async (dbPath) => {
+        const providerProfiles = createProviderProfileService({ dbPath });
+        providerProfiles.createProviderProfile({
+          id: "openai", name: "OpenAI", activationMode: "gateway-route",
+          credentialRef: "credential:openai:primary", clientProtocol: "openai-chat",
+          providerProtocol: "openai-chat", targetModel: "gpt-4",
+          endpoint: "https://api.openai.com/v1",
+        });
+        providerProfiles.selectActiveProviderProfile("openai");
+        const gateway = await startLocalGateway({ providerProfiles, port: 0 });
+
+        try {
+          const response = await fetch(gateway.url("/v1/direct/chat/completions"), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ model: "gpt-4", messages: [{ role: "user", content: "hello" }] }),
+          });
+
+          // Provider returned 401, gateway forwards the status
+          expect(response.status).toBe(401);
+        } finally {
+          await gateway.close();
+          providerProfiles.close();
+        }
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("returns 502 when provider call throws network error", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("127.0.0.1") || url.includes("localhost")) return originalFetch(input, init);
+      throw new Error("ECONNREFUSED");
+    };
+
+    try {
+      await withGateway(async (dbPath) => {
+        const providerProfiles = createProviderProfileService({ dbPath });
+        providerProfiles.createProviderProfile({
+          id: "openai", name: "OpenAI", activationMode: "gateway-route",
+          credentialRef: "credential:openai:primary", clientProtocol: "openai-chat",
+          providerProtocol: "openai-chat", targetModel: "gpt-4",
+          endpoint: "https://api.openai.com/v1",
+        });
+        providerProfiles.selectActiveProviderProfile("openai");
+        const gateway = await startLocalGateway({ providerProfiles, port: 0 });
+
+        try {
+          const response = await fetch(gateway.url("/v1/direct/chat/completions"), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ model: "gpt-4", messages: [{ role: "user", content: "hello" }] }),
+          });
+
+          expect(response.status).toBe(502);
+          const body = await response.json();
+          expect(body.error).toBe("provider-call-failed");
+        } finally {
+          await gateway.close();
+          providerProfiles.close();
+        }
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not affect proxy endpoints", async () => {
+    await withGateway(async (dbPath) => {
+      const providerProfiles = createProviderProfileService({ dbPath });
+      providerProfiles.createProviderProfile({
+        id: "openai", name: "OpenAI", activationMode: "gateway-route",
+        credentialRef: "credential:openai:primary", clientProtocol: "openai-chat",
+        providerProtocol: "openai-chat", targetModel: "gpt-4",
+        endpoint: "https://api.openai.com/v1",
+      });
+      providerProfiles.selectActiveProviderProfile("openai");
+      const gateway = await startLocalGateway({ providerProfiles, port: 0 });
+
+      try {
+        // Proxy endpoint should still return translated request (not call LLM)
+        const response = await fetch(gateway.url("/v1/chat/completions"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model: "gpt-4", messages: [{ role: "user", content: "hello" }] }),
+        });
+
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        // Proxy mode returns the translated request, not an LLM response
+        expect(body.liveProviderCallRequired).toBe(false);
+        expect(body.providerRequest).toBeDefined();
+      } finally {
+        await gateway.close();
+        providerProfiles.close();
+      }
+    });
+  });
 });
 
 // ─── Test helpers ───
