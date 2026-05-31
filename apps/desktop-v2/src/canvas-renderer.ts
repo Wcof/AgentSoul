@@ -1,6 +1,6 @@
 // Canvas 2D 动画引擎
 import type { CompanionVisualState, FrameRect, PetAppearanceSnapshot, PetAssetPackManifest, PetStateName } from "./types";
-import { normalizePetAssetPack } from "./utils/petAssetPack";
+import { normalizePetAssetPack, resolveRenderableSpriteSrc } from "./utils/petAssetPack";
 
 export interface CanvasRenderer {
   canvas: HTMLCanvasElement;
@@ -54,7 +54,7 @@ function drawFromAssetPack(
   startTime: number,
 ): boolean {
   const assetPackPath = appearance.assetPackPath;
-  const spritePath = appearance.spritesheetPath;
+  const spritePath = appearance.spritesheetPath ? resolveRenderableSpriteSrc(appearance.spritesheetPath) : undefined;
   if (!spritePath || !assetPackPath) {
     return false;
   }

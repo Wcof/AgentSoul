@@ -1,19 +1,68 @@
-// Desktop Companion 入口文件 — 重新导出拆分后的子模块
+// Desktop Companion entry — uses area modules (Issue #114)
 import "./styles.css";
 
+// Re-export everything for backward compatibility
 export * from "./types";
 export * from "./renderers";
 export * from "./controller";
 export * from "./canvas-renderer";
 
-// 启动应用
-import { defaultCompanionSnapshot } from "./renderers";
-import { createDesktopCompanionController, loadCompanionRuntimeSnapshot } from "./controller";
+// Bootstrap the application
+import { defaultCompanionSnapshot } from "./data/defaultSnapshot";
+import { loadCompanionRuntimeSnapshot } from "./shared/shell";
+import { createDesktopCompanionController } from "./shared/app-controller";
 import { createLocalControlClient } from "./utils/localControlClient";
 import { initWindowSnap } from "./utils/windowSnap";
 import i18n from "./i18n";
 
-// Gateway base URL — configurable via window.__AGENSOUL_GATEWAY_URL or env
+// Area array — used by the shell render for tab-based display
+import { renderCompanionArea } from "./areas/companion/render";
+import { renderGatewayArea } from "./areas/gateway/render";
+import { renderCostsArea } from "./areas/costs/render";
+import { renderSkillsArea } from "./areas/skills/render";
+import { renderSessionsArea } from "./areas/sessions/render";
+import { renderConversationsArea } from "./areas/conversations/render";
+import { renderSafetyArea } from "./areas/safety/render";
+import { renderSettingsArea } from "./areas/settings/render";
+import { renderSettingsFullArea } from "./areas/settings-full/render";
+import { renderSessionsMgrArea } from "./areas/sessions-mgr/render";
+import { renderMcpArea } from "./areas/mcp/render";
+import { renderPromptsArea } from "./areas/prompts/render";
+
+import { bindCompanionArea } from "./areas/companion/bind";
+import { bindGatewayArea } from "./areas/gateway/bind";
+import { bindCostsArea } from "./areas/costs/bind";
+import { bindSkillsArea } from "./areas/skills/bind";
+import { bindSessionsArea } from "./areas/sessions/bind";
+import { bindConversationsArea } from "./areas/conversations/bind";
+import { bindSafetyArea } from "./areas/safety/bind";
+import { bindSettingsArea } from "./areas/settings/bind";
+import { bindSettingsFullArea } from "./areas/settings-full/bind";
+import { bindSessionsMgrArea } from "./areas/sessions-mgr/bind";
+import { bindMcpArea } from "./areas/mcp/bind";
+import { bindPromptsArea } from "./areas/prompts/bind";
+
+import type { CompanionRuntimeSnapshot } from "./types";
+
+/** Area registry — each area has an id, render function, and bind function */
+const areas = [
+  { id: "companion", render: renderCompanionArea, bind: bindCompanionArea },
+  { id: "gateway", render: renderGatewayArea, bind: bindGatewayArea },
+  { id: "costs", render: renderCostsArea, bind: bindCostsArea },
+  { id: "skills", render: renderSkillsArea, bind: bindSkillsArea },
+  { id: "sessions", render: renderSessionsArea, bind: bindSessionsArea },
+  { id: "conversations", render: renderConversationsArea, bind: bindConversationsArea },
+  { id: "safety", render: renderSafetyArea, bind: bindSafetyArea },
+  { id: "settings", render: renderSettingsArea, bind: bindSettingsArea },
+  { id: "settings-full", render: renderSettingsFullArea, bind: bindSettingsFullArea },
+  { id: "sessions-mgr", render: renderSessionsMgrArea, bind: bindSessionsMgrArea },
+  { id: "mcp", render: renderMcpArea, bind: bindMcpArea },
+  { id: "prompts", render: renderPromptsArea, bind: bindPromptsArea },
+];
+
+export { areas };
+
+// Gateway base URL
 const GATEWAY_BASE =
   (typeof window !== "undefined" && (window as any).__AGENSOUL_GATEWAY_URL) ||
   (typeof process !== "undefined" && process.env?.AGENSOUL_GATEWAY_URL) ||
@@ -30,21 +79,17 @@ async function bootstrapDesktopCompanion(app: HTMLElement): Promise<void> {
   document.body.classList.toggle("desktop-companion-mode", shellMode === "desktop-companion");
   document.body.classList.toggle("control-center-mode", shellMode === "control-center");
 
-  // 初始化桌面伴侣窗口自动吸附（仅 desktop-companion 模式）
   if (shellMode === "desktop-companion") {
     void initWindowSnap();
   }
 
-  // 创建本地控制面客户端
   const controlClient = createLocalControlClient({
     gatewayBase: GATEWAY_BASE,
     accessKey: readGatewayAccessKey(),
   });
 
-  // 加载伴侣原生状态（Tauri invoke 或 fallback）
   const baseSnapshot = await loadCompanionRuntimeSnapshot();
 
-  // 从权威存储加载业务状态（Gateway channels, MCP, sessions）
   let snapshot = baseSnapshot;
   let gatewayAvailable = false;
   try {
@@ -52,6 +97,7 @@ async function bootstrapDesktopCompanion(app: HTMLElement): Promise<void> {
     snapshot = {
       ...baseSnapshot,
       costs: authoritativeSnapshot.costs,
+      gateway: authoritativeSnapshot.gateway,
       channels: authoritativeSnapshot.channels,
       dashboardStats: authoritativeSnapshot.dashboardStats,
       keyTrend: authoritativeSnapshot.keyTrend,
@@ -72,16 +118,11 @@ async function bootstrapDesktopCompanion(app: HTMLElement): Promise<void> {
     };
     gatewayAvailable = true;
   } catch {
-    // Gateway 不可用 — 使用空业务状态，不展示演示数据
     snapshot = {
       ...baseSnapshot,
       costs: baseSnapshot.costs,
       channels: [],
-      dashboardStats: {
-        totalChannels: 0, activeChannels: 0, totalRequests: 0,
-        totalEstimatedCost: 0, overallSuccessRate: 100,
-        totalInputTokens: 0, totalOutputTokens: 0,
-      },
+      dashboardStats: { totalChannels: 0, activeChannels: 0, totalRequests: 0, totalEstimatedCost: 0, overallSuccessRate: 100, totalInputTokens: 0, totalOutputTokens: 0 },
       keyTrend: baseSnapshot.keyTrend,
       modelStats: baseSnapshot.modelStats,
       appSwitcher: baseSnapshot.appSwitcher,
@@ -95,7 +136,6 @@ async function bootstrapDesktopCompanion(app: HTMLElement): Promise<void> {
     };
   }
 
-  // Restore locally managed states for panels that are local-first by design.
   snapshot = hydrateLocalPanelState(snapshot);
 
   if (isSupportedLocale(snapshot.appSettings?.language) && i18n.language !== snapshot.appSettings.language) {
@@ -109,11 +149,9 @@ async function bootstrapDesktopCompanion(app: HTMLElement): Promise<void> {
     initialSnapshot: snapshot,
     controlClient,
     gatewayAvailable,
-    async performInteraction(kind) {
+    async performInteraction(kind: import("./types").CompanionInteractionKind) {
       return {
-        outcome: kind === "play" && snapshot.companion.vitals.companionEnergy < 20
-          ? "blocked-low-energy"
-          : "applied",
+        outcome: kind === "play" && snapshot.companion.vitals.companionEnergy < 20 ? "blocked-low-energy" : "applied",
         state: snapshot,
       };
     },
@@ -130,11 +168,8 @@ function readGatewayAccessKey(): string | undefined {
 function persistGatewayAccessKey(value: string | undefined): void {
   if (typeof localStorage === "undefined") return;
   const next = value?.trim() ?? "";
-  if (next.length === 0) {
-    localStorage.removeItem("agentsoul_gateway_access_key");
-  } else {
-    localStorage.setItem("agentsoul_gateway_access_key", next);
-  }
+  if (next.length === 0) localStorage.removeItem("agentsoul_gateway_access_key");
+  else localStorage.setItem("agentsoul_gateway_access_key", next);
 }
 
 function hydrateLocalPanelState(snapshot: typeof defaultCompanionSnapshot): typeof defaultCompanionSnapshot {
@@ -144,35 +179,15 @@ function hydrateLocalPanelState(snapshot: typeof defaultCompanionSnapshot): type
     const rawWebdav = localStorage.getItem("agentsoul_webdav_sync");
     if (rawWebdav) {
       const parsed = JSON.parse(rawWebdav);
-      next = {
-        ...next,
-        webdavSync: {
-          ...next.webdavSync,
-          ...parsed,
-          config: {
-            ...next.webdavSync.config,
-            ...(parsed?.config || {}),
-          },
-        },
-      };
+      next = { ...next, webdavSync: { ...next.webdavSync, ...parsed, config: { ...next.webdavSync.config, ...(parsed?.config || {}) } } };
     }
-  } catch {
-    // Ignore invalid local webdav cache.
-  }
+  } catch {}
   try {
     const rawActiveApp = localStorage.getItem("agentsoul_active_app");
     if (rawActiveApp && rawActiveApp in next.appSwitcher.visibleApps) {
-      next = {
-        ...next,
-        appSwitcher: {
-          ...next.appSwitcher,
-          activeApp: rawActiveApp as typeof next.appSwitcher.activeApp,
-        },
-      };
+      next = { ...next, appSwitcher: { ...next.appSwitcher, activeApp: rawActiveApp as typeof next.appSwitcher.activeApp } };
     }
-  } catch {
-    // Ignore invalid active app cache.
-  }
+  } catch {}
   return next;
 }
 
@@ -181,6 +196,9 @@ function isSupportedLocale(value: unknown): value is "zh" | "en" {
 }
 
 async function detectShellMode(): Promise<"desktop-companion" | "control-center"> {
+  const queryMode = readShellModeFromUrl();
+  if (queryMode) return queryMode;
+
   try {
     const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
     const label = getCurrentWebviewWindow().label;
@@ -188,4 +206,11 @@ async function detectShellMode(): Promise<"desktop-companion" | "control-center"
   } catch {
     return "control-center";
   }
+}
+
+function readShellModeFromUrl(): "desktop-companion" | "control-center" | undefined {
+  if (typeof window === "undefined") return undefined;
+  const mode = new URLSearchParams(window.location.search).get("shellMode");
+  if (mode === "desktop-companion" || mode === "control-center") return mode;
+  return undefined;
 }

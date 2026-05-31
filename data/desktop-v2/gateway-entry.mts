@@ -5,14 +5,19 @@ import Database from "better-sqlite3";
 import {
   startLocalGateway,
   createChannelStore,
+  createGatewayAuditRepository,
   createCostTracker,
+  createLocalCompanionKernel,
+  createProviderDirectCaller,
 } from "@agentsoul/gateway";
 import {
   initializeV2Database,
   createControlPlaneStore,
-  SessionRepository,
 } from "@agentsoul/persistence";
+import { SessionRepository } from "@agentsoul/sessions";
 import { createProviderProfileService } from "@agentsoul/provider";
+import { createMemoryStore } from "@agentsoul/memory";
+import { createSkillSourceStore } from "@agentsoul/skills";
 
 async function main() {
   const dataDir = join("/Users/ldh/Downloads/project/AgentSoul", "data", "desktop-v2");
@@ -23,11 +28,21 @@ async function main() {
 
   const providerProfiles = createProviderProfileService({ dbPath });
   const channelStore = createChannelStore({ dbPath });
-  const costTracker = createCostTracker({ channelStore });
+  const audit = createGatewayAuditRepository({ dbPath });
+  const costTracker = createCostTracker({ channelStore, audit });
   const controlPlaneStore = createControlPlaneStore(join(dataDir, "control-plane.sqlite"));
+  const memoryStore = createMemoryStore({ dbPath });
+  const skillStore = createSkillSourceStore({ dbPath });
 
   const db = new Database(dbPath);
   const sessionRepository = new SessionRepository(db);
+  const directCaller = createProviderDirectCaller({ providerProfiles, audit });
+  const companionKernel = createLocalCompanionKernel({
+    memoryStore,
+    skillStore,
+    directCaller,
+    projectPath: "/Users/ldh/Downloads/project/AgentSoul",
+  });
 
   const gateway = await startLocalGateway({
     providerProfiles,
@@ -35,6 +50,12 @@ async function main() {
     costTracker,
     controlPlaneStore,
     sessionRepository,
+    companionChat: {
+      directCaller,
+      memoryProvider: companionKernel.memoryProvider,
+      skillProvider: companionKernel.skillProvider,
+      compression: { maxCharacters: 12000, preserveRecentMessages: 8 },
+    },
     host: "127.0.0.1",
     port: 0,
   });
@@ -45,6 +66,9 @@ async function main() {
   // Keep alive until parent kills us
   process.on("SIGTERM", async () => {
     controlPlaneStore.close();
+    memoryStore.close();
+    skillStore.close();
+    audit.close();
     db.close();
     channelStore.close();
     costTracker.close();

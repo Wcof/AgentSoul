@@ -83,7 +83,8 @@ describe("Desktop Companion i18n behavior", () => {
     currentLanguage = "en";
     fns.renderAgentSoulShell(target, snapshot);
     expect(target.innerHTML).toMatch(/>Companion<\/a>/);
-    expect(target.innerHTML).not.toMatch(/伙伴/);
+    expect(target.innerHTML).toMatch(/>Companion<\/a>/);
+    expect(target.innerHTML).not.toMatch(/>伙伴<\/a>/);
   });
 
   it("falls back to English when translations are missing or i18n is not configured", () => {

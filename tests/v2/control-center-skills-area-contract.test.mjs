@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { readAllAreaSources } from "./helpers/areaSource.js";
 
 const root = process.cwd();
 
 describe("AgentSoul v2 Control Center Skills area", () => {
   it("exposes Skills Area rendering for installation, activation, and workspace deployment state", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
+    const source = readAllAreaSources(root);
 
     expect(source).toMatch(/Control Center Skills Area/);
     expect(source).toMatch(/renderControlCenterSkillsAreaViewModel/);

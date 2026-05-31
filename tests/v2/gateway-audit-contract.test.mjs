@@ -7,16 +7,19 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Gateway Audit Records", () => {
   it("exposes metadata-only Gateway Audit persistence boundaries", () => {
-    const source = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
+    const indexSource = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
+    const auditSource = readFileSync(join(root, "packages", "gateway", "src", "audit", "repository.ts"), "utf8");
 
-    expect(source).toMatch(/createGatewayAuditRepository/);
-    expect(source).toMatch(/TrafficMetadata/);
-    expect(source).toMatch(/estimatedCost/);
-    expect(source).toMatch(/summarizeCostTrends/);
-    expect(source).toMatch(/dailyCosts/);
-    expect(source).toMatch(/modelMix/);
-    expect(source).toMatch(/providerMix/);
-    expect(source).not.toMatch(/requestBody|responseBody|promptBody/i);
+    // Audit repository and re-exports
+    expect(indexSource).toMatch(/createGatewayAuditRepository/);
+    expect(indexSource).toMatch(/TrafficMetadata/);
+    // Implementation details live in audit/repository.ts
+    expect(auditSource).toMatch(/estimatedCost/);
+    expect(auditSource).toMatch(/summarizeCostTrends/);
+    expect(auditSource).toMatch(/dailyCosts/);
+    expect(auditSource).toMatch(/modelMix/);
+    expect(auditSource).toMatch(/providerMix/);
+    expect(auditSource).not.toMatch(/requestBody|responseBody|promptBody/i);
   });
 
   it("verifies metadata inclusion and body exclusion", () => {

@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { readAllAreaSources } from "./helpers/areaSource.js";
 
 const root = process.cwd();
 
 describe("AgentSoul v2 Control Center Safety area", () => {
   it("exposes Safety Area rendering for approval, notice, trust, risk, and authorization state", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
+    const source = readAllAreaSources(root);
 
     expect(source).toMatch(/Control Center Safety Area/);
     expect(source).toMatch(/renderControlCenterSafetyAreaViewModel/);

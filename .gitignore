@@ -52,6 +52,12 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Rust / Tauri
+target/
+apps/desktop-v2/src-tauri/target/
+apps/desktop-v2/src-tauri/gen/
+apps/desktop-v2/src-tauri/Cargo.lock
+
 # Environment and credentials
 .env
 .env.*
@@ -76,3 +82,14 @@ config.json
 
 # Prompt history backups
 .prompt_history/
+
+# SQLite databases
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Pet asset cache (downloaded at runtime)
+data/desktop-v2/pets/
+
+# AtomCode graph cache
+.atomcode/graph.bin

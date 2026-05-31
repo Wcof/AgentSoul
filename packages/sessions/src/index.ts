@@ -1,7 +1,8 @@
 import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import type { ApprovalDecisionKind, ClientAuthorizationMode, WorkSession } from "@agentsoul/domain";
-import { initializeV2Database, SessionRepository } from "@agentsoul/persistence";
+import { initializeV2Database } from "@agentsoul/persistence";
+import { SessionRepository } from "./session-repository.js";
 import type { ControlledEntryPoint, ScopedTrustGrant } from "@agentsoul/safety";
 
 export interface CreateSessionSourceScannerOptions {
@@ -534,3 +535,6 @@ function firstTextFromNestedEvidence(value: unknown): string | undefined {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+// ─── Repository (moved from persistence) ───
+export { SessionRepository } from "./session-repository.js";

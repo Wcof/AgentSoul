@@ -12,6 +12,11 @@ import { loadFailoverPolicy, routeThroughChannels } from "./channels/failover";
 import { normalizeTokenCount, estimateTrafficCost } from "./cost/tracker";
 import { translateGatewayRoute } from "./providers";
 import { handleDirectCall } from "./direct-call";
+import {
+  createAutonomousLoopService,
+  type AutonomousLoopService,
+} from "./autonomous-loop";
+import { handleCompanionChat, type CompanionChatOptions } from "./companion-chat";
 
 // ─── Re-exports: providers ───
 
@@ -33,6 +38,24 @@ export { createGatewayAuditRepository } from "./audit/repository";
 export type { CostSummary, CostTracker } from "./cost/tracker";
 export { createCostTracker, estimateTrafficCost, normalizeTokenCount } from "./cost/tracker";
 
+// ─── Re-exports: agent-loop (TDD Slice 4) ───
+
+export type { DirectCaller, AgentLoopOptions, AgentLoopResult, SessionRepository as AgentLoopSessionRepository, CompanionGrowth } from "./agent-loop";
+export { runConversation } from "./agent-loop";
+
+// ─── Re-exports: direct-call (TDD Slice 1) ───
+
+export type { DirectCallOptions } from "./direct-call";
+export { createProviderDirectCaller, handleDirectCall } from "./direct-call";
+
+// ─── Re-exports: autonomous loop ───
+
+export type { AutonomousLoopOptions, AutonomousLoopService, CompanionAutonomySnapshot } from "./autonomous-loop";
+export { createAutonomousLoopService } from "./autonomous-loop";
+export type { CompanionChatOptions } from "./companion-chat";
+export type { LocalCompanionKernel, LocalCompanionKernelOptions } from "./local-companion-kernel";
+export { createLocalCompanionKernel } from "./local-companion-kernel";
+
 // ─── Gateway entry-point types ───
 
 export interface LocalGatewayOptions {
@@ -44,6 +67,8 @@ export interface LocalGatewayOptions {
   sessionRepository?: SessionRepository;
   proxyAccessKey?: string;
   adminAccessKey?: string;
+  autonomousLoop?: AutonomousLoopService;
+  companionChat?: CompanionChatOptions;
   host?: string;
   port?: number;
 }
@@ -77,8 +102,10 @@ export interface LocalGateway {
 
 export async function startLocalGateway(options: LocalGatewayOptions): Promise<LocalGateway> {
   const host = options.host ?? "127.0.0.1";
+  const autonomousLoop = options.autonomousLoop ?? createAutonomousLoopService({ tickIntervalMs: 60_000 });
+  const runtimeOptions = { ...options, autonomousLoop };
   const server = createServer((request, response) => {
-    routeHttp(options, request, response);
+    routeHttp(runtimeOptions, request, response);
   });
 
   await listen(server, options.port ?? 0, host);
@@ -93,6 +120,7 @@ export async function startLocalGateway(options: LocalGatewayOptions): Promise<L
       return createGatewayHealth(options.providerProfiles.getActiveProviderProfile());
     },
     close() {
+      autonomousLoop.close();
       return close(server);
     },
   };
@@ -101,7 +129,7 @@ export async function startLocalGateway(options: LocalGatewayOptions): Promise<L
 // ─── HTTP routing ───
 
 function routeHttp(
-  options: Pick<LocalGatewayOptions, "providerProfiles" | "audit" | "channelStore" | "costTracker" | "controlPlaneStore" | "sessionRepository" | "proxyAccessKey" | "adminAccessKey">,
+  options: Pick<LocalGatewayOptions, "providerProfiles" | "audit" | "channelStore" | "costTracker" | "controlPlaneStore" | "sessionRepository" | "proxyAccessKey" | "adminAccessKey" | "autonomousLoop" | "companionChat">,
   request: IncomingMessage,
   response: ServerResponse,
 ): void {
@@ -117,6 +145,38 @@ function routeHttp(
 
   if (request.method === "GET" && url === "/health") {
     sendJson(response, 200, createGatewayHealth(options.providerProfiles.getActiveProviderProfile()));
+    return;
+  }
+
+  if (request.method === "POST" && url === "/companion/chat") {
+    if (!options.companionChat) {
+      sendJson(response, 503, { error: "companion-chat-not-configured" });
+      return;
+    }
+    void handleCompanionChat(request, response, options.companionChat);
+    return;
+  }
+
+  if (request.method === "GET" && url === "/companion/autonomy") {
+    sendJson(response, 200, { autonomy: options.autonomousLoop?.getSnapshot() });
+    return;
+  }
+  if (request.method === "POST" && url === "/companion/autonomy/tick") {
+    const decision = options.autonomousLoop?.tick();
+    sendJson(response, 200, { autonomy: options.autonomousLoop?.getSnapshot(), decision });
+    return;
+  }
+  if (request.method === "POST" && url === "/companion/autonomy/events") {
+    void handleAutonomyEvent(options, request, response);
+    return;
+  }
+  if (request.method === "PUT" && url === "/companion/autonomy/presence") {
+    void handleAutonomyPresence(options, request, response);
+    return;
+  }
+  if (request.method === "POST" && url === "/companion/autonomy/drain") {
+    const actions = options.autonomousLoop?.drainQueuedOutputs() ?? [];
+    sendJson(response, 200, { autonomy: options.autonomousLoop?.getSnapshot(), actions });
     return;
   }
 
@@ -432,6 +492,41 @@ function headerValue(value: string | string[] | undefined): string | undefined {
     return value[0];
   }
   return undefined;
+}
+
+async function handleAutonomyEvent(
+  options: Pick<LocalGatewayOptions, "autonomousLoop">,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  try {
+    const body = await readJsonBody(request) as import("@agentsoul/companion").PerceptionEvent;
+    if (!body.id || !body.source || !body.priority || !body.description || !body.observedAt) {
+      sendJson(response, 400, { error: "Invalid autonomy event payload" });
+      return;
+    }
+    const decision = options.autonomousLoop?.processEvent(body);
+    sendJson(response, 200, { autonomy: options.autonomousLoop?.getSnapshot(), decision });
+  } catch (error) {
+    sendJson(response, 400, { error: String(error) });
+  }
+}
+
+async function handleAutonomyPresence(
+  options: Pick<LocalGatewayOptions, "autonomousLoop">,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  try {
+    const body = await readJsonBody(request) as { userPresence?: import("@agentsoul/companion").UserPresenceState };
+    if (!body.userPresence) {
+      sendJson(response, 400, { error: "userPresence is required" });
+      return;
+    }
+    sendJson(response, 200, { autonomy: options.autonomousLoop?.updatePresence(body.userPresence) });
+  } catch (error) {
+    sendJson(response, 400, { error: String(error) });
+  }
 }
 
 // ─── Health / profile helpers ───

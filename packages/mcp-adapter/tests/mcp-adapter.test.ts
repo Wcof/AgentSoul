@@ -8,8 +8,9 @@ import {
   createIntimacy,
   createMood,
 } from "@agentsoul/domain";
-import type { CompanionRuntimeState } from "@agentsoul/runtime";
-import { createCompanionRuntime } from "@agentsoul/runtime";
+import type { CompanionRuntimeState } from "@agentsoul/companion";
+import { createCompanionRuntime } from "@agentsoul/companion";
+import { createMemoryStore } from "@agentsoul/memory";
 import { createV2McpAdapter } from "@agentsoul/mcp-adapter";
 import { decideSafetyPolicy } from "@agentsoul/safety";
 
@@ -204,7 +205,8 @@ describe("v2 MCP adapter", () => {
   it("provides v2 replacements for startup persona, soul, base rules, and memory MCP tools", () => {
     withRuntime((dbPath) => {
       const runtime = createCompanionRuntime({ dbPath });
-      const adapter = createV2McpAdapter({ runtime, dbPath });
+      const memoryStore = createMemoryStore({ dbPath });
+      const adapter = createV2McpAdapter({ runtime, memoryStore });
 
       try {
         expect([
@@ -276,6 +278,7 @@ describe("v2 MCP adapter", () => {
         expect((soulState.content[0].json as { affectiveState: { arousal: number } }).affectiveState
             .arousal).toBe(0.2);
       } finally {
+        memoryStore.close();
         runtime.close();
       }
     });

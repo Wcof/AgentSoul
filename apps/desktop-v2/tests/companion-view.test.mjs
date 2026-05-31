@@ -1,13 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const appRoot = new URL("..", import.meta.url).pathname;
 
+/** Read all area + shared source files concatenated (for pattern checks) */
+function readAllSources() {
+  let combined = "";
+  const areasDir = join(appRoot, "src", "areas");
+  for (const area of readdirSync(areasDir)) {
+    const areaPath = join(areasDir, area);
+    if (!statSync(areaPath).isDirectory()) continue;
+    for (const file of readdirSync(areaPath)) {
+      if (file.endsWith(".ts")) combined += readFileSync(join(areaPath, file), "utf8") + "\n";
+    }
+  }
+  const sharedDir = join(appRoot, "src", "shared");
+  for (const file of readdirSync(sharedDir)) {
+    if (file.endsWith(".ts")) combined += readFileSync(join(sharedDir, file), "utf8") + "\n";
+  }
+  combined += readFileSync(join(appRoot, "src", "renderers.ts"), "utf8") + "\n";
+  combined += readFileSync(join(appRoot, "src", "controller.ts"), "utf8") + "\n";
+  combined += readFileSync(join(appRoot, "src", "types.ts"), "utf8") + "\n";
+  combined += readFileSync(join(appRoot, "src", "data", "defaultSnapshot.ts"), "utf8") + "\n";
+  return combined;
+}
+
 describe("Desktop Companion appearance view", () => {
   it("renders Pet Appearance and basic Companion states from runtime snapshots", () => {
     const typesSource = readFileSync(join(appRoot, "src", "types.ts"), "utf8");
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Companion appearance view model/);
     expect(renderersSource).toMatch(/renderCompanionViewModel/);
@@ -19,7 +41,7 @@ describe("Desktop Companion appearance view", () => {
   });
 
   it("keeps rendering terms aligned with the AgentSoul Companion glossary", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Pet Appearance/);
     expect(renderersSource).toMatch(/Companion/);
@@ -29,8 +51,8 @@ describe("Desktop Companion appearance view", () => {
 
 describe("Desktop Companion interaction command flow", () => {
   it("exposes Feed, Play, Pet, and Sleep controls wired to Growth results", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
-    const controllerSource = readFileSync(join(appRoot, "src", "controller.ts"), "utf8");
+    const renderersSource = readAllSources();
+    const controllerSource = readAllSources();
     const typesSource = readFileSync(join(appRoot, "src", "types.ts"), "utf8");
 
     expect(controllerSource).toMatch(/createDesktopCompanionController/);
@@ -45,8 +67,8 @@ describe("Desktop Companion interaction command flow", () => {
 
 describe("Desktop Companion approval flow", () => {
   it("displays pending Approval Required state and exposes Allow/Deny decisions", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
-    const controllerSource = readFileSync(join(appRoot, "src", "controller.ts"), "utf8");
+    const renderersSource = readAllSources();
+    const controllerSource = readAllSources();
 
     expect(renderersSource).toMatch(/Approval Required/);
     expect(renderersSource).toMatch(/pendingApproval/);
@@ -58,7 +80,7 @@ describe("Desktop Companion approval flow", () => {
 
 describe("Desktop Companion risk notice flow", () => {
   it("displays Risk Notice state separately from Approval Required", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Risk Notice/);
     expect(renderersSource).toMatch(/riskNotices/);
@@ -70,7 +92,7 @@ describe("Desktop Companion risk notice flow", () => {
 
 describe("Control Center Companion area", () => {
   it("renders Companion state, Vitals, Mood, Pet Appearance, interactions, and Growth Events", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center Companion Area/);
     expect(renderersSource).toMatch(/renderControlCenterCompanionArea/);
@@ -90,7 +112,7 @@ describe("Control Center Companion area", () => {
 
 describe("Control Center task navigation", () => {
   it("renders seven task navigation targets and data attributes for all areas", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center task navigation/);
     expect(renderersSource).toMatch(/data-nav-target/);
@@ -102,7 +124,7 @@ describe("Control Center task navigation", () => {
 
 describe("Control Center Gateway area", () => {
   it("renders channel orchestration with channel cards, add/edit/delete controls, and route health", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center Gateway Area/);
     expect(renderersSource).toMatch(/renderControlCenterGatewayArea/);
@@ -126,7 +148,7 @@ describe("Control Center Gateway area", () => {
 
 describe("Control Center Costs area", () => {
   it("renders cost breakdown with per-channel data and dashboard stats", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center Costs Area/);
     expect(renderersSource).toMatch(/renderControlCenterCostsArea/);
@@ -143,7 +165,7 @@ describe("Control Center Costs area", () => {
 
 describe("Control Center Skills area", () => {
   it("renders Skill Installation, Project Skill Activation, Workspace Rule Deployment, and Safety Policy state", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center Skills Area/);
     expect(renderersSource).toMatch(/renderControlCenterSkillsArea/);
@@ -161,7 +183,7 @@ describe("Control Center Skills area", () => {
 
 describe("Control Center Sessions area", () => {
   it("renders Work Session search, resumable state, and safety-gated Session Launcher controls", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center Sessions Area/);
     expect(renderersSource).toMatch(/renderControlCenterSessionsArea/);
@@ -180,7 +202,7 @@ describe("Control Center Sessions area", () => {
 
 describe("Control Center Safety area", () => {
   it("renders Approval Requests, Risk Notices, Scoped Trust Grants, Action Risk Classes, and revoke controls", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center Safety Area/);
     expect(renderersSource).toMatch(/renderControlCenterSafetyArea/);
@@ -197,7 +219,7 @@ describe("Control Center Safety area", () => {
 
 describe("Control Center Settings area", () => {
   it("renders persona templates, locale switching, and growth profile settings", () => {
-    const renderersSource = readFileSync(join(appRoot, "src", "renderers.ts"), "utf8");
+    const renderersSource = readAllSources();
 
     expect(renderersSource).toMatch(/Control Center Settings Area/);
     expect(renderersSource).toMatch(/renderControlCenterSettingsArea/);
@@ -229,6 +251,22 @@ describe("Canvas 2D animation engine", () => {
     expect(canvasSource).toMatch(/drawInteractionButtons/);
   });
 
+  it("uses codex-pet asset packs as the primary desktop pet renderer", () => {
+    const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
+    const assetSource = readFileSync(join(appRoot, "src", "utils", "petAssetPack.ts"), "utf8");
+    const typesSource = readFileSync(join(appRoot, "src", "types.ts"), "utf8");
+
+    expect(canvasSource).toMatch(/drawFromAssetPack/);
+    expect(canvasSource).toMatch(/normalizePetAssetPack/);
+    expect(canvasSource).toMatch(/chromaKey/);
+    expect(canvasSource).toMatch(/clean-avatar/);
+    expect(assetSource).toMatch(/REQUIRED_STATES/);
+    for (const state of ["idle", "blink", "happy", "attention", "sleep", "degraded"]) {
+      expect(assetSource).toMatch(new RegExp(state));
+      expect(typesSource).toMatch(new RegExp(state));
+    }
+  });
+
   it("supports slime and cat appearance rendering", () => {
     const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
     const typesSource = readFileSync(join(appRoot, "src", "types.ts"), "utf8");
@@ -256,5 +294,31 @@ describe("Canvas 2D animation engine", () => {
     expect(canvasSource).toMatch(/Play/);
     expect(canvasSource).toMatch(/Pet/);
     expect(canvasSource).toMatch(/Sleep/);
+  });
+});
+
+describe("Codex-like desktop pet window", () => {
+  it("declares a transparent frameless always-on-top desktop companion separate from Control Center", () => {
+    const config = JSON.parse(readFileSync(join(appRoot, "src-tauri", "tauri.conf.json"), "utf8"));
+    const companionWindow = config.app.windows.find((window) => window.label === "desktop-companion");
+    const controlCenterWindow = config.app.windows.find((window) => window.label === "control-center");
+    const shellSource = readFileSync(join(appRoot, "src", "shared", "shell.ts"), "utf8");
+    const bindSource = readFileSync(join(appRoot, "src", "areas", "companion", "bind.ts"), "utf8");
+
+    expect(companionWindow).toMatchObject({
+      alwaysOnTop: true,
+      transparent: true,
+      decorations: false,
+      resizable: false,
+    });
+    expect(config.app.macOSPrivateApi).toBe(true);
+    expect(companionWindow.width).toBeLessThan(360);
+    expect(companionWindow.height).toBeLessThan(380);
+    expect(controlCenterWindow.visible).toBe(true);
+    expect(shellSource).toMatch(/renderDesktopCompanionWidget/);
+    expect(shellSource).toMatch(/pet-widget__character/);
+    expect(bindSource).toMatch(/contextmenu/);
+    expect(bindSource).toMatch(/openCompanionQuickMenu/);
+    expect(bindSource).toMatch(/pet-widget-hit/);
   });
 });

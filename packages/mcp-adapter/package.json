@@ -11,11 +11,11 @@
     }
   },
   "dependencies": {
+    "@agentsoul/companion": "2.0.0-alpha.0",
     "@agentsoul/domain": "2.0.0-alpha.0",
+    "@agentsoul/memory": "2.0.0-alpha.0",
     "@agentsoul/persistence": "2.0.0-alpha.0",
-    "@agentsoul/runtime": "2.0.0-alpha.0",
-    "@agentsoul/safety": "2.0.0-alpha.0",
-    "better-sqlite3": "^11.8.1"
+    "@agentsoul/safety": "2.0.0-alpha.0"
   },
   "devDependencies": {
     "tsx": "^4.19.2",

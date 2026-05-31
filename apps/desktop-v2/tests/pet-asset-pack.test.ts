@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePetAssetPack } from "../src/utils/petAssetPack";
+import { normalizePetAssetPack, resolveRenderableSpriteSrc } from "../src/utils/petAssetPack";
 
 describe("pet asset pack normalization", () => {
   it("normalizes full manifest with explicit states", () => {
@@ -42,5 +42,21 @@ describe("pet asset pack normalization", () => {
     expect(normalized.states.idle.frames?.length).toBeGreaterThan(0);
     expect(normalized.states.sleep.frames?.length).toBeGreaterThan(0);
     expect(normalized.validation.messages.join(" ")).toMatch(/states missing/);
+  });
+
+  it("converts absolute local sprite paths through the Tauri asset protocol when available", () => {
+    const original = (globalThis as any).__TAURI_INTERNALS__;
+    (globalThis as any).__TAURI_INTERNALS__ = {
+      convertFileSrc: (filePath: string, protocol = "asset") => `${protocol}://${encodeURIComponent(filePath)}`,
+    };
+
+    try {
+      expect(resolveRenderableSpriteSrc("/tmp/demo.codex-pet/spritesheet.webp")).toBe(
+        "asset://%2Ftmp%2Fdemo.codex-pet%2Fspritesheet.webp",
+      );
+    } finally {
+      if (original === undefined) delete (globalThis as any).__TAURI_INTERNALS__;
+      else (globalThis as any).__TAURI_INTERNALS__ = original;
+    }
   });
 });

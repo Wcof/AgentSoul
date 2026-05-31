@@ -9,6 +9,8 @@ import type {
 } from "@agentsoul/domain";
 import { initializeV2Database } from "@agentsoul/persistence";
 
+export * from "./credential-store.js";
+
 export interface ProviderPricingAssumptions {
   inputTokenUsd: number;
   outputTokenUsd: number;

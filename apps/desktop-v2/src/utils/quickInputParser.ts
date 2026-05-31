@@ -13,6 +13,7 @@ const PLATFORM_KEY_PATTERNS: RegExp[] = [
   /^hf_[a-zA-Z0-9]{30,}$/,               // Hugging Face
   /^gsk_[a-zA-Z0-9]{40,}$/,              // Groq
   /^pplx-[a-zA-Z0-9]{40,}$/,             // Perplexity
+  /^tp-[a-zA-Z0-9_-]{20,}$/,             // TokenPlan / third-party prefixed key
   /^r8_[a-zA-Z0-9]{20,}$/,               // Replicate
   /^[a-zA-Z0-9]{20,}\.[a-zA-Z0-9]{10,}$/, // 智谱 AI (id.secret)
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, // 火山引擎 Ark (UUID)
@@ -47,7 +48,7 @@ export function isValidApiKey(token: string): boolean {
   // 长随机字符串
   if (token.length >= 32 && /^[a-zA-Z0-9_-]+$/.test(token) && /[a-zA-Z]/.test(token) && /\d/.test(token)) return true;
   // 宽松前缀兜底
-  if (/^(sk|api|key|ut|hf|gsk|cr|ms|r8|pplx)[-_].+$/i.test(token)) return true;
+  if (/^(sk|api|key|ut|hf|gsk|cr|ms|r8|pplx|tp)[-_].+$/i.test(token)) return true;
   return false;
 }
 
@@ -68,6 +69,7 @@ function detectServiceTypeAndCleanUrl(url: string): { serviceType: DetectedServi
     const path = parsed.pathname.toLowerCase();
     const endpoints: Array<[string, DetectedServiceType]> = [
       ["/messages", "claude"],
+      ["/anthropic", "claude"],
       ["/chat/completions", "openai"],
       ["/responses", "responses"],
       ["/generatecontent", "gemini"],

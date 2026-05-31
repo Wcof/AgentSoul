@@ -7,11 +7,14 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Gateway Provider Adapter", () => {
   it("exposes first Provider Adapter and Unsupported Route handling", () => {
-    const source = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
+    const indexSource = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
+    const providersSource = readFileSync(join(root, "packages", "gateway", "src", "providers", "index.ts"), "utf8");
 
-    expect(source).toMatch(/OpenAICompatibleAdapter/);
-    expect(source).toMatch(/unsupported-route/);
-    expect(source).not.toMatch(new RegExp("fetch\\(|request\\("));
+    // Adapter and route handling live in providers module, re-exported from index
+    expect(providersSource).toMatch(/OpenAICompatibleAdapter/);
+    expect(providersSource).toMatch(/unsupported-route/);
+    expect(indexSource).toMatch(/translateGatewayRoute/);
+    expect(indexSource).not.toMatch(new RegExp("fetch\\(|request\\("));
   });
 
   it("verifies adapter translation without live provider calls", () => {

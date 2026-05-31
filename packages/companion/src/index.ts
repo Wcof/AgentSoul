@@ -15,7 +15,8 @@ import {
   createIntimacy,
   createMood,
 } from "@agentsoul/domain";
-import { initializeV2Database, CompanionStateRepository } from "@agentsoul/persistence";
+import { initializeV2Database } from "@agentsoul/persistence";
+import { CompanionStateRepository } from "./companion-repository.js";
 
 const DEFAULT_COMPANION_ID = "active-companion";
 const DEFAULT_SOUL_ID = "default-soul";
@@ -754,5 +755,16 @@ function positiveNumber(value: number, fallback: number): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
-// ─── PAD Engine v2 (Issues #72-75) ───
+// ─── Re-exports from merged packages ───
 
+export * from "./config";
+export * from "./health";
+export * from "./pad-engine";
+
+// ─── Soul & Prompt (TDD Slice 2) ───
+export * from "./soul";
+export * from "./prompt";
+export * from "./autonomy";
+
+// ─── Repository (moved from persistence) ───
+export { CompanionStateRepository } from "./companion-repository.js";

@@ -13,6 +13,8 @@ describe("AgentSoul v2 Tauri Desktop Companion shell", () => {
     const configPath = join(tauriRoot, "tauri.conf.json");
     const frontendMainPath = join(root, "apps", "desktop-v2", "src", "main.ts");
     const frontendControllerPath = join(root, "apps", "desktop-v2", "src", "controller.ts");
+    const frontendShellPath = join(root, "apps", "desktop-v2", "src", "shared", "shell.ts");
+    const frontendTauriIpcPath = join(root, "apps", "desktop-v2", "src", "utils", "tauriIpc.ts");
 
     expect(existsSync(cargoTomlPath)).toBe(true);
     expect(existsSync(mainPath)).toBe(true);
@@ -22,6 +24,8 @@ describe("AgentSoul v2 Tauri Desktop Companion shell", () => {
     const lib = readFileSync(libPath, "utf8");
     const frontendMain = readFileSync(frontendMainPath, "utf8");
     const frontendController = readFileSync(frontendControllerPath, "utf8");
+    const frontendShell = readFileSync(frontendShellPath, "utf8");
+    const frontendTauriIpc = readFileSync(frontendTauriIpcPath, "utf8");
     const config = JSON.parse(readFileSync(configPath, "utf8"));
 
     expect(cargoToml).toMatch(/tauri/);
@@ -31,8 +35,9 @@ describe("AgentSoul v2 Tauri Desktop Companion shell", () => {
     expect(lib).toMatch(/Approval Required/);
     expect(lib).toMatch(/Risk Notice/);
     expect(frontendMain).toMatch(/loadCompanionRuntimeSnapshot/);
-    expect(frontendController).toMatch(/get_companion_runtime_state/);
-    expect(frontendController).toMatch(/@tauri-apps\/api\/core/);
+    expect(frontendShell).toMatch(/get_companion_runtime_state/);
+    expect(frontendShell).toMatch(/tauriInvoke/);
+    expect(frontendTauriIpc).toMatch(/@tauri-apps\/api\/core/);
 
     const windowLabels = config.app.windows.map((window) => window.label);
     expect(windowLabels.sort()).toEqual(["control-center", "desktop-companion"]);

@@ -1,13 +1,96 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createGatewayAuditRepository, startLocalGateway, createChannelStore, createCostTracker } from "@agentsoul/gateway";
+import { createAutonomousLoopService, createGatewayAuditRepository, startLocalGateway, createChannelStore, createCostTracker } from "@agentsoul/gateway";
 import { createProviderProfileService } from "@agentsoul/provider";
-import { createControlPlaneStore, SessionRepository, initializeV2Database } from "@agentsoul/persistence";
+import { createControlPlaneStore, initializeV2Database } from "@agentsoul/persistence";
+import { SessionRepository } from "@agentsoul/sessions";
 import Database from "better-sqlite3";
 
 describe("Gateway server shell", () => {
+  it("runs desktop companion chat through the agent loop", async () => {
+    await withGateway(async (dbPath) => {
+      const providerProfiles = createProviderProfileService({ dbPath });
+      providerProfiles.createProviderProfile({
+        id: "openai",
+        name: "OpenAI",
+        activationMode: "gateway-route",
+        credentialRef: "credential:openai:primary",
+        clientProtocol: "openai-chat",
+        providerProtocol: "openai-chat",
+        targetModel: "gpt-4.1",
+        endpoint: "https://api.openai.com/v1",
+      });
+      providerProfiles.selectActiveProviderProfile("openai");
+      const directCaller = {
+        call: vi.fn().mockResolvedValue({
+          content: "你好，主人。",
+          usage: { inputTokens: 12, outputTokens: 6 },
+        }),
+      };
+      const gateway = await startLocalGateway({ providerProfiles, companionChat: { directCaller }, port: 0 });
+
+      try {
+        const response = await postJson(gateway.url("/companion/chat"), {
+          message: "你好",
+          history: [],
+        });
+        expect(response.reply).toBe("你好，主人。");
+        expect(response.iterations).toBe(1);
+        expect(response.tokenUsage).toEqual({ input: 12, output: 6, total: 18 });
+        expect(directCaller.call).toHaveBeenCalledTimes(1);
+      } finally {
+        await gateway.close();
+        providerProfiles.close();
+      }
+    });
+  });
+
+  it("exposes the running companion autonomy loop over the admin API", async () => {
+    await withGateway(async (dbPath) => {
+      const providerProfiles = createProviderProfileService({ dbPath });
+      const autonomousLoop = createAutonomousLoopService({
+        clock: () => new Date("2026-05-31T00:00:00.000Z"),
+      });
+      const gateway = await startLocalGateway({ providerProfiles, autonomousLoop, port: 0 });
+
+      try {
+        const initial = await getJson(gateway.url("/companion/autonomy"));
+        expect(initial.autonomy).toMatchObject({
+          userPresence: "PRESENT",
+          companionMode: "AUTONOMOUS",
+          queuedOutputCount: 0,
+        });
+
+        const event = await postJson(gateway.url("/companion/autonomy/events"), {
+          id: "memory-http-1",
+          source: "memory",
+          priority: "MEDIUM",
+          description: "主人喜欢在夜晚写代码",
+          observedAt: "2026-05-31T00:00:00.000Z",
+        });
+        expect(event.autonomy).toMatchObject({
+          companionMode: "QUEUING",
+          lastOutputStrategy: "queue",
+          queuedOutputCount: 1,
+        });
+
+        const presence = await putJson(gateway.url("/companion/autonomy/presence"), {
+          userPresence: "AWAY",
+        });
+        expect(presence.autonomy.userPresence).toBe("AWAY");
+
+        const drained = await postJson(gateway.url("/companion/autonomy/drain"), {});
+        expect(drained.actions).toHaveLength(1);
+        expect(drained.autonomy.queuedOutputCount).toBe(0);
+      } finally {
+        await gateway.close();
+        providerProfiles.close();
+      }
+    });
+  });
+
   it("starts locally and reports no-profile route readiness without live provider calls", async () => {
     await withGateway(async (dbPath) => {
       const providerProfiles = createProviderProfileService({ dbPath });

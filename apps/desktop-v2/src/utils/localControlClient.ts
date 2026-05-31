@@ -15,8 +15,11 @@ import type {
   PromptTemplateViewModel,
   SkillsAreaSnapshot,
   AppSettingsSnapshot,
+  ExternalToolGatewaySnapshot,
+  CompanionAutonomySnapshot,
 } from "../types";
 import { defaultCompanionSnapshot } from "../renderers";
+import { tauriInvoke } from "./tauriIpc";
 
 export interface ApprovalRequestVM {
   id: string;
@@ -82,6 +85,10 @@ export interface LocalControlClient {
   getSkillsState(): Promise<SkillsAreaSnapshot | null>;
   saveSkillsState(skills: SkillsAreaSnapshot): Promise<boolean>;
   saveAppSettings(settings: AppSettingsSnapshot): Promise<boolean>;
+  getExternalToolGatewayStatus(): Promise<ExternalToolGatewaySnapshot>;
+  startExternalToolGateway(): Promise<ExternalToolGatewaySnapshot>;
+  stopExternalToolGateway(): Promise<ExternalToolGatewaySnapshot>;
+  restartExternalToolGateway(): Promise<ExternalToolGatewaySnapshot>;
 }
 
 export interface ChannelCreateInput {
@@ -176,10 +183,17 @@ interface SkillsStateDTO {
 }
 
 function channelDTOtoVM(dto: GatewayChannelDTO, metrics?: GatewayMetricsDTO): ChannelListItemViewModel {
+  const gatewayType = (dto.type || "").toLowerCase();
+  const apiType: ChannelApiType =
+    gatewayType === "openai" ? "openai-chat"
+      : gatewayType === "claude" ? "claude"
+        : gatewayType === "codex" ? "codex"
+          : gatewayType === "gemini" ? "gemini"
+            : "openai-chat";
   return {
     id: dto.id,
     name: dto.name,
-    apiType: (dto.type as ChannelApiType) || "openai-chat",
+    apiType,
     baseUrl: dto.baseUrl,
     priority: dto.priority,
     status: (dto.status as any) || "active",
@@ -201,6 +215,7 @@ export function createLocalControlClient(options: LocalControlClientOptions): Lo
   const fetchFn = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const base = options.gatewayBase.replace(/\/$/, "");
   let runtimeAccessKey = options.accessKey?.trim() || "";
+  const invoke = options.invoke ?? tauriInvoke;
 
   async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${base}${path}`;
@@ -215,11 +230,24 @@ export function createLocalControlClient(options: LocalControlClientOptions): Lo
     if (body !== undefined) {
       init.body = JSON.stringify(body);
     }
-    const res = await fetchFn(url, init);
+    let res: Response;
+    try {
+      res = await fetchFn(url, init) as Response;
+    } catch (error: any) {
+      const reason = error?.message || "network error";
+      throw new Error(`gateway_unreachable:${base} (${reason})`);
+    }
     if (res.status === 204) return undefined as T;
-    const json = await (res as Response).json();
-    if (!(res as Response).ok) throw new Error(json.error || `API ${method} ${path} failed: ${(res as Response).status}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `API ${method} ${path} failed: ${res.status}`);
     return json as T;
+  }
+
+  function normalizeChannelType(type: string | undefined): string {
+    const raw = (type || "").toLowerCase();
+    if (raw === "openai-chat") return "openai";
+    if (raw === "responses") return "codex";
+    return raw || "openai";
   }
 
   return {
@@ -229,6 +257,13 @@ export function createLocalControlClient(options: LocalControlClientOptions): Lo
     async loadSnapshot(): Promise<CompanionRuntimeSnapshot> {
       const emptySnapshot = structuredClone(defaultCompanionSnapshot);
       const channelVMs: ChannelListItemViewModel[] = [];
+      let gatewayReachable = false;
+      try {
+        await api<{ status: string }>("GET", "/health");
+        gatewayReachable = true;
+      } catch {
+        gatewayReachable = false;
+      }
       try {
         const { channels } = await api<{ channels: GatewayChannelDTO[] }>("GET", "/channels");
         channelVMs.push(...channels.map((ch) => channelDTOtoVM(ch)));
@@ -468,8 +503,46 @@ export function createLocalControlClient(options: LocalControlClientOptions): Lo
           lastQueriedAt: new Date().toISOString(),
         };
 
+        const resumableSessions = localSessions.filter((session) => session.isResumable).length;
+        const runningMcpServers = mcpServers.filter((server) => server.status === "running").length;
+        const permitCount = safety.scopedTrustGrants.length;
+        const localHealthSignals = {
+          session: resumableSessions > 0 ? "ready" : "missing",
+          gateway: gatewayReachable ? "ready" : "missing",
+          mcp: runningMcpServers > 0 ? "ready" : "missing",
+          permit: permitCount > 0 ? "ready" : "missing",
+        } as const;
+        const readyCount = Object.values(localHealthSignals).filter((s) => s === "ready").length;
+        const nextHealthState: "healthy" | "attention" | "degraded" =
+          readyCount >= 3 ? "healthy" : readyCount >= 2 ? "attention" : "degraded";
+        const nextActivityState: "idle" | "attention" | "degraded" =
+          nextHealthState === "healthy" ? "idle" : nextHealthState === "attention" ? "attention" : "degraded";
+        const summary =
+          `session:${localHealthSignals.session}, gateway:${localHealthSignals.gateway}, mcp:${localHealthSignals.mcp}, permit:${localHealthSignals.permit}`;
+        let autonomy = emptySnapshot.companion.autonomy;
+        try {
+          const autonomyData = await api<{ autonomy?: CompanionAutonomySnapshot }>("GET", "/companion/autonomy");
+          if (autonomyData.autonomy) {
+            autonomy = autonomyData.autonomy;
+          }
+        } catch {
+          // Older gateway versions do not expose the running autonomy loop.
+        }
+
         return {
           ...emptySnapshot,
+          companion: {
+            ...emptySnapshot.companion,
+            activityState: nextActivityState,
+            healthState: nextHealthState,
+            summary,
+            autonomy,
+            availableQuickActions: ["open-control-center", "refresh-runtime", "hide-companion", "show-status"],
+            lastUpdatedAt: new Date().toISOString(),
+          },
+          gateway: {
+            ...emptySnapshot.gateway,
+          },
           channels: channelVMs,
           dashboardStats,
           keyTrend,
@@ -491,7 +564,7 @@ export function createLocalControlClient(options: LocalControlClientOptions): Lo
     async createChannel(input: ChannelCreateInput): Promise<ChannelListItemViewModel> {
       const { channel } = await api<{ channel: GatewayChannelDTO }>("POST", "/channels", {
         name: input.name,
-        type: input.type,
+        type: normalizeChannelType(input.type),
         baseUrl: input.baseUrl,
         apiKeys: input.apiKeys || [],
         description: input.description,
@@ -505,7 +578,7 @@ export function createLocalControlClient(options: LocalControlClientOptions): Lo
       const payload: Record<string, unknown> = {};
       if (input.name !== undefined) payload.name = input.name;
       if (input.baseUrl !== undefined) payload.baseUrl = input.baseUrl;
-      if (input.type !== undefined) payload.type = input.type;
+      if (input.type !== undefined) payload.type = normalizeChannelType(input.type);
       if (input.apiKeys !== undefined) payload.apiKeys = input.apiKeys;
       if (input.description !== undefined) payload.description = input.description;
       if (input.priority !== undefined) payload.priority = input.priority;
@@ -786,6 +859,22 @@ export function createLocalControlClient(options: LocalControlClientOptions): Lo
       } catch {
         return false;
       }
+    },
+
+    async getExternalToolGatewayStatus(): Promise<ExternalToolGatewaySnapshot> {
+      return invoke<ExternalToolGatewaySnapshot>("get_external_tool_gateway_status");
+    },
+
+    async startExternalToolGateway(): Promise<ExternalToolGatewaySnapshot> {
+      return invoke<ExternalToolGatewaySnapshot>("start_external_tool_gateway");
+    },
+
+    async stopExternalToolGateway(): Promise<ExternalToolGatewaySnapshot> {
+      return invoke<ExternalToolGatewaySnapshot>("stop_external_tool_gateway");
+    },
+
+    async restartExternalToolGateway(): Promise<ExternalToolGatewaySnapshot> {
+      return invoke<ExternalToolGatewaySnapshot>("restart_external_tool_gateway");
     },
   };
 }

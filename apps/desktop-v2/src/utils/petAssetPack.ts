@@ -37,6 +37,14 @@ export function normalizePetAssetPack(
   };
 }
 
+export function resolveRenderableSpriteSrc(spritePath: string): string {
+  const converter = (globalThis as any)?.__TAURI_INTERNALS__?.convertFileSrc;
+  if (typeof converter === "function" && isLocalAbsolutePath(spritePath)) {
+    return converter(spritePath, "asset");
+  }
+  return spritePath;
+}
+
 function normalizeManifest(
   raw: Partial<PetAssetPackManifest> | null | undefined,
   assetPackPath: string,
@@ -145,6 +153,10 @@ function resolveSpritePath(assetPackPath: string, spritePath: string): string {
   }
   const normalizedBase = assetPackPath.endsWith("/") ? assetPackPath.slice(0, -1) : assetPackPath;
   return `${normalizedBase}/${spritePath}`;
+}
+
+function isLocalAbsolutePath(path: string): boolean {
+  return path.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(path);
 }
 
 function nonEmpty(value: unknown): string | undefined {

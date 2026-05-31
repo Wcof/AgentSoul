@@ -10,23 +10,28 @@ function readJson(path) {
 }
 
 describe("AgentSoul v2 Credential Store bridge", () => {
-  it("exposes a local security workspace for Credential references", () => {
+  it("exposes credential store through the provider workspace", () => {
     const rootPackage = readJson(join(root, "package.json"));
-    const securityPackage = readJson(join(root, "packages", "security", "package.json"));
 
-    expect(rootPackage.workspaces.includes("packages/security")).toBe(true);
-    expect(rootPackage.scripts["security:test"]).toMatch(/vitest run/);
-    expect(rootPackage.scripts["security:typecheck"]).toMatch(/typecheck/);
-    expect(securityPackage.name).toBe("@agentsoul/security");
-    expect(securityPackage.dependencies["@agentsoul/domain"]).toBe("2.0.0-alpha.0");
+    expect(rootPackage.workspaces.includes("packages/provider")).toBe(true);
+    expect(rootPackage.workspaces.includes("packages/security")).toBe(false);
+    expect(rootPackage.scripts["security:test"]).toBeUndefined();
+    expect(rootPackage.scripts["security:typecheck"]).toBeUndefined();
 
-    const source = readFileSync(join(root, "packages", "security", "src", "index.ts"), "utf8");
-    expect(source).toMatch(/Credential Store bridge/);
-    expect(source).not.toMatch(/portableSecret|plaintextProviderSecret/i);
+    const providerPackage = readJson(join(root, "packages", "provider", "package.json"));
+    expect(providerPackage.name).toBe("@agentsoul/provider");
+    expect(providerPackage.dependencies["@agentsoul/domain"]).toBe("2.0.0-alpha.0");
+
+    const credentialStoreSource = readFileSync(
+      join(root, "packages", "provider", "src", "credential-store.ts"),
+      "utf8",
+    );
+    expect(credentialStoreSource).toMatch(/Credential Store bridge/);
+    expect(credentialStoreSource).not.toMatch(/portableSecret|plaintextProviderSecret/i);
   });
 
   it("verifies controlled credential access and routine secret exclusion", () => {
-    const output = execFileSync("npm", ["run", "security:test"], {
+    const output = execFileSync("npm", ["run", "provider:test"], {
       cwd: root,
       encoding: "utf8",
     });
@@ -34,12 +39,12 @@ describe("AgentSoul v2 Credential Store bridge", () => {
     expect(output).toMatch(/Credential Store bridge/);
   });
 
-  it("typechecks the security package through the root workspace script", () => {
-    const output = execFileSync("npm", ["run", "security:typecheck"], {
+  it("typechecks the provider package through the root workspace script", () => {
+    const output = execFileSync("npm", ["run", "provider:typecheck"], {
       cwd: root,
       encoding: "utf8",
     });
 
-    expect(output).toMatch(/@agentsoul\/security@2\.0\.0-alpha\.0 typecheck/);
+    expect(output).toMatch(/@agentsoul\/provider@2\.0\.0-alpha\.0 typecheck/);
   });
 });

@@ -5,6 +5,8 @@
  * 如果在阈值范围内则自动吸附到对应边缘。
  */
 
+import { tauriInvoke } from "./tauriIpc";
+
 const SNAP_THRESHOLD = 30; // px — 距离边缘多少像素内触发吸附
 const SNAP_ANIMATION_DURATION = 200; // ms
 
@@ -23,6 +25,11 @@ interface WindowInfo {
   height: number;
 }
 
+interface StoredWindowPosition {
+  x: number;
+  y: number;
+}
+
 /**
  * 初始化桌面伴侣窗口的自动吸附行为
  * 仅在 desktop-companion 模式下生效
@@ -30,7 +37,6 @@ interface WindowInfo {
 export async function initWindowSnap(): Promise<void> {
   try {
     const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-    const { invoke } = await import("@tauri-apps/api/core");
 
     const currentWindow = getCurrentWebviewWindow();
     const label = currentWindow.label;
@@ -41,8 +47,9 @@ export async function initWindowSnap(): Promise<void> {
     // 监听窗口移动结束事件
     await currentWindow.onMoved(async ({ payload: position }) => {
       try {
-        const screenInfo = (await invoke("get_screen_info")) as ScreenInfo;
-        const winInfo = (await invoke("get_window_info", { label })) as WindowInfo;
+        saveWindowPosition(position.x, position.y);
+        const screenInfo = (await tauriInvoke("get_screen_info")) as ScreenInfo;
+        const winInfo = (await tauriInvoke("get_window_info", { label })) as WindowInfo;
 
         // 计算物理像素下的屏幕边界
         const screenW = screenInfo.width;
@@ -81,7 +88,7 @@ export async function initWindowSnap(): Promise<void> {
               break;
           }
 
-          await invoke("set_window_position", {
+          await tauriInvoke("set_window_position", {
             label,
             x: snapX,
             y: snapY,
@@ -97,7 +104,7 @@ export async function initWindowSnap(): Promise<void> {
     });
 
     // 启动时恢复上次保存的吸附位置
-    await restoreSnapPosition(invoke, label);
+    await restoreSnapPosition(label);
   } catch (e) {
     // Tauri API 不可用（浏览器模式），忽略
     console.debug("Window snap not available:", e);
@@ -108,15 +115,20 @@ export async function initWindowSnap(): Promise<void> {
  * 启动时恢复上次保存的吸附位置
  */
 async function restoreSnapPosition(
-  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>,
   label: string,
 ): Promise<void> {
   try {
+    const savedPosition = loadWindowPosition();
+    if (savedPosition) {
+      await tauriInvoke("set_window_position", { label, x: savedPosition.x, y: savedPosition.y });
+      return;
+    }
+
     const savedEdge = loadSnapEdge();
     if (!savedEdge || savedEdge === "none") return;
 
-    const screenInfo = (await invoke("get_screen_info")) as ScreenInfo;
-    const winInfo = (await invoke("get_window_info", { label })) as WindowInfo;
+    const screenInfo = (await tauriInvoke("get_screen_info")) as ScreenInfo;
+    const winInfo = (await tauriInvoke("get_window_info", { label })) as WindowInfo;
 
     let x = winInfo.x;
     let y = winInfo.y;
@@ -136,13 +148,14 @@ async function restoreSnapPosition(
         break;
     }
 
-    await invoke("set_window_position", { label, x, y });
+    await tauriInvoke("set_window_position", { label, x, y });
   } catch (e) {
     console.debug("Restore snap position failed:", e);
   }
 }
 
 const STORAGE_KEY = "agentsoul_companion_snap_edge";
+const POSITION_STORAGE_KEY = "agentsoul_companion_position";
 
 function saveSnapEdge(edge: SnapEdge): void {
   try {
@@ -157,6 +170,29 @@ function loadSnapEdge(): SnapEdge | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw && ["left", "right", "top", "bottom"].includes(raw)) {
       return raw as SnapEdge;
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+function saveWindowPosition(x: number, y: number): void {
+  try {
+    const value: StoredWindowPosition = { x, y };
+    localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Ignore
+  }
+}
+
+function loadWindowPosition(): StoredWindowPosition | null {
+  try {
+    const raw = localStorage.getItem(POSITION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredWindowPosition>;
+    if (typeof parsed.x === "number" && Number.isFinite(parsed.x) && typeof parsed.y === "number" && Number.isFinite(parsed.y)) {
+      return { x: Math.round(parsed.x), y: Math.round(parsed.y) };
     }
   } catch {
     // Ignore

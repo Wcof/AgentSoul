@@ -12,8 +12,8 @@ import {
 import {
   initializeV2Database,
   createControlPlaneStore,
-  SessionRepository,
 } from "@agentsoul/persistence";
+import { SessionRepository } from "@agentsoul/sessions";
 import { createProviderProfileService } from "@agentsoul/provider";
 import { createLocalControlClient } from "../src/utils/localControlClient";
 

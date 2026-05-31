@@ -10,8 +10,8 @@
     "baseUrl": ".",
     "paths": {
       "@agentsoul/mcp-adapter": ["src/index.ts"],
+      "@agentsoul/companion": ["../companion/src/index.ts"],
       "@agentsoul/domain": ["../domain/src/index.ts"],
-      "@agentsoul/runtime": ["../runtime/src/index.ts"],
       "@agentsoul/safety": ["../safety/src/index.ts"]
     }
   },

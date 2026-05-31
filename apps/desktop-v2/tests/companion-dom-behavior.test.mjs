@@ -93,6 +93,84 @@ describe("Desktop Companion DOM rendering behavior", () => {
     expect(target.innerHTML).toMatch(/data-interaction="sleep"/);
   });
 
+  it("renders separated companion asset pack select and apply controls", () => {
+    const target = createMockTarget();
+    const snapshot = buildSnapshot({
+      companion: {
+        ...buildSnapshot().companion,
+        petAppearance: {
+          kind: "custom",
+          skin: "yuanqi-mianmian",
+          animationStyle: "idle",
+          assetPackPath: "/Users/ldh/Downloads/yuanqi-mianmian.codex-pet",
+        },
+      },
+    });
+    fns.renderAgentSoulShell(target, snapshot);
+
+    expect(target.innerHTML).toMatch(/data-companion-asset-pack-path/);
+    expect(target.innerHTML).toMatch(/data-companion-pick-pack/);
+    expect(target.innerHTML).toMatch(/data-companion-apply-pack/);
+    expect(target.innerHTML).toMatch(/选择文件夹/);
+    expect(target.innerHTML).toMatch(/更换形象/);
+  });
+
+  it("presents companion soul memory and master cognition fields in Chinese", () => {
+    const target = createMockTarget();
+    const snapshot = buildSnapshot({
+      companion: {
+        ...buildSnapshot().companion,
+        mood: "positive",
+        activityState: "happy",
+        healthState: "healthy",
+      },
+      growthHistory: [
+        { description: "Gateway traffic converted to growth", sourceType: "gateway", xpDelta: 5, occurredAt: "2026-05-31T00:00:00Z" },
+      ],
+    });
+    fns.renderAgentSoulShell(target, snapshot);
+
+    expect(target.innerHTML).toMatch(/灵魂/);
+    expect(target.innerHTML).toMatch(/记忆/);
+    expect(target.innerHTML).toMatch(/对 Master 的认知/);
+    expect(target.innerHTML).toMatch(/心情/);
+    expect(target.innerHTML).toMatch(/积极/);
+    expect(target.innerHTML).toMatch(/活动状态/);
+    expect(target.innerHTML).toMatch(/开心/);
+    expect(target.innerHTML).toMatch(/工作记忆/);
+    expect(target.innerHTML).toMatch(/情景记忆/);
+    expect(target.innerHTML).toMatch(/语义记忆/);
+    expect(target.innerHTML).toMatch(/Master 名称/);
+    expect(target.innerHTML).toMatch(/沟通风格/);
+  });
+
+  it("renders autonomous loop runtime state in the companion profile", () => {
+    const target = createMockTarget();
+    const snapshot = buildSnapshot({
+      companion: {
+        ...buildSnapshot().companion,
+        autonomy: {
+          userPresence: "PRESENT",
+          companionMode: "AUTONOMOUS",
+          lastEventPriority: "MEDIUM",
+          lastOutputStrategy: "express",
+          queuedOutputCount: 1,
+          lastAction: "surface-memory-or-status",
+        },
+      },
+    });
+    fns.renderAgentSoulShell(target, snapshot);
+
+    expect(target.innerHTML).toMatch(/自主循环/);
+    expect(target.innerHTML).toMatch(/用户存在/);
+    expect(target.innerHTML).toMatch(/在电脑前/);
+    expect(target.innerHTML).toMatch(/伴侣模式/);
+    expect(target.innerHTML).toMatch(/自主/);
+    expect(target.innerHTML).toMatch(/输出策略/);
+    expect(target.innerHTML).toMatch(/表达/);
+    expect(target.innerHTML).toMatch(/队列数量/);
+  });
+
   it("renders approval required section when pending approval is present", () => {
     const target = createMockTarget();
     const snapshot = buildSnapshot();
@@ -218,13 +296,13 @@ describe("Desktop Companion DOM rendering behavior", () => {
     expect(target.innerHTML).toMatch(/data-conversation-id="conv-1"/);
   });
 
-  it("renders advanced center modules (charts, backup, webdav, deeplink, usage footer)", () => {
+  it("renders advanced center modules (backup, webdav, deeplink, usage footer) without global charts", () => {
     const target = createMockTarget();
     const snapshot = buildSnapshot();
     fns.renderAgentSoulShell(target, snapshot);
 
-    expect(target.innerHTML).toMatch(/data-chart-type="key-trend"/);
-    expect(target.innerHTML).toMatch(/data-chart-type="model-stats"/);
+    expect(target.innerHTML).not.toMatch(/data-chart-type="key-trend"/);
+    expect(target.innerHTML).not.toMatch(/data-chart-type="model-stats"/);
     expect(target.innerHTML).toMatch(/data-control-area="backup"/);
     expect(target.innerHTML).toMatch(/data-control-area="webdav"/);
     expect(target.innerHTML).toMatch(/data-dialog="deeplink-import"/);

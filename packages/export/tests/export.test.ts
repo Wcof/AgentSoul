@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createUserManagedExportService } from "@agentsoul/export";
 import { createGatewayAuditRepository } from "@agentsoul/gateway";
 import { createProviderProfileService } from "@agentsoul/provider";
-import { createCompanionRuntime } from "@agentsoul/runtime";
+import { createCompanionRuntime } from "@agentsoul/companion";
 import { createSessionSourceScanner } from "@agentsoul/sessions";
 import { createSkillSourceStore } from "@agentsoul/skills";
 import { decideSafetyPolicy } from "@agentsoul/safety";

@@ -5,7 +5,7 @@ const root = process.cwd();
 
 describe("AgentSoul v2 Companion Energy behavior", () => {
   it("covers fatigue, XP dampening, rest recovery, and manual Sleep recovery", () => {
-    const output = execFileSync("npm", ["run", "runtime:test"], {
+    const output = execFileSync("npm", ["run", "companion:test"], {
       cwd: root,
       encoding: "utf8",
     });

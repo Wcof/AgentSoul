@@ -3,7 +3,8 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type { MemoryLayer, MemoryPriority, MemoryEntry } from "@agentsoul/domain";
-import { initializeV2Database, MemoryRepository } from "@agentsoul/persistence";
+import { initializeV2Database } from "@agentsoul/persistence";
+import { MemoryRepository } from "./memory-repository.js";
 
 export type { MemoryLayer, MemoryPriority, MemoryEntry };
 
@@ -133,3 +134,15 @@ export function createMemoryStore(options: MemoryStoreOptions): MemoryStore {
     },
   };
 }
+
+// Re-export entity and semantic stores
+export { createEntityStore } from "./entity.js";
+export type { EntityType, EntityFact, Entity, FactConfidence, WriteFactInput, EntityStoreOptions, EntityStore } from "./entity.js";
+
+export { createSemanticStore, createMockEmbedding } from "./semantic.js";
+export type { SemanticMatch, DeduplicationResult, EmbeddingProvider, SemanticStoreOptions, SemanticStore } from "./semantic.js";
+
+// ─── Repositories (moved from persistence) ───
+export { MemoryRepository } from "./memory-repository.js";
+export { EntityRepository } from "./entity-repository.js";
+export { SemanticRepository } from "./semantic-repository.js";

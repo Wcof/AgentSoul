@@ -10,8 +10,11 @@
     "baseUrl": ".",
     "paths": {
       "@agentsoul/gateway": ["src/index.ts"],
+      "@agentsoul/companion": ["../companion/src/index.ts"],
+      "@agentsoul/memory": ["../memory/src/index.ts"],
       "@agentsoul/persistence": ["../persistence/src/index.ts"],
-      "@agentsoul/provider": ["../provider/src/index.ts"]
+      "@agentsoul/provider": ["../provider/src/index.ts"],
+      "@agentsoul/skills": ["../skills/src/index.ts"]
     }
   },
   "include": ["src", "tests"]

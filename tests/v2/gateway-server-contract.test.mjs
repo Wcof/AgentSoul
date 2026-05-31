@@ -21,7 +21,14 @@ describe("AgentSoul v2 Gateway server shell", () => {
     expect(gatewayPackage.dependencies["@agentsoul/provider"]).toBe("2.0.0-alpha.0");
 
     const source = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
+    const launcher = readFileSync(join(root, "apps", "desktop-v2", "launcher.mjs"), "utf8");
     expect(source).toMatch(/startLocalGateway/);
+    expect(source).toMatch(/createLocalCompanionKernel/);
+    expect(source).toMatch(/companionChat/);
+    expect(launcher).toMatch(/createMemoryStore/);
+    expect(launcher).toMatch(/createSkillSourceStore/);
+    expect(launcher).toMatch(/createLocalCompanionKernel/);
+    expect(launcher).toMatch(/companionChat/);
     expect(source).toMatch(/getActiveProviderProfile/);
     expect(source).not.toMatch(/hardcodedCredential|sk-[a-zA-Z0-9]{20,}|api[_-]?key[_-]?=.*["'][a-zA-Z0-9]{20,}/i);
     // Field names like apiKeys are allowed; only hardcoded credential values are forbidden

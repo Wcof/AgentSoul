@@ -206,7 +206,7 @@ describe("Direct call endpoints", () => {
           });
 
           expect(response.status).toBe(200);
-          const body = await response.json();
+          const body = await response.json() as any;
           expect(body.choices[0].message.content).toBe("Hi there!");
           expect(mock.calls).toHaveLength(1);
           expect(mock.calls[0].url).toContain("openai.com");
@@ -373,7 +373,7 @@ describe("Direct call endpoints", () => {
           });
 
           expect(response.status).toBe(502);
-          const body = await response.json();
+          const body = await response.json() as any;
           expect(body.error).toBe("provider-call-failed");
         } finally {
           await gateway.close();
@@ -382,6 +382,70 @@ describe("Direct call endpoints", () => {
       });
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("direct call uses soul-driven prompt when companion context provided", async () => {
+    const mock = mockFetch({ choices: [{ message: { content: "reply" } }] });
+    try {
+      await withGateway(async (dbPath) => {
+        const providerProfiles = createProviderProfileService({ dbPath });
+        providerProfiles.createProviderProfile({
+          id: "openai", name: "OpenAI", activationMode: "gateway-route",
+          credentialRef: "credential:openai:primary", clientProtocol: "openai-chat",
+          providerProtocol: "openai-chat", targetModel: "gpt-4",
+          endpoint: "https://api.openai.com/v1",
+        });
+        providerProfiles.selectActiveProviderProfile("openai");
+        const gateway = await startLocalGateway({ providerProfiles, port: 0 });
+
+        try {
+          const response = await fetch(gateway.url("/v1/direct/chat/completions"), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              model: "gpt-4",
+              companionId: "test-companion",
+              companionName: "小明",
+              companionContext: {
+                pad: { pleasure: 0.3, arousal: 0.2, dominance: -0.2 },
+                vitals: { energy: 91, hunger: 82, intimacy: 66 },
+                masterModel: {
+                  basic: { name: "主人", preferredLanguage: "zh-CN", timezone: "Asia/Shanghai" },
+                  preferences: { interests: ["桌宠", "TypeScript"], communicationStyle: "直接" },
+                  behaviorPatterns: { responsePreference: "一步到位" },
+                  learningState: {
+                    solidifiedFacts: [{ claim: "主人希望 AgentSoul 像 Codex App Pets 一样在桌面出现" }],
+                  },
+                },
+                memories: [{ text: "主人正在验收伴侣内核" }],
+                sessionContext: "Gateway direct-call 验收",
+                level: 6,
+              },
+              messages: [{ role: "user", content: "你好" }],
+            }),
+          });
+
+          expect(response.status).toBe(200);
+          // Verify the LLM request includes a soul-driven system prompt
+          expect(mock.calls.length).toBe(1);
+          const llmBody = mock.calls[0].body as Record<string, unknown>;
+          const messages = llmBody.messages as Array<{ role: string; content: string }>;
+          const systemMsg = messages.find((m) => m.role === "system");
+          expect(systemMsg).toBeDefined();
+          expect(systemMsg!.content).toContain("身份：小明");
+          expect(systemMsg!.content).toContain("情感状态：pleasure=0.3");
+          expect(systemMsg!.content).toContain("主人画像");
+          expect(systemMsg!.content).toContain("主人希望 AgentSoul 像 Codex App Pets 一样在桌面出现");
+          expect(systemMsg!.content).toContain("相关记忆：主人正在验收伴侣内核");
+          expect(systemMsg!.content).not.toContain("helpful assistant");
+        } finally {
+          await gateway.close();
+          providerProfiles.close();
+        }
+      });
+    } finally {
+      mock.restore();
     }
   });
 
@@ -406,7 +470,7 @@ describe("Direct call endpoints", () => {
         });
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await response.json() as any;
         // Proxy mode returns the translated request, not an LLM response
         expect(body.liveProviderCallRequired).toBe(false);
         expect(body.providerRequest).toBeDefined();

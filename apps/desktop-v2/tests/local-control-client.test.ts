@@ -4,6 +4,29 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // The client abstracts between Tauri invoke and HTTP fetch.
 
 describe("local control client", () => {
+  it("uses injected invoke for desktop-only third-party tool gateway controls", async () => {
+    const invoke = vi.fn(async (command: string) => ({
+      state: command.includes("start") ? "running" : "stopped",
+      host: "127.0.0.1",
+      port: 3001,
+      url: "http://127.0.0.1:3001",
+      pid: 42,
+      message: command,
+    }));
+    const { createLocalControlClient } = await import("../src/utils/localControlClient.ts");
+    const client = createLocalControlClient({
+      gatewayBase: "http://127.0.0.1:9999",
+      invoke,
+      fetchImpl: vi.fn() as any,
+    });
+
+    await expect(client.startExternalToolGateway()).resolves.toMatchObject({
+      state: "running",
+      port: 3001,
+    });
+    expect(invoke).toHaveBeenCalledWith("start_external_tool_gateway");
+  });
+
   it("attaches bearer authorization header when accessKey is provided", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -120,6 +143,23 @@ describe("local control client", () => {
           }),
         };
       }
+      if (url.includes("/companion/autonomy")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            autonomy: {
+              userPresence: "AWAY",
+              companionMode: "QUEUING",
+              lastEventPriority: "MEDIUM",
+              lastOutputStrategy: "queue",
+              queuedOutputCount: 2,
+              lastAction: "surface-memory-or-status",
+              cooldownUntil: "2026-05-31T00:00:30.000Z",
+            },
+          }),
+        };
+      }
       if (url.includes("/sessions")) {
         return {
           ok: true,
@@ -213,6 +253,20 @@ describe("local control client", () => {
     expect(snapshot.safety.scopedTrustGrants[0].id).toBe("trust-1");
     expect(snapshot.sessions.workSessions[0].id).toBe("sess-1");
     expect(snapshot.sessions.workSessions[0].projectPath).toBe("/workspace/project-a");
+    expect(snapshot.companion.healthState).toBe("attention");
+    expect(snapshot.companion.activityState).toBe("attention");
+    expect(snapshot.companion.availableQuickActions).toContain("hide-companion");
+    expect(snapshot.companion.summary).toContain("session:ready");
+    expect(snapshot.companion.summary).toContain("permit:ready");
+    expect(snapshot.companion.autonomy).toEqual({
+      userPresence: "AWAY",
+      companionMode: "QUEUING",
+      lastEventPriority: "MEDIUM",
+      lastOutputStrategy: "queue",
+      queuedOutputCount: 2,
+      lastAction: "surface-memory-or-status",
+      cooldownUntil: "2026-05-31T00:00:30.000Z",
+    });
   });
 
   it("creates a channel through gateway HTTP", async () => {
@@ -258,6 +312,44 @@ describe("local control client", () => {
     expect(channel.name).toBe("New Channel");
     expect(createdBody).not.toBeNull();
     expect(createdBody.name).toBe("New Channel");
+    expect(createdBody.type).toBe("openai");
+  });
+
+  it("normalizes channel type when updating channel", async () => {
+    let updateBody = null;
+    const fetchMock = vi.fn(async (url, init) => {
+      if (url.includes("/channels/ch-1") && init?.method === "PUT") {
+        updateBody = JSON.parse(init.body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            channel: {
+              id: "ch-1",
+              name: "Updated",
+              type: "codex",
+              baseUrl: "http://localhost:3000",
+              apiKeys: ["key-1"],
+              priority: 0,
+              status: "active",
+              createdAt: "2026-01-01T00:00:00Z",
+              updatedAt: "2026-01-01T00:00:00Z",
+            },
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    const { createLocalControlClient } = await import("../src/utils/localControlClient.ts");
+    const client = createLocalControlClient({
+      gatewayBase: "http://127.0.0.1:9999",
+      fetchImpl: fetchMock,
+    });
+
+    await client.updateChannel("ch-1", { type: "responses" });
+    expect(updateBody).not.toBeNull();
+    expect(updateBody.type).toBe("codex");
   });
 
   it("deletes a channel through gateway HTTP", async () => {

@@ -18,7 +18,7 @@ describe("AgentSoul v2 default Chinese locale", () => {
 
   it("uses zh as the initial app settings language in desktop snapshot", () => {
     const source = readFileSync(
-      join(root, "apps", "desktop-v2", "src", "renderers.ts"),
+      join(root, "apps", "desktop-v2", "src", "data", "defaultSnapshot.ts"),
       "utf8",
     );
 

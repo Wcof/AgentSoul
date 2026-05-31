@@ -17,7 +17,7 @@ describe("AgentSoul v2 workspace scaffold", () => {
     expect(rootPackage.private).toBe(true);
     expect(rootPackage.workspaces).toContain("apps/desktop-v2");
     expect(rootPackage.workspaces).toContain("packages/domain");
-    expect(rootPackage.workspaces.length).toBeGreaterThanOrEqual(14);
+    expect(rootPackage.workspaces.length).toBeGreaterThanOrEqual(12);
     expect(rootPackage.scripts["v2:test"]).toMatch(/vitest run/);
     expect(rootPackage.scripts["v2:typecheck"]).toMatch(/typecheck/);
     expect(rootPackage.scripts["v2:dev"]).toBe("npm --workspace @agentsoul/desktop-v2 run dev");
@@ -32,9 +32,6 @@ describe("AgentSoul v2 workspace scaffold", () => {
 
     expect(existsSync(join(root, "apps", "desktop-v2", "src", "main.ts"))).toBe(true);
     expect(existsSync(join(root, "apps", "desktop-v2", "src-tauri", "tauri.conf.json"))).toBe(true);
-    expect(existsSync(join(root, "src", "gateway", "proxy_server.py"))).toBe(true);
-    expect(existsSync(join(root, "src", "desktop_pet", "widget.py"))).toBe(true);
-    expect(existsSync(join(root, "apps", "mcp-server", "src", "index.ts"))).toBe(true);
   });
 
   it("runs a v2 command through the root workspace script", () => {

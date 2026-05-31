@@ -40,19 +40,19 @@ npm run v2:tauri dev
 npm run v2:test
 
 # Run specific package tests
-npm run gateway:test
+npm run companion:test      # Companion runtime + soul + prompt + PAD
+npm run gateway:test        # Gateway server + agent-loop + direct-call
 npm run safety:test
 npm run skills:test
 npm run sessions:test
-npm run runtime:test
 npm run persistence:test
-npm run security:test
 npm run provider:test
 npm run mcp-adapter:test
 npm run export:test
 npm run memory:test
-npm run entity:test
-npm run semantic:test
+
+# Run frontend tests
+npx vitest run apps/desktop-v2/tests/
 
 # Run all package tests
 vitest run
@@ -96,23 +96,16 @@ AgentSoul/
 │       │   └── src/lib.rs         # Tauri commands, asset loading
 │       └── tests/                 # Frontend tests
 ├── packages/
-│   ├── domain/                    # Shared domain types
-│   ├── gateway/                   # Local HTTP gateway server
-│   ├── persistence/               # SQLite persistence layer
-│   ├── sessions/                  # Session management
-│   ├── runtime/                   # Companion runtime state
-│   ├── companion/                 # Companion behavior
-│   ├── pad-engine/                # PAD emotion engine
-│   ├── config/                    # Configuration management
-│   ├── health/                    # Health checks
-│   ├── security/                  # Credential store
-│   ├── provider/                  # Provider profiles
-│   ├── safety/                    # Safety policy engine
-│   ├── skills/                    # Skill management
-│   ├── memory/                    # Hierarchical memory
-│   ├── entity/                    # Entity memory
-│   ├── semantic/                  # Semantic search
-│   ├── mcp-adapter/               # MCP protocol adapter
+│   ├── domain/                    # Shared domain types (pure types, no deps)
+│   ├── companion/                 # Core: runtime, PAD, health, config, personality
+│   ├── gateway/                   # Local HTTP gateway (channels, cost, audit)
+│   ├── persistence/               # SQLite init, migrate, ControlPlaneStore
+│   ├── sessions/                  # Session management + SessionRepository
+│   ├── provider/                  # Provider profiles + credential store
+│   ├── safety/                    # Safety policy engine + approval flows
+│   ├── skills/                    # Skill pack management
+│   ├── memory/                    # Unified: memory + entity + semantic
+│   ├── mcp-adapter/               # MCP protocol adapter (protocol conversion only)
 │   └── export/                    # Data export
 ├── tests/
 │   └── v2/                        # Cross-package contract tests

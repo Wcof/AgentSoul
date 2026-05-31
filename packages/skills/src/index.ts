@@ -10,7 +10,8 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import type { SkillPackId } from "@agentsoul/domain";
-import { initializeV2Database, SkillRepository } from "@agentsoul/persistence";
+import { initializeV2Database } from "@agentsoul/persistence";
+import { SkillRepository } from "./skill-repository.js";
 
 export type SkillSourceKind = "local-directory" | "git-repository" | "archive";
 
@@ -556,3 +557,6 @@ function parseManagedRuleFile(row: ManagedRuleFileRow): ManagedRuleFile {
     createdAt: row.created_at,
   };
 }
+
+// ─── Repository (moved from persistence) ───
+export { SkillRepository } from "./skill-repository.js";

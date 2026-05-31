@@ -1,3 +1,17 @@
+// ═══════════════════════════════════════════════════════════════════════
+// AreaContext — Unified area injection interface (Issue #114)
+// ═══════════════════════════════════════════════════════════════════════
+
+export type TranslationFunction = (key: string, fallback: string) => string;
+
+export interface AreaContext {
+  target: HTMLElement;
+  snapshot: CompanionRuntimeSnapshot;
+  controller: DesktopCompanionController;
+  controlClient: LocalControlClientLike;
+  t: TranslationFunction;
+}
+
 export type CompanionVisualState = "idle" | "positive" | "fatigue" | "sleep" | "attention";
 export type CompanionInteractionKind = "feed" | "play" | "pet" | "sleep";
 export type CompanionInteractionOutcome = "applied" | "blocked-low-energy";
@@ -30,6 +44,21 @@ export type CompanionQuickAction =
   | "refresh-runtime"
   | "hide-companion"
   | "show-status";
+
+export type UserPresenceState = "ACTIVE" | "PRESENT" | "IDLE" | "AWAY" | "OFFLINE";
+export type CompanionMode = "AUTONOMOUS" | "CONVERSING" | "THINKING" | "QUEUING" | "SLEEPING" | "INTRUDING";
+export type CompanionEventPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export type CompanionOutputStrategy = "silent" | "queue" | "express" | "interrupt";
+
+export interface CompanionAutonomySnapshot {
+  userPresence: UserPresenceState;
+  companionMode: CompanionMode;
+  lastEventPriority?: CompanionEventPriority;
+  lastOutputStrategy?: CompanionOutputStrategy;
+  queuedOutputCount: number;
+  lastAction?: string;
+  cooldownUntil?: string;
+}
 
 export type PetStateName = "idle" | "blink" | "happy" | "attention" | "sleep" | "degraded";
 
@@ -92,6 +121,7 @@ export interface CompanionRuntimeSnapshot {
     summary?: string;
     availableQuickActions?: CompanionQuickAction[];
     lastUpdatedAt?: string;
+    autonomy?: CompanionAutonomySnapshot;
   };
   providerProfile: {
     id: string;
@@ -170,6 +200,18 @@ export interface GatewayAreaSnapshot {
   targetModel: string;
   adapterSupport: "supported" | "unsupported";
   fallbackStatus: "not-needed" | "available" | "active";
+  externalToolGateway?: ExternalToolGatewaySnapshot;
+}
+
+export type ExternalToolGatewayState = "stopped" | "running" | "error";
+
+export interface ExternalToolGatewaySnapshot {
+  state: ExternalToolGatewayState;
+  host: string;
+  port: number;
+  url: string;
+  pid?: number | null;
+  message: string;
 }
 
 export interface CostsAreaSnapshot {
@@ -372,6 +414,10 @@ export interface LocalControlClientLike {
   getSkillsState(): Promise<SkillsAreaSnapshot | null>;
   saveSkillsState(skills: SkillsAreaSnapshot): Promise<boolean>;
   saveAppSettings(settings: AppSettingsSnapshot): Promise<boolean>;
+  getExternalToolGatewayStatus?(): Promise<ExternalToolGatewaySnapshot>;
+  startExternalToolGateway?(): Promise<ExternalToolGatewaySnapshot>;
+  stopExternalToolGateway?(): Promise<ExternalToolGatewaySnapshot>;
+  restartExternalToolGateway?(): Promise<ExternalToolGatewaySnapshot>;
 }
 
 export interface DesktopCompanionControllerOptions {
@@ -607,6 +653,11 @@ export interface AppSettingsSnapshot {
   lastBackupAt?: string;
   autoBackup: boolean;
   autoBackupInterval: number;
+
+  // WebDAV
+  webdavEnabled: boolean;
+  webdavUrl: string;
+  webdavUser: string;
 }
 
 // ─── 渠道日志 (仿照 CCX ChannelLogsDialog) ───
@@ -875,4 +926,24 @@ export interface DeepLinkImportSnapshot {
     message: string;
     importedCount: number;
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Chat Types (TDD Slice 3)
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: string;
+  emotion?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  companionId: string;
+  messages: ChatMessage[];
+  startedAt: string;
+  lastMessageAt: string;
 }

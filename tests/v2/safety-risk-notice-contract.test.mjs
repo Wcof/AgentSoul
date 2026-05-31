@@ -2,13 +2,14 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { readAllAreaSources } from "./helpers/areaSource.js";
 
 const root = process.cwd();
 
 describe("AgentSoul v2 Risk Notice flow", () => {
   it("exposes Risk Notice as readable non-blocking state, separate from Approval Required", () => {
     const safetySource = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
-    const desktopSource = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
+    const desktopSource = readAllAreaSources(root);
 
     expect(safetySource).toMatch(/createRiskNoticeFlow/);
     expect(safetySource).toMatch(/blocking: false/);

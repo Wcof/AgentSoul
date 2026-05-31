@@ -100,10 +100,21 @@ describe("desktop-v2 boot flow", () => {
   });
 
   it("controller business flows are unified on localControlClient", async () => {
-    const { readFileSync } = await import("node:fs");
+    const { readFileSync, readdirSync, statSync } = await import("node:fs");
     const { join } = await import("node:path");
     const appRoot = new URL("..", import.meta.url).pathname;
-    const controllerSource = readFileSync(join(appRoot, "src", "controller.ts"), "utf8");
+    // Read all area bind sources since controller.ts is now a barrel file
+    let controllerSource = "";
+    const areasDir = join(appRoot, "src", "areas");
+    for (const area of readdirSync(areasDir)) {
+      const areaPath = join(areasDir, area);
+      if (!statSync(areaPath).isDirectory()) continue;
+      try { controllerSource += readFileSync(join(areaPath, "bind.ts"), "utf8") + "\n"; } catch {}
+    }
+    const sharedDir = join(appRoot, "src", "shared");
+    for (const file of readdirSync(sharedDir)) {
+      if (file.endsWith(".ts")) try { controllerSource += readFileSync(join(sharedDir, file), "utf8") + "\n"; } catch {}
+    }
 
     // Controller should no longer import the old gateway client for business writes.
     expect(controllerSource).not.toMatch(/from "\.\/utils\/gatewayClient"/);
@@ -159,21 +170,21 @@ describe("desktop-v2 boot flow", () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const appRoot = new URL("..", import.meta.url).pathname;
-    const controllerSource = readFileSync(join(appRoot, "src", "controller.ts"), "utf8");
+    const settingsFullBind = readFileSync(join(appRoot, "src", "areas", "settings-full", "bind.ts"), "utf8");
 
-    expect(controllerSource).toMatch(/refreshBackupsFromControl/);
-    expect(controllerSource).toMatch(/controlClient\.saveAppSettings\(snapshot\.appSettings\)/);
-    expect(controllerSource).toMatch(/controlClient\.listBackups\(\)/);
+    expect(settingsFullBind).toMatch(/refreshBackupsFromControl/);
+    expect(settingsFullBind).toMatch(/controlClient\.saveAppSettings/);
+    expect(settingsFullBind).toMatch(/controlClient\.listBackups/);
   });
 
   it("deeplink import flow refreshes authoritative snapshot after import", async () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const appRoot = new URL("..", import.meta.url).pathname;
-    const controllerSource = readFileSync(join(appRoot, "src", "controller.ts"), "utf8");
+    const settingsBind = readFileSync(join(appRoot, "src", "areas", "settings", "bind.ts"), "utf8");
 
-    expect(controllerSource).toMatch(/syncFromControlSnapshot/);
-    expect(controllerSource).toMatch(/await controlClient\.loadSnapshot\(\)/);
-    expect(controllerSource).toMatch(/dialog\.close\(\)/);
+    expect(settingsBind).toMatch(/syncFromControlSnapshot/);
+    expect(settingsBind).toMatch(/await controlClient\.loadSnapshot\(\)/);
+    expect(settingsBind).toMatch(/dialog\.close\(\)/);
   });
 });

@@ -17,9 +17,9 @@
     "better-sqlite3": "^11.8.1"
   },
   "devDependencies": {
+    "@agentsoul/companion": "2.0.0-alpha.0",
     "@agentsoul/gateway": "2.0.0-alpha.0",
     "@agentsoul/provider": "2.0.0-alpha.0",
-    "@agentsoul/runtime": "2.0.0-alpha.0",
     "@agentsoul/sessions": "2.0.0-alpha.0",
     "@agentsoul/skills": "2.0.0-alpha.0",
     "@types/better-sqlite3": "^7.6.12",

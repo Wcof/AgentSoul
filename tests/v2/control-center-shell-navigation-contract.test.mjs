@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { readAllAreaSources } from "./helpers/areaSource.js";
 
 const root = process.cwd();
 
 describe("AgentSoul v2 Control Center shell navigation", () => {
   it("renders local-first task navigation for the seven Control Center areas", () => {
-    const source = readFileSync(join(root, "apps", "desktop-v2", "src", "renderers.ts"), "utf8");
+    const source = readAllAreaSources(root);
     const css = readFileSync(join(root, "apps", "desktop-v2", "src", "styles.css"), "utf8");
 
     for (const area of ["companion", "gateway", "skills", "sessions", "costs", "safety", "settings"]) {

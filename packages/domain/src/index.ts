@@ -284,3 +284,25 @@ export interface ExportManifest {
   excludedSections: string[];
   createdAt: string;
 }
+
+// ─── Companion Intelligence Types (CONTEXT.md) ───
+
+export type UserPresence = "ACTIVE" | "PRESENT" | "IDLE" | "AWAY" | "OFFLINE";
+export type CompanionMode = "AUTONOMOUS" | "CONVERSING" | "THINKING" | "QUEUING" | "SLEEPING" | "INTRUDING";
+export type OutputStrategy = "bubble" | "silent" | "force-notify" | "queue";
+export type EventPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export interface CompanionIntelligenceState {
+  userPresence: UserPresence;
+  companionMode: CompanionMode;
+  lastPresenceChange: string;
+  lastModeChange: string;
+}
+
+export interface PerceptualEvent {
+  id: string;
+  type: string;
+  priority: EventPriority;
+  payload: unknown;
+  triggeredAt: string;
+}
