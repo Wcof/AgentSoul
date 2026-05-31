@@ -37,10 +37,20 @@
 npm install
 ```
 
+### 默认桌面开发模式
+
+```bash
+npm run dev
+```
+
+这会启动 Tauri 原生桌面端，并打开两个原生窗口：
+- **Desktop Companion** — 280×320 悬浮宠物窗口
+- **Control Center** — 1100×760 控制中心窗口
+
 ### 浏览器开发模式
 
 ```bash
-# 启动 Vite 开发服务器
+# 仅启动 Vite 开发服务器
 npm run v2:dev
 
 # 或者同时启动 Gateway 侧车
@@ -52,10 +62,6 @@ cd apps/desktop-v2 && npm run launch
 ```bash
 npm run v2:tauri dev
 ```
-
-这会启动两个原生窗口：
-- **Desktop Companion** — 280×320 悬浮宠物窗口
-- **Control Center** — 1100×760 控制中心窗口
 
 ---
 

@@ -12,7 +12,8 @@ This is an AgentSoul v2 project — a local-first AI Agent Companion built with 
 
 ## Key Commands
 
-- `npm run v2:dev` — start Vite dev server
+- `npm run dev` — start native Tauri desktop with companion and control center
+- `npm run v2:dev` — start Vite dev server only
 - `npm run v2:test` — run contract tests
 - `npm run v2:tauri dev` — run native Tauri desktop
 
