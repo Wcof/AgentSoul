@@ -3,7 +3,7 @@
  * These are used across all areas and shared modules.
  */
 import type {
-  CompanionRuntimeSnapshot,
+  DesktopBodySnapshot,
   CompanionVisualState,
   CompanionInteractionKind,
 } from "../types";
@@ -18,7 +18,7 @@ export function t(key: string, fallback: string): string {
   return fallback;
 }
 
-export function resolveVisualState(snapshot: CompanionRuntimeSnapshot): CompanionVisualState {
+export function resolveVisualState(snapshot: DesktopBodySnapshot): CompanionVisualState {
   const { mood, vitals } = snapshot.companion;
   if (mood === "sleeping") return "sleep";
   if (mood === "fatigued" || vitals.companionEnergy < 20) return "fatigue";
@@ -84,14 +84,4 @@ export function formatBytes(bytes: number): string {
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error";
-}
-
-export function resolveSessionResumeFeedback(message: string): { key: string; level: "info" | "error"; hintKey?: string } {
-  const normalized = (message || "").toLowerCase();
-  if (normalized.includes("not found")) return { key: "sessions.resumeReason.notFound", level: "info", hintKey: "sessions.resumeHint.refresh" };
-  if (normalized.includes("not resumable")) return { key: "sessions.resumeReason.notResumable", level: "info" };
-  if (normalized.includes("no resume command")) return { key: "sessions.resumeReason.noCommand", level: "error", hintKey: "sessions.resumeHint.reScan" };
-  if (normalized.includes("timed out") || normalized.includes("timeout")) return { key: "sessions.resumeReason.timeout", level: "error", hintKey: "sessions.resumeHint.retry" };
-  if (normalized.includes("enoent") || normalized.includes("not recognized")) return { key: "sessions.resumeReason.commandMissing", level: "error", hintKey: "sessions.resumeHint.installCli" };
-  return { key: "sessions.resumeReason.execFailed", level: "error", hintKey: "sessions.resumeHint.retry" };
 }

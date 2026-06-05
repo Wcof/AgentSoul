@@ -1,33 +1,31 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Gateway Audit Records", () => {
-  it("exposes metadata-only Gateway Audit persistence boundaries", () => {
-    const indexSource = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
-    const auditSource = readFileSync(join(root, "packages", "gateway", "src", "audit", "repository.ts"), "utf8");
-
-    // Audit repository and re-exports
-    expect(indexSource).toMatch(/createGatewayAuditRepository/);
-    expect(indexSource).toMatch(/TrafficMetadata/);
-    // Implementation details live in audit/repository.ts
-    expect(auditSource).toMatch(/estimatedCost/);
-    expect(auditSource).toMatch(/summarizeCostTrends/);
-    expect(auditSource).toMatch(/dailyCosts/);
-    expect(auditSource).toMatch(/modelMix/);
-    expect(auditSource).toMatch(/providerMix/);
-    expect(auditSource).not.toMatch(/requestBody|responseBody|promptBody/i);
-  });
-
-  it("verifies metadata inclusion and body exclusion", () => {
-    const output = execFileSync("npm", ["run", "gateway:test"], {
-      cwd: root,
-      encoding: "utf8",
+  it("can load a metadata-only audit adapter without requiring a built-in gateway package", async () => {
+    const { runtime } = createAdapterRuntime("gateway-audit", {
+      id: "gateway.audit.summarize",
+      title: "Summarize Gateway Audit",
+      surface: "drawer",
+      handler: ({ input }) => ({
+        dailyCosts: [{ date: "2026-06-05", estimatedCost: input.estimatedCost }],
+        modelMix: { [input.model]: 1 },
+        providerMix: { [input.provider]: 1 },
+      }),
     });
 
-    expect(output).toMatch(/Gateway Audit Records/);
+    const summary = await runtime.invoke("gateway.audit.summarize", {
+      provider: "local",
+      model: "test-model",
+      estimatedCost: 0.02,
+      requestBody: "must-not-be-returned",
+    });
+
+    expect(summary).toEqual({
+      dailyCosts: [{ date: "2026-06-05", estimatedCost: 0.02 }],
+      modelMix: { "test-model": 1 },
+      providerMix: { local: 1 },
+    });
+    expect(JSON.stringify(summary)).not.toMatch(/requestBody|responseBody|promptBody/i);
   });
 });

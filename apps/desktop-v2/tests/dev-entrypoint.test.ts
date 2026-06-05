@@ -24,6 +24,18 @@ describe("development entrypoint", () => {
     expect(devDesktopScript).not.toMatch(/import\.meta\.dirname/);
   });
 
+  it("clears a stale repo-owned Vite dev server before Tauri starts", () => {
+    expect(devDesktopScript).toMatch(/ensureDevPortAvailable/);
+    expect(devDesktopScript).toMatch(/port:\s*"1420"/);
+  });
+
+  it("reuses an already-running Vite dev server instead of starting a duplicate", () => {
+    expect(devDesktopScript).toMatch(/isDevServerResponding/);
+    expect(devDesktopScript).toMatch(/beforeDevCommand/);
+    expect(devDesktopScript).toMatch(/--no-dev-server-wait/);
+    expect(devDesktopScript).toMatch(/--no-watch/);
+  });
+
   it("keeps Vite as the frontend server used by Tauri dev", () => {
     expect(rootPackageJson.scripts["v2:dev"]).toBe("npm --workspace @agentsoul/desktop-v2 run dev");
     expect(tauriConfig.build.beforeDevCommand).toBe("npm run dev");

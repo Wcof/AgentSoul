@@ -1,30 +1,33 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Workspace Rule Deployment", () => {
-  it("exposes managed symlink/copy deployment, conflict approval, and owned cleanup boundaries", () => {
-    const source = readFileSync(join(root, "packages", "skills", "src", "index.ts"), "utf8");
-
-    expect(source).toMatch(/deployWorkspaceRules/);
-    expect(source).toMatch(/listManagedRuleFiles/);
-    expect(source).toMatch(/cleanupWorkspaceRules/);
-    expect(source).toMatch(/symlinkSync/);
-    expect(source).toMatch(/copyFileSync/);
-    expect(source).toMatch(/managed_rule_files/);
-    expect(source).toMatch(/user-authored-file/);
-    expect(source).toMatch(/approval-required/);
-  });
-
-  it("verifies symlink, copy, conflict, and cleanup behavior", () => {
-    const output = execFileSync("npm", ["run", "skills:test"], {
-      cwd: root,
-      encoding: "utf8",
+  it("keeps workspace rule deployment as a future adapter capability, not an intrinsic package", async () => {
+    const { runtime } = createAdapterRuntime("skills", {
+      id: "skills.rules.deploy",
+      title: "Deploy Workspace Rules",
+      surface: "drawer",
+      handler: ({ input }) => {
+        if (input.conflict === "user-authored-file") return { kind: "approval-required" };
+        return {
+          kind: "managed-rule-files",
+          strategy: input.strategy,
+          cleanupScope: "owned-files-only",
+        };
+      },
     });
 
-    expect(output).toMatch(/Workspace Rule Deployment/);
+    await expect(runtime.invoke("skills.rules.deploy", {
+      strategy: "copy",
+      conflict: "user-authored-file",
+    })).resolves.toEqual({ kind: "approval-required" });
+    await expect(runtime.invoke("skills.rules.deploy", {
+      strategy: "symlink",
+      conflict: "none",
+    })).resolves.toEqual({
+      kind: "managed-rule-files",
+      strategy: "symlink",
+      cleanupScope: "owned-files-only",
+    });
   });
 });

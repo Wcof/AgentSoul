@@ -6,25 +6,18 @@
   "description": "AgentSoul v2 TypeScript/Tauri desktop companion and control center",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "launch": "node launcher.mjs",
-    "launch:gateway": "node launcher.mjs --no-vite",
     "test": "cd ../.. && vitest run apps/desktop-v2/tests/ && echo \"Desktop Companion appearance view\" && echo \"Pet Appearance\"",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "tauri": "tauri"
   },
   "dependencies": {
+    "@agentsoul/companion": "2.0.0-alpha.0",
     "@tauri-apps/api": "^2.2.0",
-    "i18next": "^26.3.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-i18next": "^17.0.8",
-    "zustand": "^5.0.14"
+    "i18next": "^26.3.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.2.7",
-    "@types/react": "^19.2.15",
-    "@types/react-dom": "^19.2.3",
     "playwright": "^1.60.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"

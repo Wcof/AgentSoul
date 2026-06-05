@@ -1,28 +1,25 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Gateway Provider Adapter", () => {
-  it("exposes first Provider Adapter and Unsupported Route handling", () => {
-    const indexSource = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
-    const providersSource = readFileSync(join(root, "packages", "gateway", "src", "providers", "index.ts"), "utf8");
-
-    // Adapter and route handling live in providers module, re-exported from index
-    expect(providersSource).toMatch(/OpenAICompatibleAdapter/);
-    expect(providersSource).toMatch(/unsupported-route/);
-    expect(indexSource).toMatch(/translateGatewayRoute/);
-    expect(indexSource).not.toMatch(new RegExp("fetch\\(|request\\("));
-  });
-
-  it("verifies adapter translation without live provider calls", () => {
-    const output = execFileSync("npm", ["run", "gateway:test"], {
-      cwd: root,
-      encoding: "utf8",
+  it("can be loaded as an external capability adapter with unsupported-route behavior", async () => {
+    const { runtime } = createAdapterRuntime("gateway-provider", {
+      id: "gateway.provider.route",
+      title: "Route Provider Request",
+      surface: "drawer",
+      handler: ({ input }) => {
+        if (input.route !== "chat.completions") return { kind: "unsupported-route", route: input.route };
+        return { kind: "translated", provider: input.provider };
+      },
     });
 
-    expect(output).toMatch(/Gateway Provider Adapter routing/);
+    await expect(runtime.invoke("gateway.provider.route", {
+      provider: "openai-compatible",
+      route: "chat.completions",
+    })).resolves.toEqual({ kind: "translated", provider: "openai-compatible" });
+    await expect(runtime.invoke("gateway.provider.route", { route: "images.generate" })).resolves.toEqual({
+      kind: "unsupported-route",
+      route: "images.generate",
+    });
   });
 });

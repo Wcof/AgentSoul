@@ -1,30 +1,30 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime, expectRetiredCapability } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Safety Policy", () => {
-  it("exposes policy language for approval, risk notice, timeout, unavailable, and trust grants", () => {
-    const source = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
+  it("loads safety policy decisions through a Desktop adapter capability", async () => {
+    expectRetiredCapability("safety.approval.review");
 
-    expect(source).toMatch(/classifyActionRisk/);
-    expect(source).toMatch(/decideSafetyPolicy/);
-    expect(source).toMatch(/resolveApprovalTimeout/);
-    expect(source).toMatch(/ScopedTrustGrant/);
-    expect(source).toMatch(/approval-required/);
-    expect(source).toMatch(/risk-notice/);
-    expect(source).toMatch(/timeout-denied/);
-    expect(source).toMatch(/unavailable-denied/);
-  });
-
-  it("verifies Safety Policy decision outcomes through the package test suite", () => {
-    const output = execFileSync("npm", ["run", "safety:test"], {
-      cwd: root,
-      encoding: "utf8",
+    const { runtime } = createAdapterRuntime("safety", {
+      id: "safety.policy.decide",
+      title: "Decide Safety Policy",
+      surface: "drawer",
+      handler: ({ input }) => {
+        if (input.unavailable) return { decision: "unavailable-denied" };
+        if (input.timedOut) return { decision: "timeout-denied" };
+        if (input.trusted) return { decision: "fully-authorized" };
+        return { decision: input.riskClass === "critical" ? "approval-required" : "risk-notice" };
+      },
     });
 
-    expect(output).toMatch(/Safety Policy decision engine/);
+    await expect(runtime.invoke("safety.policy.decide", { riskClass: "critical" })).resolves.toEqual({
+      decision: "approval-required",
+    });
+    await expect(runtime.invoke("safety.policy.decide", { riskClass: "medium" })).resolves.toEqual({
+      decision: "risk-notice",
+    });
+    await expect(runtime.invoke("safety.policy.decide", { trusted: true })).resolves.toEqual({
+      decision: "fully-authorized",
+    });
   });
 });

@@ -1,100 +1,59 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const appRoot = new URL("..", import.meta.url).pathname;
 
-/** Read all area + shared source files concatenated */
-function readAllSources() {
-  let combined = "";
-  const areasDir = join(appRoot, "src", "areas");
-  for (const area of readdirSync(areasDir)) {
-    const areaPath = join(areasDir, area);
-    if (!statSync(areaPath).isDirectory()) continue;
-    for (const file of readdirSync(areaPath)) {
-      if (file.endsWith(".ts")) {
-        combined += readFileSync(join(areaPath, file), "utf8") + "\n";
-      }
-    }
-  }
-  const sharedDir = join(appRoot, "src", "shared");
-  for (const file of readdirSync(sharedDir)) {
-    if (file.endsWith(".ts")) {
-      combined += readFileSync(join(sharedDir, file), "utf8") + "\n";
-    }
-  }
-  // Also include barrel files
-  combined += readFileSync(join(appRoot, "src", "renderers.ts"), "utf8") + "\n";
-  combined += readFileSync(join(appRoot, "src", "controller.ts"), "utf8") + "\n";
-  return combined;
+function readDesktopBodyShellSources() {
+  return [
+    "main.ts",
+    "renderers.ts",
+    "controller.ts",
+    "desktop-body/index.ts",
+    "desktop-body/bootstrap.ts",
+    "desktop-companion-surface.ts",
+    "desktop-companion-experience.ts",
+    "agent-mind/index.ts",
+    "memory/index.ts",
+    "extension-runtime/index.ts",
+  ]
+    .map((file) => readFileSync(join(appRoot, "src", ...file.split("/")), "utf8"))
+    .join("\n");
 }
 
-describe("AgentSoul v2 desktop shell", () => {
-  it("declares the local-first companion shell copy", () => {
-    const source = readAllSources();
-
-    expect(source).toMatch(/AgentSoul v2 desktop shell/);
-    expect(source).toMatch(/Local-first AI Agent Companion/);
-    expect(source).toMatch(/Desktop Companion and Control Center/);
-  });
-
-  it("supports a desktop-companion shell mode URL override for visual smoke testing", () => {
+describe("AgentSoul v2 Desktop Body shell", () => {
+  it("uses a thin Desktop Body default entrypoint", () => {
     const source = readFileSync(join(appRoot, "src", "main.ts"), "utf8");
 
-    expect(source).toMatch(/shellMode/);
-    expect(source).toMatch(/desktop-companion/);
-    expect(source).toMatch(/URLSearchParams/);
+    expect(source).toMatch(/bootstrapDesktopBody/);
+    expect(source).toMatch(/\.\/desktop-body/);
+    expect(source).not.toMatch(/shellMode/);
+    expect(source).not.toMatch(/URLSearchParams/);
+    expect(source).not.toMatch(/renderAgentSoulShell/);
+  });
+
+  it("keeps the shell vocabulary aligned with Desktop Body-first architecture", () => {
+    const source = readDesktopBodyShellSources();
+
+    expect(source).toMatch(/Desktop Body|bootstrapDesktopBody/);
+    expect(source).toMatch(/Agent Mind|agent-mind|buildAgentMindPromptLayers/);
+    expect(source).toMatch(/Memory|masterModel|memory/);
+    expect(source).toMatch(/Extension Runtime|createExtensionRuntime/);
+    expect(source).not.toMatch(/Control Center task navigation/);
+    expect(source).not.toMatch(/data-nav-target/);
   });
 });
 
-describe("Control Center i18n integration", () => {
-  it("imports i18n module and supports locale switching", () => {
-    const source = readFileSync(join(appRoot, "src", "main.ts"), "utf8");
+describe("Desktop Body i18n resources", () => {
+  it("keeps bilingual resources available without routing through Control Center renderers", () => {
     const i18nSource = readFileSync(join(appRoot, "src", "i18n", "index.ts"), "utf8");
+    const en = readFileSync(join(appRoot, "src", "i18n", "en.json"), "utf8");
+    const zh = readFileSync(join(appRoot, "src", "i18n", "zh.json"), "utf8");
 
     expect(i18nSource).toMatch(/i18next/);
     expect(i18nSource).toMatch(/zh/);
     expect(i18nSource).toMatch(/en/);
-  });
-
-  it("includes locale switcher in the renderers", () => {
-    const source = readAllSources();
-
-    expect(source).toMatch(/locale/i);
-    expect(source).toMatch(/data-locale-toggle/);
-  });
-
-  it("includes channel orchestration UI in the gateway area", () => {
-    const source = readAllSources();
-
-    expect(source).toMatch(/channel-orchestration/);
-    expect(source).toMatch(/channel-card/);
-    expect(source).toMatch(/data-channel-action/);
-    expect(source).toMatch(/data-channel-edit/);
-  });
-
-  it("includes companion customization UI", () => {
-    const source = readAllSources();
-
-    expect(source).toMatch(/companion-customization/);
-    expect(source).toMatch(/skin-preview/);
-    expect(source).toMatch(/data-companion-field/);
-    expect(source).toMatch(/data-skin-select/);
-  });
-
-  it("includes persona template cards in settings", () => {
-    const source = readAllSources();
-
-    expect(source).toMatch(/persona-grid/);
-    expect(source).toMatch(/persona-card/);
-    expect(source).toMatch(/data-persona-select/);
-  });
-
-  it("includes cost breakdown table with per-channel data", () => {
-    const source = readAllSources();
-
-    expect(source).toMatch(/cost-breakdown/);
-    expect(source).toMatch(/cost-table/);
-    expect(source).toMatch(/perChannel/);
+    expect(en).toMatch(/Desktop Body|desktop companion/i);
+    expect(zh).toMatch(/Desktop Body|桌面|伴侣/);
   });
 });

@@ -10,6 +10,7 @@
     }
   },
   "dependencies": {
+    "@agentsoul/companion": "2.0.0-alpha.0",
     "@agentsoul/domain": "2.0.0-alpha.0",
     "@agentsoul/persistence": "2.0.0-alpha.0",
     "better-sqlite3": "^11.8.1"

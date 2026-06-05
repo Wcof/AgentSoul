@@ -2,7 +2,6 @@ import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type { ClientAuthorizationMode, ExportManifest, ExportKind, ProviderProfile } from "@agentsoul/domain";
 import { initializeV2Database } from "@agentsoul/persistence";
-import type { ScopedTrustGrant } from "@agentsoul/safety";
 
 export const USER_MANAGED_EXPORT_FORMAT_VERSION = "agentsoul-export-v1";
 export const USER_MANAGED_EXPORT_SCHEMA_VERSION = 1;
@@ -39,8 +38,6 @@ export interface PortableWorkSession {
   lastActiveAt: string;
   client?: string;
   sessionId?: string;
-  resumeCommand?: string;
-  evidenceSummary?: string;
 }
 
 export interface PortableTrafficMetadataSummary {
@@ -74,6 +71,16 @@ export type SensitiveExportResult =
       approvalDecisionKind: "allowed";
       trustGrantId?: string;
     };
+
+export interface ScopedTrustGrant {
+  id: string;
+  actionKinds: string[];
+  projectPath?: string;
+  clientId?: string;
+  maxRiskClass: "high-risk" | "critical";
+  expiresAt: string;
+  revokedAt?: string;
+}
 
 export interface SensitiveExportInput {
   payload: unknown;
@@ -319,8 +326,6 @@ function readWorkSessions(db: Database.Database): PortableWorkSession[] {
     const session = JSON.parse(row.session_json) as {
       client?: string;
       sessionId?: string;
-      evidenceSummary?: string;
-      resumeCommand?: string;
     };
 
     return {
@@ -332,8 +337,6 @@ function readWorkSessions(db: Database.Database): PortableWorkSession[] {
       lastActiveAt: row.last_active_at,
       client: session.client,
       sessionId: session.sessionId,
-      resumeCommand: session.resumeCommand,
-      evidenceSummary: session.evidenceSummary,
     };
   });
 }

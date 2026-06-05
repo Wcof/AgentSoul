@@ -3,10 +3,16 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type { MemoryLayer, MemoryPriority, MemoryEntry } from "@agentsoul/domain";
+import {
+  advanceMasterModelObservation,
+  recordMasterModelObservation,
+} from "@agentsoul/companion/soul";
+import type { MasterModel, MasterModelLearningStage } from "@agentsoul/companion/soul";
 import { initializeV2Database } from "@agentsoul/persistence";
 import { MemoryRepository } from "./memory-repository.js";
 
 export type { MemoryLayer, MemoryPriority, MemoryEntry };
+export type { MasterModel, MasterModelLearningStage };
 
 export interface WriteMemoryInput {
   layer: MemoryLayer;
@@ -23,6 +29,15 @@ export interface QueryMemoryOptions {
 
 export interface MemoryStoreOptions {
   dbPath: string;
+  semanticIndex?: {
+    addEntry(sourceType: string, sourceId: string, text: string): unknown;
+  };
+}
+
+export interface MemoryIndexingFailure {
+  memoryId: string;
+  message: string;
+  occurredAt: string;
 }
 
 export interface MemoryStore {
@@ -32,8 +47,14 @@ export interface MemoryStore {
   update(id: string, patch: Partial<Pick<MemoryEntry, "content" | "priority" | "tags">>): void;
   delete(id: string): void;
   listLayers(): MemoryLayer[];
+  getLastIndexingFailure(): MemoryIndexingFailure | undefined;
   close(): void;
 }
+
+export type MasterModelCommand =
+  | { kind: "record"; claim: string; evidence: string[]; confidence: number }
+  | { kind: "advance"; observationId: string; stage: MasterModelLearningStage }
+  | { kind: "forget"; observationId: string };
 
 const PRIORITY_ORDER: Record<MemoryPriority, number> = {
   low: 0,
@@ -45,6 +66,7 @@ export function createMemoryStore(options: MemoryStoreOptions): MemoryStore {
   initializeV2Database(options.dbPath);
   const db = new Database(options.dbPath);
   const repo = new MemoryRepository(db);
+  let lastIndexingFailure: MemoryIndexingFailure | undefined;
 
   return {
     write(input) {
@@ -61,6 +83,15 @@ export function createMemoryStore(options: MemoryStoreOptions): MemoryStore {
       };
 
       repo.insert(id, input.layer, input.content, input.priority, JSON.stringify(input.tags), now, now);
+      try {
+        options.semanticIndex?.addEntry("memory", id, input.content);
+      } catch (error) {
+        lastIndexingFailure = {
+          memoryId: id,
+          message: error instanceof Error ? error.message : String(error),
+          occurredAt: new Date().toISOString(),
+        };
+      }
 
       return { ...entry };
     },
@@ -118,6 +149,17 @@ export function createMemoryStore(options: MemoryStoreOptions): MemoryStore {
       const tags = patch.tags ? JSON.stringify(patch.tags) : JSON.stringify(existing.tags);
 
       repo.update(id, content, priority, tags, now);
+      if (patch.content !== undefined && patch.content !== existing.content) {
+        try {
+          options.semanticIndex?.addEntry("memory", id, content);
+        } catch (error) {
+          lastIndexingFailure = {
+            memoryId: id,
+            message: error instanceof Error ? error.message : String(error),
+            occurredAt: new Date().toISOString(),
+          };
+        }
+      }
     },
 
     delete(id) {
@@ -129,8 +171,42 @@ export function createMemoryStore(options: MemoryStoreOptions): MemoryStore {
       return layers.map((r) => r as MemoryLayer);
     },
 
+    getLastIndexingFailure() {
+      return lastIndexingFailure ? { ...lastIndexingFailure } : undefined;
+    },
+
     close() {
       db.close();
+    },
+  };
+}
+
+export function applyMasterModelCommand(masterModel: MasterModel, command: MasterModelCommand): MasterModel {
+  if (command.kind === "record") {
+    return recordMasterModelObservation(masterModel, {
+      source: "manual",
+      claim: command.claim,
+      evidence: command.evidence,
+      confidence: command.confidence,
+    });
+  }
+
+  if (command.kind === "advance") {
+    return advanceMasterModelObservation(masterModel, command.observationId, command.stage);
+  }
+
+  return forgetMasterModelObservation(masterModel, command.observationId);
+}
+
+function forgetMasterModelObservation(masterModel: MasterModel, observationId: string): MasterModel {
+  const withoutTarget = (items: MasterModel["learningState"]["observations"]) => items.filter((item) => item.id !== observationId);
+  return {
+    ...masterModel,
+    learningState: {
+      observations: withoutTarget(masterModel.learningState?.observations ?? []),
+      hypotheses: withoutTarget(masterModel.learningState?.hypotheses ?? []),
+      verifiedFacts: withoutTarget(masterModel.learningState?.verifiedFacts ?? []),
+      solidifiedFacts: withoutTarget(masterModel.learningState?.solidifiedFacts ?? []),
     },
   };
 }

@@ -105,6 +105,8 @@ describe("Direct Client Config fallback", () => {
         expect(fallback.providerProfileId).toBe("codex-direct");
         expect(fallback.client).toBe("codex");
         expect(fallback.targetConfigPath).toBe("/Users/dev/.codex/config.toml");
+        expect("credentialRef" in fallback).toBe(false);
+        expect(JSON.stringify(fallback)).not.toMatch(/credential:codex:primary/);
         expect(fallback.guarantees).toEqual({
           providerSwitching: true,
           fullAudit: false,

@@ -575,7 +575,7 @@ function createDefaultRuntimeState(clock: () => Date): CompanionRuntimeState {
     },
     providerProfile: {
       id: DEFAULT_PROVIDER_PROFILE_ID,
-      name: "Local Gateway Default",
+      name: "Local Desktop Body Default",
       activationMode: "gateway-route",
       clientProtocol: "claude-messages",
       providerProtocol: "anthropic",

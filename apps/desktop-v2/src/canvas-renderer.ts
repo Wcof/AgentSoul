@@ -8,6 +8,8 @@ export interface CanvasRenderer {
   draw(appearance: PetAppearanceSnapshot, state: CompanionVisualState): void;
 }
 
+const FAILED_IMAGE_SENTINEL = "__failed__";
+
 export function createCanvasRenderer(canvas: HTMLCanvasElement): CanvasRenderer {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -21,11 +23,12 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): CanvasRenderer 
     canvas,
     ctx,
     draw(appearance, state) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (drawFromAssetPack(ctx, canvas, appearance, state, loadedImages, chromaProcessed, startTime)) {
+      const assetDraw = drawFromAssetPack(ctx, canvas, appearance, state, loadedImages, chromaProcessed, startTime);
+      if (assetDraw !== "unavailable") {
         return;
       }
 
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (appearance.kind === "slime") {
         drawSlime(ctx, state);
       } else if (appearance.kind === "cat") {
@@ -52,49 +55,54 @@ function drawFromAssetPack(
   loadedImages: Map<string, HTMLImageElement>,
   chromaProcessed: Map<string, HTMLCanvasElement>,
   startTime: number,
-): boolean {
+): "drawn" | "loading" | "unavailable" {
   const assetPackPath = appearance.assetPackPath;
-  const spritePath = appearance.spritesheetPath ? resolveRenderableSpriteSrc(appearance.spritesheetPath) : undefined;
+  const spritePath = appearance.spritesheetDataUrl
+    ?? appearance.assetManifest?.spritesheetDataUrl
+    ?? (appearance.spritesheetPath ? resolveRenderableSpriteSrc(appearance.spritesheetPath) : undefined);
   if (!spritePath || !assetPackPath) {
-    return false;
+    return "unavailable";
   }
 
   const normalized = normalizePetAssetPack(appearance.assetManifest, assetPackPath);
   let image = loadedImages.get(spritePath);
+  if ((image as unknown as string) === FAILED_IMAGE_SENTINEL) {
+    return "unavailable";
+  }
   if (!image) {
     image = new Image();
     image.decoding = "async";
+    image.onerror = () => {
+      loadedImages.set(spritePath, FAILED_IMAGE_SENTINEL as unknown as HTMLImageElement);
+    };
     image.src = spritePath;
     loadedImages.set(spritePath, image);
-    return false;
+    return "loading";
   }
 
   if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
-    return false;
+    return image.complete ? "unavailable" : "loading";
   }
 
   const stateName = toPetState(state);
   const sequence = normalized.states[stateName] ?? normalized.states.idle;
   const frameRect = pickFrameRect(normalized.manifest.frame, sequence, image, startTime);
-  const elapsed = (performance.now() - startTime) / 1000;
-  const bounce = state === "positive" || state === "attention" ? Math.sin(elapsed * 6) * 6 : Math.sin(elapsed * 2) * 2;
-  const scale = state === "sleep" ? 0.95 : 1;
   const maxWidth = canvas.width * 0.9;
   const maxHeight = canvas.height * 0.9;
   const ratio = Math.min(maxWidth / frameRect.w, maxHeight / frameRect.h);
-  const drawWidth = frameRect.w * ratio * scale;
-  const drawHeight = frameRect.h * ratio * scale;
+  const drawWidth = frameRect.w * ratio;
+  const drawHeight = frameRect.h * ratio;
   const x = (canvas.width - drawWidth) / 2;
-  const y = (canvas.height - drawHeight) / 2 + bounce;
+  const y = (canvas.height - drawHeight) / 2;
   const source = normalized.manifest.chromaKey
     ? getChromaProcessedCanvas(spritePath, image, normalized.manifest.chromaKey, chromaProcessed)
     : image;
 
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
-  ctx.globalAlpha = state === "fatigue" ? 0.8 : 1;
   ctx.drawImage(source, frameRect.x, frameRect.y, frameRect.w, frameRect.h, x, y, drawWidth, drawHeight);
   ctx.restore();
-  return true;
+  return "drawn";
 }
 
 function toPetState(state: CompanionVisualState): PetStateName {

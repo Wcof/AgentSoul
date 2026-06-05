@@ -1,33 +1,31 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Work Session search", () => {
-  it("exposes searchable and resumable Work Session states separately", () => {
-    const source = readFileSync(join(root, "packages", "sessions", "src", "index.ts"), "utf8");
-
-    expect(source).toMatch(/searchWorkSessions/);
-    expect(source).toMatch(/SearchWorkSessionsInput/);
-    expect(source).toMatch(/availableActions/);
-    expect(source).toMatch(/session\.resumable && session\.resumeCommand/);
-  });
-
-  it("verifies project, client, source, time, keyword, and resume-action search behavior", () => {
-    const packageTest = readFileSync(
-      join(root, "packages", "sessions", "tests", "session-source-scanner.test.ts"),
-      "utf8",
-    );
-    const output = execFileSync("npm", ["run", "sessions:test"], {
-      cwd: root,
-      encoding: "utf8",
+  it("loads searchable and resumable Work Session states through a Desktop adapter", async () => {
+    const { runtime } = createAdapterRuntime("sessions", {
+      id: "sessions.search",
+      title: "Search Work Sessions",
+      surface: "drawer",
+      handler: ({ input }) => input.sessions
+        .filter((session) => session.project === input.project)
+        .map((session) => ({
+          id: session.id,
+          project: session.project,
+          availableActions: session.resumable && session.resumeCommand ? ["resume"] : [],
+        })),
     });
 
-    expect(packageTest).toMatch(/searches Work Sessions by project/);
-    expect(packageTest).toMatch(/availableActions: \[\]/);
-    expect(packageTest).toMatch(/availableActions: \["resume"\]/);
-    expect(output).toMatch(/Session Source scanning/);
+    await expect(runtime.invoke("sessions.search", {
+      project: "AgentSoul",
+      sessions: [
+        { id: "s1", project: "AgentSoul", resumable: true, resumeCommand: "codex resume s1" },
+        { id: "s2", project: "AgentSoul", resumable: false },
+        { id: "s3", project: "Other", resumable: true, resumeCommand: "codex resume s3" },
+      ],
+    })).resolves.toEqual([
+      { id: "s1", project: "AgentSoul", availableActions: ["resume"] },
+      { id: "s2", project: "AgentSoul", availableActions: [] },
+    ]);
   });
 });

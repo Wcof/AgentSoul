@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { defaultCompanionSnapshot } from "../src/data/defaultSnapshot";
-import { mergeNativeCompanionRuntimeState } from "../src/shared/shell";
+import { mergeDesktopBodyNativeState } from "../src/desktop-body";
 
 describe("native companion runtime merge", () => {
   it("preserves Tauri autonomous loop state in the frontend snapshot", () => {
-    const merged = mergeNativeCompanionRuntimeState(defaultCompanionSnapshot, {
+    const merged = mergeDesktopBodyNativeState(defaultCompanionSnapshot, {
       companion: {
         autonomy: {
           userPresence: "PRESENT",

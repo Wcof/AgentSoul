@@ -15,29 +15,39 @@
         "label": "desktop-companion",
         "title": "AgentSoul Desktop Companion",
         "url": "index.html",
-        "width": 280,
-        "height": 320,
-        "minWidth": 220,
-        "minHeight": 220,
+        "width": 260,
+        "height": 260,
+        "minWidth": 240,
+        "minHeight": 240,
         "alwaysOnTop": true,
         "transparent": true,
         "decorations": false,
         "resizable": false
-      },
-      {
-        "label": "control-center",
-        "title": "AgentSoul Control Center",
-        "url": "index.html",
-        "width": 1100,
-        "height": 760,
-        "minWidth": 360,
-        "minHeight": 520,
-        "visible": true
       }
     ],
     "macOSPrivateApi": true,
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "desktop-companion-drag",
+          "description": "Allow the frameless desktop companion window to be dragged by the pet surface.",
+          "windows": ["desktop-companion"],
+          "permissions": ["core:window:allow-start-dragging"]
+        }
+      ],
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$DOWNLOAD/*.codex-pet/**",
+          "$HOME/Downloads/*.codex-pet/**",
+          "/Users/ldh/Downloads/*.codex-pet/**",
+          "$APPDATA/agentsoul/desktop-v2/pets/*.codex-pet/**",
+          "$APPDATA/agentsoul/desktop-v2/pets/current.codex-pet/**",
+          "../data/desktop-v2/pets/*.codex-pet/**",
+          "../data/desktop-v2/pets/current.codex-pet/**"
+        ]
+      }
     }
   }
 }

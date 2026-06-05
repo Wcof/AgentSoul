@@ -2,13 +2,10 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 import { createUserManagedExportService } from "@agentsoul/export";
-import { createGatewayAuditRepository } from "@agentsoul/gateway";
 import { createProviderProfileService } from "@agentsoul/provider";
 import { createCompanionRuntime } from "@agentsoul/companion";
-import { createSessionSourceScanner } from "@agentsoul/sessions";
-import { createSkillSourceStore } from "@agentsoul/skills";
-import { decideSafetyPolicy } from "@agentsoul/safety";
 
 describe("User-managed Export", () => {
   it("exports Portable Data and excludes credentials, bodies, raw evidence, and private auth files", () => {
@@ -17,7 +14,7 @@ describe("User-managed Export", () => {
       const service = createUserManagedExportService({
         dbPath,
         clock: () => new Date("2026-05-29T10:00:00.000Z"),
-        decideSafetyPolicy,
+        decideSafetyPolicy: decideExportSafetyPolicy,
       });
 
       try {
@@ -39,6 +36,8 @@ describe("User-managed Export", () => {
         expect((portable.skillPacks[0] as { name?: string } | undefined)?.name).toBe("TDD");
         expect((portable.projectSkillActivations[0] as { enabled?: boolean } | undefined)?.enabled).toBe(true);
         expect(portable.workSessions[0]?.id).toBe("work-session-1");
+        expect("resumeCommand" in (portable.workSessions[0] ?? {})).toBe(false);
+        expect("evidenceSummary" in (portable.workSessions[0] ?? {})).toBe(false);
         expect((
             portable.trafficMetadataSummaries[0]?.trafficMetadata as
               | { inputTokens?: number }
@@ -55,6 +54,8 @@ describe("User-managed Export", () => {
         expect(serialized).not.toMatch(/credential:anthropic-main/);
         expect(serialized).not.toMatch(/captured request body/);
         expect(serialized).not.toMatch(/raw indexed evidence text/);
+        expect(serialized).not.toMatch(/Discussed export boundary/);
+        expect(serialized).not.toMatch(/claude -r session-1/);
         expect(serialized).not.toMatch(new RegExp("\\.claude/auth"));
       } finally {
         service.close();
@@ -64,7 +65,7 @@ describe("User-managed Export", () => {
 
   it("requires explicit high-risk confirmation before creating a Sensitive Export", () => {
     withDatabase((dbPath) => {
-      const service = createUserManagedExportService({ dbPath, decideSafetyPolicy });
+      const service = createUserManagedExportService({ dbPath, decideSafetyPolicy: decideExportSafetyPolicy });
 
       try {
         const pending = service.createSensitiveExport({
@@ -150,9 +151,11 @@ function seedPortableData(dbPath: string): void {
     providerProfiles.close();
   }
 
-  const skills = createSkillSourceStore({ dbPath });
+  const db = new Database(dbPath);
   try {
-    skills.installSkillPack({
+    db.prepare("INSERT INTO skill_packs (id, skill_json, installed_at) VALUES (?, ?, ?)").run(
+      "skill-tdd",
+      JSON.stringify({
       id: "skill-tdd",
       name: "TDD",
       source: {
@@ -161,20 +164,21 @@ function seedPortableData(dbPath: string): void {
       },
       globalDefaultEnabled: false,
       installedAt: "2026-05-29T09:00:00.000Z",
-    });
-    skills.setProjectSkillActivation({
-      projectPath: "/workspace/app",
-      skillPackId: "skill-tdd",
-      enabled: true,
-      updatedAt: "2026-05-29T09:05:00.000Z",
-    });
-  } finally {
-    skills.close();
-  }
-
-  const sessions = createSessionSourceScanner({ dbPath });
-  try {
-    sessions.recordWorkSession({
+    }),
+      "2026-05-29T09:00:00.000Z",
+    );
+    db.prepare(
+      "INSERT INTO project_skill_activations (id, project_path, skill_pack_id, enabled, updated_at) VALUES (?, ?, ?, ?, ?)",
+    ).run("activation-1", "/workspace/app", "skill-tdd", 1, "2026-05-29T09:05:00.000Z");
+    db.prepare(
+      "INSERT INTO work_sessions (id, source, project_path, searchable, resumable, session_json, last_active_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      "work-session-1",
+      "claude-history",
+      "/workspace/app",
+      1,
+      1,
+      JSON.stringify({
       id: "work-session-1",
       source: "claude-history",
       client: "claude-code",
@@ -186,15 +190,15 @@ function seedPortableData(dbPath: string): void {
       resumable: true,
       resumeCommand: "claude -r session-1",
       sourcePath: "/Users/dev/.claude/history.jsonl",
-    });
-  } finally {
-    sessions.close();
-  }
-
-  const audit = createGatewayAuditRepository({ dbPath });
-  try {
-    audit.recordAudit({
-      trafficMetadata: {
+    }),
+      "2026-05-29T09:10:00.000Z",
+    );
+    db.prepare(
+      "INSERT INTO audit_records (id, gateway_event_id, traffic_metadata_json, estimated_cost, outcome, evidence_hash, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      "audit-1",
+      "gateway-event-1",
+      JSON.stringify({
         gatewayEventId: "gateway-event-1",
         clientProtocol: "claude-messages",
         providerProtocol: "anthropic",
@@ -205,14 +209,31 @@ function seedPortableData(dbPath: string): void {
         outputTokens: 300,
         latencyMs: 850,
         outcome: "success",
-      },
-      estimatedCost: 0.0042,
-      outcome: "success",
-      evidenceHash: "sha256:raw-evidence-digest",
-    });
+      }),
+      0.0042,
+      "success",
+      "sha256:raw-evidence-digest",
+      "2026-05-29T09:15:00.000Z",
+    );
   } finally {
-    audit.close();
+    db.close();
   }
+}
+
+function decideExportSafetyPolicy(options: {
+  approvalSurfaceAvailable: boolean;
+  approvalDecisionKind?: "allowed" | "denied";
+}): any {
+  if (!options.approvalSurfaceAvailable) {
+    return { outcome: "deny" };
+  }
+  if (options.approvalDecisionKind === "allowed") {
+    return { outcome: "allow" };
+  }
+  if (options.approvalDecisionKind === "denied") {
+    return { outcome: "approval-required", approvalRequest: { id: "approval:export-secret:denied" } };
+  }
+  return { outcome: "approval-required", approvalRequest: { id: "approval:export-secret:pending" } };
 }
 
 function withDatabase(fn: (dbPath: string) => void): void {
@@ -224,12 +245,13 @@ function withDatabase(fn: (dbPath: string) => void): void {
   }
 }
 
+describe("Export manifest", () => {
   it("generates ExportManifest with included and excluded sections", () => {
     withDatabase((dbPath) => {
       const service = createUserManagedExportService({
         dbPath,
         clock: () => new Date("2026-05-29T10:00:00.000Z"),
-        decideSafetyPolicy,
+        decideSafetyPolicy: decideExportSafetyPolicy,
       });
 
       try {
@@ -252,3 +274,4 @@ function withDatabase(fn: (dbPath: string) => void): void {
       }
     });
   });
+});

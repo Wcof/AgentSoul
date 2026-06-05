@@ -2,8 +2,10 @@
 import { accessSync, constants } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { spawn } from "node:child_process";
+import { request } from "node:http";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { ensureDevPortAvailable } from "../apps/desktop-v2/scripts/ensure-dev-port.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -26,9 +28,32 @@ try {
   process.exit(1);
 }
 
+ensureDevPortAvailable({ repoRoot, port: "1420" });
+
+const reuseExistingDevServer = await isDevServerResponding("http://127.0.0.1:1420/");
+if (reuseExistingDevServer) {
+  console.log("Reusing existing Vite dev server at http://127.0.0.1:1420/.");
+}
+
+const tauriArgs = [
+  "--workspace",
+  "@agentsoul/desktop-v2",
+  "run",
+  "tauri",
+  "--",
+  "dev",
+  ...(reuseExistingDevServer ? [
+    "--config",
+    '{"build":{"beforeDevCommand":""}}',
+    "--no-dev-server-wait",
+    "--no-watch",
+  ] : []),
+  ...process.argv.slice(2),
+];
+
 const child = spawn(
   "npm",
-  ["--workspace", "@agentsoul/desktop-v2", "run", "tauri", "--", "dev", ...process.argv.slice(2)],
+  tauriArgs,
   {
     cwd: repoRoot,
     env,
@@ -43,3 +68,18 @@ child.on("exit", (code, signal) => {
   }
   process.exit(code ?? 0);
 });
+
+function isDevServerResponding(url) {
+  return new Promise((resolve) => {
+    const req = request(url, { method: "HEAD", timeout: 600 }, (res) => {
+      res.resume();
+      resolve(true);
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.on("error", () => resolve(false));
+    req.end();
+  });
+}

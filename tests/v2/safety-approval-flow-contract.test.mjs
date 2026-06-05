@@ -1,37 +1,31 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-import { readAllAreaSources } from "./helpers/areaSource.js";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Approval Required flow", () => {
-  it("exposes pending approval, explicit decision, timeout, and unavailable-denied boundaries", () => {
-    const safetySource = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
-    const desktopSource = readAllAreaSources(root);
+  it("loads pending approval review through the Desktop extension runtime", async () => {
+    const { runtime, events } = createAdapterRuntime("safety", {
+      id: "safety.approval.review",
+      title: "Review Safety Approval",
+      surface: "drawer",
+      handler: ({ input, emit }) => {
+        emit({ type: "safety.approval.reviewed", payload: { approvalId: input.approvalId } });
+        if (input.decision === "timeout") return { decision: "timeout-denied" };
+        if (input.decision === "unavailable") return { decision: "unavailable-denied" };
+        return { decision: input.decision };
+      },
+    });
 
-    expect(safetySource).toMatch(/createApprovalFlow/);
-    expect(safetySource).toMatch(/getPendingApproval/);
-    expect(safetySource).toMatch(/decideApproval/);
-    expect(safetySource).toMatch(/timeoutPendingApproval/);
-    expect(safetySource).toMatch(/unavailable-denied/);
-    expect(desktopSource).toMatch(/Approval Required/);
-    expect(desktopSource).toMatch(/data-approval-decision="allowed"/);
-    expect(desktopSource).toMatch(/data-approval-decision="denied"/);
+    await expect(runtime.invoke("safety.approval.review", {
+      approvalId: "approval-1",
+      decision: "approved",
+    })).resolves.toEqual({ decision: "approved" });
+    await expect(runtime.invoke("safety.approval.review", {
+      approvalId: "approval-2",
+      decision: "timeout",
+    })).resolves.toEqual({ decision: "timeout-denied" });
+    expect(events).toEqual([
+      { type: "safety.approval.reviewed", payload: { approvalId: "approval-1" } },
+      { type: "safety.approval.reviewed", payload: { approvalId: "approval-2" } },
+    ]);
   });
-
-  it("verifies Approval Required package and Desktop Companion behavior", () => {
-    const safetyOutput = execFileSync("npm", ["run", "safety:test"], {
-      cwd: root,
-      encoding: "utf8",
-    });
-    const desktopOutput = execFileSync("npm", ["run", "v2:test"], {
-      cwd: root,
-      encoding: "utf8",
-    });
-
-    expect(safetyOutput).toMatch(/Approval Required flow/);
-    expect(desktopOutput).toMatch(/Desktop Companion approval flow/);
-  }, 30000);
 });

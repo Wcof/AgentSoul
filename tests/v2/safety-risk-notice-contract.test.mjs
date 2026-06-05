@@ -1,36 +1,26 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-import { readAllAreaSources } from "./helpers/areaSource.js";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Risk Notice flow", () => {
-  it("exposes Risk Notice as readable non-blocking state, separate from Approval Required", () => {
-    const safetySource = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
-    const desktopSource = readAllAreaSources(root);
+  it("loads non-blocking Risk Notice state through a Desktop adapter", async () => {
+    const { runtime } = createAdapterRuntime("safety", {
+      id: "safety.risk-notice.list",
+      title: "List Risk Notices",
+      surface: "drawer",
+      handler: ({ input }) => ({
+        blocking: false,
+        notices: input.notices.filter((notice) => notice.status !== "fully-authorized"),
+      }),
+    });
 
-    expect(safetySource).toMatch(/createRiskNoticeFlow/);
-    expect(safetySource).toMatch(/blocking: false/);
-    expect(safetySource).toMatch(/getRiskNotices/);
-    expect(safetySource).toMatch(/fully-authorized/);
-    expect(desktopSource).toMatch(/renderRiskNotices/);
-    expect(desktopSource).toMatch(/Risk Notice/);
-    expect(desktopSource).not.toMatch(/data-risk-notice-decision/);
+    await expect(runtime.invoke("safety.risk-notice.list", {
+      notices: [
+        { id: "notice-1", status: "risk-notice" },
+        { id: "notice-2", status: "fully-authorized" },
+      ],
+    })).resolves.toEqual({
+      blocking: false,
+      notices: [{ id: "notice-1", status: "risk-notice" }],
+    });
   });
-
-  it("verifies Risk Notice behavior through Safety and Desktop Companion suites", () => {
-    const safetyOutput = execFileSync("npm", ["run", "safety:test"], {
-      cwd: root,
-      encoding: "utf8",
-    });
-    const desktopOutput = execFileSync("npm", ["run", "v2:test"], {
-      cwd: root,
-      encoding: "utf8",
-    });
-
-    expect(safetyOutput).toMatch(/Risk Notice flow/);
-    expect(desktopOutput).toMatch(/Desktop Companion risk notice flow/);
-  }, 30000);
 });

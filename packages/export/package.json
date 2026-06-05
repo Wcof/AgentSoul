@@ -13,15 +13,11 @@
   "dependencies": {
     "@agentsoul/domain": "2.0.0-alpha.0",
     "@agentsoul/persistence": "2.0.0-alpha.0",
-    "@agentsoul/safety": "2.0.0-alpha.0",
     "better-sqlite3": "^11.8.1"
   },
   "devDependencies": {
     "@agentsoul/companion": "2.0.0-alpha.0",
-    "@agentsoul/gateway": "2.0.0-alpha.0",
     "@agentsoul/provider": "2.0.0-alpha.0",
-    "@agentsoul/sessions": "2.0.0-alpha.0",
-    "@agentsoul/skills": "2.0.0-alpha.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",

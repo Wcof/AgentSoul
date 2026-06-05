@@ -1,34 +1,15 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use std::fs;
-use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
-use std::time::Duration;
-use tauri::{AppHandle, Manager, PhysicalPosition, State};
-
-const EXTERNAL_TOOL_GATEWAY_HOST: &str = "127.0.0.1";
-const EXTERNAL_TOOL_GATEWAY_PORT: u16 = 3001;
-
-struct ExternalToolGatewayProcess {
-    child: Mutex<Option<Child>>,
-}
-
-impl Default for ExternalToolGatewayProcess {
-    fn default() -> Self {
-        Self {
-            child: Mutex::new(None),
-        }
-    }
-}
+use tauri::{AppHandle, Manager, PhysicalPosition};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompanionRuntimeState {
     companion: CompanionState,
     provider_profile: ProviderProfileState,
-    approval_surface: ApprovalSurfaceState,
 }
 
 #[derive(Serialize)]
@@ -58,6 +39,7 @@ struct PetAppearanceState {
     asset_pack_path: String,
     display_name: String,
     spritesheet_path: String,
+    spritesheet_data_url: Option<String>,
     asset_pack_version: String,
     asset_validation: AssetValidationState,
     asset_manifest: Option<PetAssetManifestState>,
@@ -77,6 +59,7 @@ struct PetAssetManifestState {
     display_name: String,
     description: Option<String>,
     spritesheet_path: String,
+    spritesheet_data_url: Option<String>,
     kind: String,
     version: Option<String>,
     frame: Option<FrameConfigState>,
@@ -130,24 +113,6 @@ struct ProviderProfileState {
     name: &'static str,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ApprovalSurfaceState {
-    approval_required_placeholder: &'static str,
-    risk_notice_placeholder: &'static str,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ExternalToolGatewayStatus {
-    state: &'static str,
-    host: &'static str,
-    port: u16,
-    url: String,
-    pid: Option<u32>,
-    message: String,
-}
-
 #[tauri::command]
 fn get_companion_runtime_state() -> CompanionRuntimeState {
     let asset_pack_path = resolve_active_pet_asset_pack_path();
@@ -157,37 +122,21 @@ fn get_companion_runtime_state() -> CompanionRuntimeState {
         Ok(ok) => (Some(ok), AssetValidationState { level: "ok", messages: vec![] }),
         Err(errs) => (None, AssetValidationState { level: "error", messages: errs }),
     };
-    let session_ready = has_any_path(&[
-        "./data/desktop-v2/agentsoul-v2.sqlite",
-        "./data/sessions",
-    ]);
-    let gateway_ready = is_gateway_reachable("127.0.0.1:3001");
-    let mcp_ready = has_any_path(&[
-        "./apps/mcp-server",
-        "./packages/mcp-adapter",
-    ]);
-    let permit_ready = has_any_path(&[
-        "./data/desktop-v2/agentsoul-v2.sqlite",
-        "./data/permits",
-    ]);
-    let ready_count = [session_ready, gateway_ready, mcp_ready, permit_ready]
-        .iter()
-        .filter(|ready| **ready)
-        .count();
-    let (health_state, mood, activity_state) = if ready_count >= 3 {
-        ("healthy", "positive", "idle")
-    } else if ready_count >= 2 {
-        ("attention", "neutral", "attention")
+    let (health_state, mood, activity_state, summary) = if asset_manifest.is_some() {
+        (
+            "healthy",
+            "neutral",
+            "idle",
+            "desktop-body:ready; pet-asset:ready".to_string(),
+        )
     } else {
-        ("degraded", "fatigued", "attention")
+        (
+            "attention",
+            "neutral",
+            "attention",
+            "desktop-body:ready; pet-asset:needs-attention".to_string(),
+        )
     };
-    let summary = format!(
-        "session:{}, gateway:{}, mcp:{}, permit:{}",
-        bool_status(session_ready),
-        bool_status(gateway_ready),
-        bool_status(mcp_ready),
-        bool_status(permit_ready)
-    );
 
     CompanionRuntimeState {
         companion: CompanionState {
@@ -222,6 +171,9 @@ fn get_companion_runtime_state() -> CompanionRuntimeState {
                             .to_string_lossy()
                             .to_string()
                     }),
+                spritesheet_data_url: asset_manifest
+                    .as_ref()
+                    .and_then(|manifest| manifest.spritesheet_data_url.clone()),
                 asset_pack_version: asset_manifest
                     .as_ref()
                     .and_then(|manifest| manifest.version.clone())
@@ -240,29 +192,21 @@ fn get_companion_runtime_state() -> CompanionRuntimeState {
             activity_state,
             health_state,
             summary,
-            available_quick_actions: vec!["open-control-center", "refresh-runtime", "show-status"],
+            available_quick_actions: vec!["refresh-runtime", "show-status"],
             last_updated_at: iso_timestamp_now(),
             autonomy: CompanionAutonomyState {
                 user_presence: "PRESENT",
-                companion_mode: if gateway_ready { "AUTONOMOUS" } else { "QUEUING" },
-                last_event_priority: if gateway_ready { "LOW" } else { "MEDIUM" },
-                last_output_strategy: if gateway_ready { "silent" } else { "queue" },
-                queued_output_count: if gateway_ready { 0 } else { 1 },
-                last_action: if gateway_ready {
-                    "reflect-and-update-affect"
-                } else {
-                    "surface-memory-or-status"
-                },
+                companion_mode: "AUTONOMOUS",
+                last_event_priority: "LOW",
+                last_output_strategy: "silent",
+                queued_output_count: 0,
+                last_action: "reflect-and-update-affect",
                 cooldown_until: None,
             },
         },
         provider_profile: ProviderProfileState {
             id: "default-provider-profile",
-            name: "Local Gateway Default",
-        },
-        approval_surface: ApprovalSurfaceState {
-            approval_required_placeholder: "Approval Required",
-            risk_notice_placeholder: "Risk Notice",
+            name: "Local Desktop Body",
         },
     }
 }
@@ -276,27 +220,15 @@ fn resolve_active_pet_asset_pack_path() -> PathBuf {
     if current.join("pet.json").exists() {
         return current;
     }
-    PathBuf::from("/Users/ldh/Downloads/yuanqi-mianmian.codex-pet")
-}
-
-fn has_any_path(paths: &[&str]) -> bool {
-    paths.iter().any(|path| Path::new(path).exists())
-}
-
-fn is_gateway_reachable(addr: &str) -> bool {
-    let socket: Option<SocketAddr> = addr.parse().ok();
-    match socket {
-        Some(target) => TcpStream::connect_timeout(&target, Duration::from_millis(250)).is_ok(),
-        None => false,
+    let bundled_default = PathBuf::from("/Users/ldh/Downloads/yuanqi-mianmian.codex-pet");
+    if bundled_default.join("pet.json").exists() {
+        return bundled_default;
     }
+    current
 }
 
 fn iso_timestamp_now() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => format!("{}Z", duration.as_secs()),
-        Err(_) => "0Z".to_string(),
-    }
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
 #[tauri::command]
@@ -369,6 +301,8 @@ fn read_asset_pack(asset_pack_path: &str) -> Result<PetAssetManifestState, Vec<S
     if !Path::new(&spritesheet_full).exists() {
         errors.push(format!("error: spritesheet missing at {spritesheet_full}"));
     }
+    let spritesheet_data_url = read_spritesheet_data_url(&spritesheet_full)
+        .map_err(|error| vec![format!("error: failed encoding spritesheet: {error}")])?;
     let frame = parsed
         .get("frame")
         .and_then(|value| serde_json::from_value::<FrameConfigState>(value.clone()).ok());
@@ -380,6 +314,7 @@ fn read_asset_pack(asset_pack_path: &str) -> Result<PetAssetManifestState, Vec<S
         display_name,
         description: str_field(&parsed, "description"),
         spritesheet_path: spritesheet_full,
+        spritesheet_data_url: Some(spritesheet_data_url),
         kind: str_field(&parsed, "kind").unwrap_or_else(|| "custom".to_string()),
         version: str_field(&parsed, "version"),
         frame,
@@ -393,6 +328,23 @@ fn read_asset_pack(asset_pack_path: &str) -> Result<PetAssetManifestState, Vec<S
     } else {
         Err(errors)
     }
+}
+
+fn read_spritesheet_data_url(path: &str) -> Result<String, std::io::Error> {
+    let bytes = fs::read(path)?;
+    let mime = match Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        _ => "application/octet-stream",
+    };
+    Ok(format!("data:{mime};base64,{}", BASE64_STANDARD.encode(bytes)))
 }
 
 fn str_field(root: &Value, key: &str) -> Option<String> {
@@ -413,6 +365,10 @@ fn pick_pet_asset_pack_folder() -> Result<String, String> {
 #[tauri::command]
 fn import_pet_asset_pack(source_asset_pack_path: String) -> Result<PetAssetPackImportResult, String> {
     let source = PathBuf::from(source_asset_pack_path.trim());
+    import_pet_asset_pack_into_root(&source, &resolve_project_root())
+}
+
+fn import_pet_asset_pack_into_root(source: &Path, project_root: &Path) -> Result<PetAssetPackImportResult, String> {
     if !source.exists() || !source.is_dir() {
         return Err("source folder not found".to_string());
     }
@@ -421,12 +377,11 @@ fn import_pet_asset_pack(source_asset_pack_path: String) -> Result<PetAssetPackI
         return Err("invalid asset pack folder: missing pet.json".to_string());
     }
 
-    let project_root = resolve_project_root();
     let pets_root = project_root.join("data").join("desktop-v2").join("pets");
     fs::create_dir_all(&pets_root).map_err(|error| format!("failed creating pets folder: {error}"))?;
 
     let target = pets_root.join("current.codex-pet");
-    let source_canonical = source.canonicalize().unwrap_or_else(|_| source.clone());
+    let source_canonical = source.canonicalize().unwrap_or_else(|_| source.to_path_buf());
     let target_canonical = target.canonicalize().unwrap_or_else(|_| target.clone());
 
     if source_canonical == target_canonical {
@@ -453,35 +408,55 @@ fn import_pet_asset_pack(source_asset_pack_path: String) -> Result<PetAssetPackI
         };
     }
 
-    if target.exists() {
-        fs::remove_dir_all(&target).map_err(|error| format!("failed clearing current asset pack: {error}"))?;
+    let temp_target = pets_root.join(format!(".import-{}.codex-pet", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+    if temp_target.exists() {
+        fs::remove_dir_all(&temp_target).map_err(|error| format!("failed clearing temp asset pack: {error}"))?;
     }
-    clear_other_pet_packs(&pets_root, "current.codex-pet")
-        .map_err(|error| format!("failed clearing old asset packs: {error}"))?;
-
-    copy_dir_recursive(&source, &target).map_err(|error| format!("failed copying asset pack: {error}"))?;
-    let target_path = target.to_string_lossy().to_string();
-
-    match read_asset_pack(&target_path) {
-        Ok(manifest) => Ok(PetAssetPackImportResult {
+    copy_dir_recursive(source, &temp_target).map_err(|error| format!("failed copying asset pack: {error}"))?;
+    let temp_path = temp_target.to_string_lossy().to_string();
+    if let Err(messages) = read_asset_pack(&temp_path) {
+        let _ = fs::remove_dir_all(&temp_target);
+        return Ok(PetAssetPackImportResult {
             source_asset_pack_path: source.to_string_lossy().to_string(),
-            asset_pack_path: target_path,
-            manifest: Some(manifest),
-            validation: AssetValidationState {
-                level: "ok",
-                messages: vec![],
-            },
-        }),
-        Err(messages) => Ok(PetAssetPackImportResult {
-            source_asset_pack_path: source.to_string_lossy().to_string(),
-            asset_pack_path: target_path,
+            asset_pack_path: target.to_string_lossy().to_string(),
             manifest: None,
             validation: AssetValidationState {
                 level: "error",
                 messages,
             },
-        }),
+        });
+    };
+
+    let backup_target = pets_root.join(format!(".previous-{}.codex-pet", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+    let had_existing_target = target.exists();
+    if had_existing_target {
+        fs::rename(&target, &backup_target)
+            .map_err(|error| format!("failed staging current asset pack replacement: {error}"))?;
     }
+    if let Err(error) = fs::rename(&temp_target, &target) {
+        if had_existing_target {
+            let _ = fs::rename(&backup_target, &target);
+        }
+        return Err(format!("failed activating imported asset pack: {error}"));
+    }
+    if had_existing_target {
+        let _ = fs::remove_dir_all(&backup_target);
+    }
+    clear_other_pet_packs(&pets_root, "current.codex-pet")
+        .map_err(|error| format!("failed clearing old asset packs: {error}"))?;
+    let target_path = target.to_string_lossy().to_string();
+    let manifest = read_asset_pack(&target_path)
+        .map_err(|messages| format!("imported asset pack failed validation after activation: {}", messages.join("; ")))?;
+
+    Ok(PetAssetPackImportResult {
+        source_asset_pack_path: source.to_string_lossy().to_string(),
+        asset_pack_path: target_path,
+        manifest: Some(manifest),
+        validation: AssetValidationState {
+            level: "ok",
+            messages: vec![],
+        },
+    })
 }
 
 fn resolve_project_root() -> PathBuf {
@@ -534,22 +509,9 @@ fn clear_other_pet_packs(pets_root: &Path, keep_name: &str) -> Result<(), std::i
     Ok(())
 }
 
-fn bool_status(ready: bool) -> &'static str {
-    if ready {
-        "ready"
-    } else {
-        "missing"
-    }
-}
-
 #[tauri::command]
 fn show_desktop_companion(app: AppHandle) -> Result<(), String> {
     show_window(&app, "desktop-companion")
-}
-
-#[tauri::command]
-fn show_control_center(app: AppHandle) -> Result<(), String> {
-    show_window(&app, "control-center")
 }
 
 #[tauri::command]
@@ -633,184 +595,106 @@ fn set_window_position(app: AppHandle, label: String, x: i32, y: i32) -> Result<
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn get_external_tool_gateway_status(
-    state: State<ExternalToolGatewayProcess>,
-) -> Result<ExternalToolGatewayStatus, String> {
-    external_tool_gateway_status(&state)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-#[tauri::command]
-fn start_external_tool_gateway(
-    state: State<ExternalToolGatewayProcess>,
-) -> Result<ExternalToolGatewayStatus, String> {
-    let mut guard = state
-        .child
-        .lock()
-        .map_err(|_| "external tool gateway state lock poisoned".to_string())?;
-
-    if let Some(child) = guard.as_mut() {
-        match child.try_wait() {
-            Ok(None) => return Ok(status_running(Some(child.id()), "第三方工具网关运行中")),
-            Ok(Some(_)) => {
-                *guard = None;
-            }
-            Err(error) => {
-                *guard = None;
-                return Ok(status_error(format!("检查网关进程失败: {error}")));
-            }
-        }
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("agentsoul-{name}-{nanos}"))
     }
 
-    if is_gateway_reachable(&external_tool_gateway_addr()) {
-        return Ok(status_error(format!(
-            "端口 {} 已被占用",
-            EXTERNAL_TOOL_GATEWAY_PORT
-        )));
-    }
-
-    let project_root = resolve_project_root();
-    let script_path = project_root
-        .join("apps")
-        .join("desktop-v2")
-        .join("scripts")
-        .join("external-tool-gateway.mts");
-
-    let child = Command::new("npx")
-        .arg("tsx")
-        .arg(script_path)
-        .current_dir(&project_root)
-        .env("AGENTSOUL_EXTERNAL_TOOL_GATEWAY_HOST", EXTERNAL_TOOL_GATEWAY_HOST)
-        .env(
-            "AGENTSOUL_EXTERNAL_TOOL_GATEWAY_PORT",
-            EXTERNAL_TOOL_GATEWAY_PORT.to_string(),
+    fn write_asset_pack_at(pack: &Path, id: &str, spritesheet_name: &str, write_sprite: bool) {
+        fs::create_dir_all(pack).expect("asset pack folder should be writable");
+        fs::write(
+            pack.join("pet.json"),
+            format!(
+                r#"{{
+                    "id": "{id}",
+                    "displayName": "{id}",
+                    "spritesheetPath": "{spritesheet_name}",
+                    "kind": "person",
+                    "frame": {{"width": 1, "height": 1, "count": 1}},
+                    "states": {{"idle": {{"frames": [0], "loop": true}}}}
+                }}"#
+            ),
         )
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|error| format!("启动第三方工具网关失败: {error}"))?;
-
-    let pid = child.id();
-    *guard = Some(child);
-    Ok(status_running(Some(pid), "第三方工具网关已启动"))
-}
-
-#[tauri::command]
-fn stop_external_tool_gateway(
-    state: State<ExternalToolGatewayProcess>,
-) -> Result<ExternalToolGatewayStatus, String> {
-    let mut guard = state
-        .child
-        .lock()
-        .map_err(|_| "external tool gateway state lock poisoned".to_string())?;
-
-    if let Some(mut child) = guard.take() {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Ok(status_stopped("第三方工具网关已暂停"));
-    }
-
-    Ok(status_stopped("第三方工具网关未启动"))
-}
-
-#[tauri::command]
-fn restart_external_tool_gateway(
-    state: State<ExternalToolGatewayProcess>,
-) -> Result<ExternalToolGatewayStatus, String> {
-    let _ = stop_external_tool_gateway(state.clone());
-    start_external_tool_gateway(state)
-}
-
-fn external_tool_gateway_status(
-    state: &State<ExternalToolGatewayProcess>,
-) -> Result<ExternalToolGatewayStatus, String> {
-    let mut guard = state
-        .child
-        .lock()
-        .map_err(|_| "external tool gateway state lock poisoned".to_string())?;
-
-    if let Some(child) = guard.as_mut() {
-        match child.try_wait() {
-            Ok(None) => return Ok(status_running(Some(child.id()), "第三方工具网关运行中")),
-            Ok(Some(_)) => {
-                *guard = None;
+        .expect("pet.json should be writable");
+        if write_sprite {
+            let spritesheet_path = pack.join(spritesheet_name);
+            if let Some(parent) = spritesheet_path.parent() {
+                fs::create_dir_all(parent).expect("spritesheet parent should be writable");
             }
-            Err(error) => {
-                *guard = None;
-                return Ok(status_error(format!("检查网关进程失败: {error}")));
-            }
+            fs::write(spritesheet_path, [0_u8, 1, 2, 3]).expect("spritesheet should be writable");
         }
     }
 
-    if is_gateway_reachable(&external_tool_gateway_addr()) {
-        return Ok(status_error(format!(
-            "端口 {} 已被其他进程占用",
-            EXTERNAL_TOOL_GATEWAY_PORT
-        )));
+    fn write_asset_pack(root: &Path, name: &str, spritesheet_name: &str, write_sprite: bool) -> PathBuf {
+        let pack = root.join(name);
+        write_asset_pack_at(&pack, name, spritesheet_name, write_sprite);
+        pack
     }
 
-    Ok(status_stopped("第三方工具网关未启动"))
-}
+    #[test]
+    fn import_pet_asset_pack_validates_temp_copy_before_replacing_current() {
+        let project_root = unique_temp_dir("transaction-import");
+        let source_root = project_root.join("sources");
+        let current = project_root
+            .join("data")
+            .join("desktop-v2")
+            .join("pets")
+            .join("current.codex-pet");
+        fs::create_dir_all(&source_root).expect("source root should be writable");
+        write_asset_pack_at(&current, "current", "spritesheet.webp", true);
+        let invalid_source = write_asset_pack(&source_root, "invalid", "missing.webp", false);
 
-fn external_tool_gateway_addr() -> String {
-    format!("{}:{}", EXTERNAL_TOOL_GATEWAY_HOST, EXTERNAL_TOOL_GATEWAY_PORT)
-}
+        let result = import_pet_asset_pack_into_root(&invalid_source, &project_root)
+            .expect("invalid imports should return validation, not throw");
 
-fn external_tool_gateway_url() -> String {
-    format!(
-        "http://{}:{}",
-        EXTERNAL_TOOL_GATEWAY_HOST, EXTERNAL_TOOL_GATEWAY_PORT
-    )
-}
-
-fn status_running(pid: Option<u32>, message: impl Into<String>) -> ExternalToolGatewayStatus {
-    ExternalToolGatewayStatus {
-        state: "running",
-        host: EXTERNAL_TOOL_GATEWAY_HOST,
-        port: EXTERNAL_TOOL_GATEWAY_PORT,
-        url: external_tool_gateway_url(),
-        pid,
-        message: message.into(),
+        assert_eq!(result.validation.level, "error");
+        assert!(current.join("spritesheet.webp").exists());
+        let current_manifest = fs::read_to_string(current.join("pet.json")).expect("current manifest should remain");
+        assert!(current_manifest.contains("\"id\": \"current\""));
     }
-}
 
-fn status_stopped(message: impl Into<String>) -> ExternalToolGatewayStatus {
-    ExternalToolGatewayStatus {
-        state: "stopped",
-        host: EXTERNAL_TOOL_GATEWAY_HOST,
-        port: EXTERNAL_TOOL_GATEWAY_PORT,
-        url: external_tool_gateway_url(),
-        pid: None,
-        message: message.into(),
-    }
-}
+    #[test]
+    fn import_pet_asset_pack_replaces_current_after_temp_copy_validates() {
+        let project_root = unique_temp_dir("valid-import");
+        let source_root = project_root.join("sources");
+        fs::create_dir_all(&source_root).expect("source root should be writable");
+        let current = project_root
+            .join("data")
+            .join("desktop-v2")
+            .join("pets")
+            .join("current.codex-pet");
+        write_asset_pack_at(&current, "current", "spritesheet.webp", true);
+        let valid_source = write_asset_pack(&source_root, "next", "nested/spritesheet.webp", true);
 
-fn status_error(message: impl Into<String>) -> ExternalToolGatewayStatus {
-    ExternalToolGatewayStatus {
-        state: "error",
-        host: EXTERNAL_TOOL_GATEWAY_HOST,
-        port: EXTERNAL_TOOL_GATEWAY_PORT,
-        url: external_tool_gateway_url(),
-        pid: None,
-        message: message.into(),
+        let result = import_pet_asset_pack_into_root(&valid_source, &project_root)
+            .expect("valid imports should succeed");
+
+        assert_eq!(result.validation.level, "ok");
+        assert!(current.join("nested").join("spritesheet.webp").exists());
+        assert!(result
+            .manifest
+            .expect("valid import should return manifest")
+            .spritesheet_path
+            .ends_with("current.codex-pet/nested/spritesheet.webp"));
     }
 }
 
 pub fn run() {
     tauri::Builder::default()
-        .manage(ExternalToolGatewayProcess::default())
         .invoke_handler(tauri::generate_handler![
             get_companion_runtime_state,
             load_pet_asset_pack,
             pick_pet_asset_pack_folder,
             import_pet_asset_pack,
-            get_external_tool_gateway_status,
-            start_external_tool_gateway,
-            stop_external_tool_gateway,
-            restart_external_tool_gateway,
             show_desktop_companion,
-            show_control_center,
             hide_desktop_companion,
             get_screen_info,
             get_window_info,

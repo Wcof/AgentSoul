@@ -37,7 +37,7 @@ export interface PortableProviderProfileInput {
 export interface RoutineCredentialExport {
   exportKind: "portable-data";
   sensitiveCredentialsIncluded: false;
-  providerProfiles: ProviderProfile[];
+  providerProfiles: Array<Omit<ProviderProfile, "credentialRef"> & { credentialRef?: never }>;
 }
 
 export function createCredentialStoreBridge(options: {
@@ -110,7 +110,7 @@ export function createRoutineCredentialExport(
   return {
     exportKind: "portable-data",
     sensitiveCredentialsIncluded: false,
-    providerProfiles: providerProfiles.map((profile) => ({ ...profile })),
+    providerProfiles: providerProfiles.map(({ credentialRef: _credentialRef, ...profile }) => ({ ...profile })),
   };
 }
 

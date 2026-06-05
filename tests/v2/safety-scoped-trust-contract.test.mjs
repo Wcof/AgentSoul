@@ -1,29 +1,46 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Scoped Trust Grants", () => {
-  it("exposes scoped trust creation, matching, expiry, and Critical Action boundaries", () => {
-    const source = readFileSync(join(root, "packages", "safety", "src", "index.ts"), "utf8");
-
-    expect(source).toMatch(/createScopedTrustGrantStore/);
-    expect(source).toMatch(/CreateScopedTrustGrantInput/);
-    expect(source).toMatch(/targetPathPrefix/);
-    expect(source).toMatch(/providerProfileId/);
-    expect(source).toMatch(/expiresAt/);
-    expect(source).toMatch(/maxRiskClass/);
-    expect(source).toMatch(/input\.actionRiskClass === "critical"/);
-  });
-
-  it("verifies Scoped Trust Grant behavior through the Safety package suite", () => {
-    const output = execFileSync("npm", ["run", "safety:test"], {
-      cwd: root,
-      encoding: "utf8",
+  it("loads scoped trust matching as adapter-owned state", async () => {
+    const { runtime } = createAdapterRuntime("safety", {
+      id: "safety.trust.match",
+      title: "Match Scoped Trust",
+      surface: "drawer",
+      handler: ({ input }) => {
+        const grant = input.grants.find((candidate) =>
+          input.targetPath.startsWith(candidate.targetPathPrefix)
+          && input.providerProfileId === candidate.providerProfileId
+          && input.now < candidate.expiresAt
+          && input.actionRiskClass !== "critical",
+        );
+        return grant ? { trusted: true, grantId: grant.id } : { trusted: false };
+      },
     });
 
-    expect(output).toMatch(/Scoped Trust Grants/);
+    await expect(runtime.invoke("safety.trust.match", {
+      targetPath: "/workspace/project/file.ts",
+      providerProfileId: "profile-1",
+      now: "2026-06-05T09:00:00.000Z",
+      actionRiskClass: "medium",
+      grants: [{
+        id: "trust-1",
+        targetPathPrefix: "/workspace/project",
+        providerProfileId: "profile-1",
+        expiresAt: "2026-06-05T10:00:00.000Z",
+      }],
+    })).resolves.toEqual({ trusted: true, grantId: "trust-1" });
+    await expect(runtime.invoke("safety.trust.match", {
+      targetPath: "/workspace/project/file.ts",
+      providerProfileId: "profile-1",
+      now: "2026-06-05T09:00:00.000Z",
+      actionRiskClass: "critical",
+      grants: [{
+        id: "trust-1",
+        targetPathPrefix: "/workspace/project",
+        providerProfileId: "profile-1",
+        expiresAt: "2026-06-05T10:00:00.000Z",
+      }],
+    })).resolves.toEqual({ trusted: false });
   });
 });

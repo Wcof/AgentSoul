@@ -5,14 +5,15 @@ import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
 
-describe("AgentSoul v2 Gateway Events to Growth Events", () => {
-  it("exposes Runtime-owned Gateway Growth conversion", () => {
+describe("AgentSoul v2 external traffic events to Growth Events", () => {
+  it("keeps external traffic growth conversion inside Companion without requiring an embedded gateway package", () => {
     const companionSource = readFileSync(join(root, "packages", "companion", "src", "index.ts"), "utf8");
-    const gatewaySource = readFileSync(join(root, "packages", "gateway", "src", "index.ts"), "utf8");
+    const rootPackage = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 
     expect(companionSource).toMatch(/applyGatewayTrafficGrowth/);
     expect(companionSource).toMatch(/gateway-traffic-v1/);
-    expect(gatewaySource).not.toMatch(/writeRuntimeState|companion_state|applyGatewayTrafficGrowth/);
+    expect(rootPackage.workspaces).not.toContain("packages/gateway");
+    expect(rootPackage.scripts["gateway:test"]).toBeUndefined();
   });
 
   it("verifies successful and failed Gateway traffic growth behavior", () => {

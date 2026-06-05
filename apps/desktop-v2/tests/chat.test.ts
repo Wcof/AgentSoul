@@ -123,7 +123,7 @@ describe("Chat controller", () => {
     }
   });
 
-  it("sendMessage includes companion identity and runtime prompt context", async () => {
+  it("sendMessage forwards supplied companion identity and runtime prompt context", async () => {
     const { sendMessage } = await import("../src/chat-controller.js");
 
     const originalFetch = globalThis.fetch;
@@ -140,14 +140,15 @@ describe("Chat controller", () => {
       await sendMessage("你好", [], {
         companionId: "active-companion",
         companionName: "元气眠眠",
-        mood: "positive",
-        vitals: { level: 6, companionEnergy: 85, hunger: 77, intimacy: 66 },
-        summary: "session:ready, gateway:ready",
-        masterCognition: {
-          masterName: "主人",
-          interests: ["桌宠", "AgentSoul"],
-          communicationStyle: "直接",
-          responsePreference: "一步到位",
+        companionContext: {
+          pad: { pleasure: 0.35, arousal: 0.2, dominance: 0.05 },
+          vitals: { energy: 85, hunger: 77, intimacy: 66 },
+          level: 6,
+          sessionContext: "session:ready, gateway:ready",
+          masterModel: {
+            basic: { name: "主人" },
+            preferences: { interests: ["桌宠", "AgentSoul"] },
+          },
         },
       });
 
@@ -234,7 +235,9 @@ describe("Chat controller — toggle and submit", () => {
       await submitMessage(container, [], {
         companionId: "active-companion",
         companionName: "元气眠眠",
-        vitals: { companionEnergy: 90, hunger: 90, intimacy: 20 },
+        companionContext: {
+          vitals: { energy: 90, hunger: 90, intimacy: 20 },
+        },
       });
       expect(calls[0].body.companionId).toBe("active-companion");
       expect(calls[0].body.companionContext.vitals.energy).toBe(90);

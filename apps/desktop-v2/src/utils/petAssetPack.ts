@@ -5,6 +5,7 @@ import type {
   PetAssetPackManifest,
   PetStateName,
 } from "../types";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 const REQUIRED_STATES: PetStateName[] = ["idle", "blink", "happy", "attention", "sleep", "degraded"];
 
@@ -38,9 +39,17 @@ export function normalizePetAssetPack(
 }
 
 export function resolveRenderableSpriteSrc(spritePath: string): string {
-  const converter = (globalThis as any)?.__TAURI_INTERNALS__?.convertFileSrc;
+  const windowLike = typeof window !== "undefined" ? window : undefined;
+  const converter = (globalThis as any)?.__TAURI__?.core?.convertFileSrc
+    ?? (globalThis as any)?.__TAURI_INTERNALS__?.convertFileSrc
+    ?? (windowLike as any)?.__TAURI_INTERNALS__?.convertFileSrc
+    ?? convertFileSrc;
   if (typeof converter === "function" && isLocalAbsolutePath(spritePath)) {
-    return converter(spritePath, "asset");
+    try {
+      return converter(spritePath, "asset");
+    } catch {
+      return spritePath;
+    }
   }
   return spritePath;
 }
@@ -70,6 +79,9 @@ function normalizeManifest(
   if (!raw?.states) {
     messages.push("warning: states missing in pet.json, using fallback state map");
   }
+  if (!nonEmpty(raw?.spritesheetPath)) {
+    messages.push("warning: spritesheetPath missing in pet.json, using spritesheet.webp");
+  }
   if (!raw?.frame) {
     messages.push("warning: frame config missing in pet.json, using guessed frame grid");
   }
@@ -82,17 +94,25 @@ function normalizeStates(
 ): Record<PetStateName, FrameSequence> {
   const guessedStates = guessStates(manifest.frame);
   const normalized = {} as Record<PetStateName, FrameSequence>;
+  const declaredStates = manifest.states as Record<string, FrameSequence> | undefined;
+  const defaultSource = declaredStates?.idle ?? declaredStates?.default;
+  const missingStates: PetStateName[] = [];
 
   for (const state of REQUIRED_STATES) {
-    const source = manifest.states?.[state];
+    const source = declaredStates?.[state];
     if (source) {
       normalized[state] = normalizeSequence(source, manifest.fps ?? 8, messages, state);
       continue;
     }
-    messages.push(`warning: state '${state}' missing, fallback to idle`);
-    normalized[state] = state === "idle"
-      ? guessedStates.idle
-      : normalizeSequence(manifest.states?.idle ?? guessedStates.idle, manifest.fps ?? 8, messages, state);
+    missingStates.push(state);
+    normalized[state] = defaultSource
+      ? normalizeSequence(defaultSource, manifest.fps ?? 8, messages, state)
+      : guessedStates[state];
+  }
+
+  if (missingStates.length > 0 && declaredStates) {
+    const fallbackName = declaredStates?.idle ? "idle" : declaredStates?.default ? "default" : "guessed frame grid";
+    messages.push(`warning: states ${missingStates.join(", ")} missing, fallback to ${fallbackName}`);
   }
 
   return normalized;

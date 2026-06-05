@@ -41,7 +41,6 @@ export interface DirectClientConfigFallback {
   providerProfileName: string;
   client: string;
   targetConfigPath: string;
-  credentialRef?: string;
   targetModel: string;
   endpoint: string;
   guarantees: {
@@ -153,9 +152,6 @@ export function createDirectClientConfigFallback(input: {
     providerProfileName: input.providerProfile.name,
     client: input.client,
     targetConfigPath: input.targetConfigPath,
-    credentialRef: input.providerProfile.credentialRef
-      ? String(input.providerProfile.credentialRef)
-      : undefined,
     targetModel: input.providerProfile.targetModel,
     endpoint: input.providerProfile.endpoint,
     guarantees: {

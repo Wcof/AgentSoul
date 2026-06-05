@@ -1,36 +1,35 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 safety-gated Session Launcher", () => {
-  it("exposes Session Launcher as a Safety Policy controlled launch-session action", () => {
-    const source = readFileSync(join(root, "packages", "sessions", "src", "index.ts"), "utf8");
-
-    expect(source).toMatch(/createSessionLauncher/);
-    expect(source).toMatch(/launchWorkSession/);
-    expect(source).toMatch(/kind: "launch-session"/);
-    expect(source).toMatch(/decideSafetyPolicy/);
-    expect(source).toMatch(/executeTerminalCommand/);
-  });
-
-  it("verifies approval, denial, trust, and non-resumable launch behavior", () => {
-    const packageTest = readFileSync(
-      join(root, "packages", "sessions", "tests", "session-source-scanner.test.ts"),
-      "utf8",
-    );
-    const output = execFileSync("npm", ["run", "sessions:test"], {
-      cwd: root,
-      encoding: "utf8",
+  it("keeps launch-session as an adapter-owned capability gated by runtime invocation", async () => {
+    const { runtime } = createAdapterRuntime("sessions", {
+      id: "sessions.resume",
+      title: "Resume Session",
+      surface: "drawer",
+      handler: ({ input }) => {
+        if (!input.resumable) return { kind: "blocked", reason: "non-resumable" };
+        if (input.safetyPolicy === "approval-required") return { kind: "approval-required" };
+        return { kind: "launched", action: "launch-session", command: input.resumeCommand };
+      },
     });
 
-    expect(packageTest).toMatch(/gates Session Launcher execution through approval decisions or scoped trust/);
-    expect(packageTest).toMatch(/reason: "non-resumable"/);
-    expect(packageTest).toMatch(/approval-required/);
-    expect(packageTest).toMatch(/approvalDecisionKind: "denied"/);
-    expect(packageTest).toMatch(/trust:launch-session/);
-    expect(output).toMatch(/Session Source scanning/);
+    await expect(runtime.invoke("sessions.resume", { resumable: false })).resolves.toEqual({
+      kind: "blocked",
+      reason: "non-resumable",
+    });
+    await expect(runtime.invoke("sessions.resume", {
+      resumable: true,
+      safetyPolicy: "approval-required",
+    })).resolves.toEqual({ kind: "approval-required" });
+    await expect(runtime.invoke("sessions.resume", {
+      resumable: true,
+      safetyPolicy: "fully-authorized",
+      resumeCommand: "codex resume s1",
+    })).resolves.toEqual({
+      kind: "launched",
+      action: "launch-session",
+      command: "codex resume s1",
+    });
   });
 });

@@ -27,7 +27,7 @@ describe("Credential Store bridge", () => {
     expect(header).toBe("Bearer sk-ant-secret");
   });
 
-  it("excludes plaintext secrets from Provider Profiles and routine export", async () => {
+  it("excludes plaintext secrets and credential refs from routine export", async () => {
     const bridge = createCredentialStoreBridge({
       nativeVault: createMemoryNativeCredentialVault(),
     });
@@ -48,6 +48,8 @@ describe("Credential Store bridge", () => {
     expect(providerProfile.credentialRef).toBe(credentialRef);
     expect(JSON.stringify(providerProfile)).not.toMatch(/sk-openai-secret/);
     expect(JSON.stringify(routineExport)).not.toMatch(/sk-openai-secret/);
+    expect(JSON.stringify(routineExport)).not.toMatch(/credential:openai/);
+    expect("credentialRef" in (routineExport.providerProfiles[0] ?? {})).toBe(false);
     expect(routineExport.sensitiveCredentialsIncluded).toBe(false);
   });
 });

@@ -13,11 +13,7 @@
       "@agentsoul/companion": ["../companion/src/index.ts"],
       "@agentsoul/domain": ["../domain/src/index.ts"],
       "@agentsoul/persistence": ["../persistence/src/index.ts"],
-      "@agentsoul/safety": ["../safety/src/index.ts"],
-      "@agentsoul/gateway": ["../gateway/src/index.ts"],
-      "@agentsoul/provider": ["../provider/src/index.ts"],
-      "@agentsoul/sessions": ["../sessions/src/index.ts"],
-      "@agentsoul/skills": ["../skills/src/index.ts"]
+      "@agentsoul/provider": ["../provider/src/index.ts"]
     }
   },
   "include": ["src", "tests"]

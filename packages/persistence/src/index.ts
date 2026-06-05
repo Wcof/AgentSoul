@@ -17,6 +17,12 @@ export const REQUIRED_V2_TABLES = [
   "work_sessions",
   "export_records",
   "memory_entries",
+  "entity_memory",
+  "entity_facts",
+  "semantic_vectors",
+  "health_snapshots",
+  "config_versions",
+  "emotion_snapshots",
 ] as const;
 
 export type V2TableName = (typeof REQUIRED_V2_TABLES)[number];
@@ -241,6 +247,4 @@ CREATE TABLE IF NOT EXISTS emotion_snapshots (
 // Repository classes have been moved to their respective domain packages:
 //   CompanionStateRepository → @agentsoul/companion
 //   MemoryRepository, EntityRepository, SemanticRepository, McpMemoryRepository → @agentsoul/memory
-//   SessionRepository → @agentsoul/sessions
-//   SkillRepository → @agentsoul/skills
-
+//   Session and skill repositories are future Extension Runtime adapters, not core workspace packages.

@@ -31,11 +31,19 @@ export function ensureDevPortAvailable({
   execFileSyncImpl = execFileSync,
   logger = console,
 }) {
-  const lsofOutput = execFileSyncImpl(
-    "lsof",
-    ["-t", `-iTCP:${port}`, "-sTCP:LISTEN"],
-    { encoding: "utf8" },
-  );
+  let lsofOutput = "";
+  try {
+    lsofOutput = execFileSyncImpl(
+      "lsof",
+      ["-t", `-iTCP:${port}`, "-sTCP:LISTEN"],
+      { encoding: "utf8" },
+    );
+  } catch (error) {
+    if (isNoListenerError(error)) {
+      return false;
+    }
+    throw error;
+  }
 
   const processCommandByPid = new Map();
   const pids = lsofOutput
@@ -44,10 +52,14 @@ export function ensureDevPortAvailable({
     .filter(Boolean);
 
   for (const pid of pids) {
-    const command = execFileSyncImpl("ps", ["-p", pid, "-o", "command="], {
-      encoding: "utf8",
-    }).trim();
-    processCommandByPid.set(pid, command);
+    try {
+      const command = execFileSyncImpl("ps", ["-p", pid, "-o", "command="], {
+        encoding: "utf8",
+      }).trim();
+      processCommandByPid.set(pid, command);
+    } catch (error) {
+      logger.warn?.(`Could not inspect process ${pid} on dev port ${port}: ${errorMessage(error)}`);
+    }
   }
 
   const ownedPid = findOwnedVitePid({ repoRoot, lsofOutput, processCommandByPid });
@@ -59,6 +71,23 @@ export function ensureDevPortAvailable({
   execFileSyncImpl("kill", [ownedPid], { encoding: "utf8" });
   logger.log(`Freed dev port ${port} by stopping stale Vite process ${ownedPid}.`);
   return true;
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isNoListenerError(error) {
+  const status = typeof error === "object" && error !== null && "status" in error
+    ? error.status
+    : undefined;
+  const stdout = typeof error === "object" && error !== null && "stdout" in error
+    ? error.stdout
+    : undefined;
+  const stderr = typeof error === "object" && error !== null && "stderr" in error
+    ? error.stderr
+    : undefined;
+  return status === 1 && String(stdout ?? "") === "" && String(stderr ?? "") === "";
 }
 
 function main() {

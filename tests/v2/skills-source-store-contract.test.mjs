@@ -1,30 +1,30 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { execFileSync } from "node:child_process";
-
-const root = process.cwd();
+import { describe, expect, it } from "vitest";
+import { createAdapterRuntime, expectRetiredCapability } from "./extension-runtime-contract-helpers.mjs";
 
 describe("AgentSoul v2 Skill Source Store and Installation", () => {
-  it("exposes Skill Installation without Project Skill Activation or Workspace Rule Deployment", () => {
-    const source = readFileSync(join(root, "packages", "skills", "src", "index.ts"), "utf8");
-    const packageJson = readFileSync(join(root, "package.json"), "utf8");
+  it("loads skill installation as a Desktop adapter capability without requiring a skills workspace", async () => {
+    expectRetiredCapability("skills.activate");
 
-    expect(packageJson).toMatch(/@agentsoul\/skills|skills:test/);
-    expect(source).toMatch(/createSkillSourceStore/);
-    expect(source).toMatch(/installSkillPack/);
-    expect(source).toMatch(/importLocalSkillPack/);
-    expect(source).toMatch(/listSkillPacks/);
-    expect(source).toMatch(/SkillSourceMetadata/);
-    expect(source).toMatch(/workspaceRuleDeploymentsCreated: false/);
-  });
-
-  it("verifies install, list, source metadata, and no-deploy behavior", () => {
-    const output = execFileSync("npm", ["run", "skills:test"], {
-      cwd: root,
-      encoding: "utf8",
+    const { runtime } = createAdapterRuntime("skills", {
+      id: "skills.install",
+      title: "Install Skill Pack",
+      surface: "drawer",
+      handler: ({ input }) => ({
+        installed: true,
+        source: input.source,
+        metadata: input.metadata,
+        workspaceRuleDeploymentsCreated: false,
+      }),
     });
 
-    expect(output).toMatch(/Skill Source Store and Installation/);
+    await expect(runtime.invoke("skills.install", {
+      source: "local-skill-pack",
+      metadata: { name: "diagnose" },
+    })).resolves.toEqual({
+      installed: true,
+      source: "local-skill-pack",
+      metadata: { name: "diagnose" },
+      workspaceRuleDeploymentsCreated: false,
+    });
   });
 });

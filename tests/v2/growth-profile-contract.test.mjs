@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { readAllAreaSources } from "./helpers/areaSource.js";
 
 const root = process.cwd();
 
@@ -19,13 +18,13 @@ describe("AgentSoul v2 Growth Profile", () => {
     expect(source).toMatch(/maxEnergyCostPerEvent/);
   });
 
-  it("surfaces Growth Profile parameters in the Control Center Settings Area", () => {
-    const source = readAllAreaSources(root);
+  it("does not require a legacy Control Center Settings Area surface", () => {
+    const desktopBodySource = readFileSync(join(root, "apps", "desktop-v2", "src", "desktop-body", "index.ts"), "utf8");
+    const extensionRuntimeSource = readFileSync(join(root, "apps", "desktop-v2", "src", "extension-runtime", "index.ts"), "utf8");
 
-    expect(source).toMatch(/Growth Profile/);
-    expect(source).toMatch(/XP multiplier/);
-    expect(source).toMatch(/Fatigue threshold/);
-    expect(source).toMatch(/Growth Cap/);
+    expect(desktopBodySource).toMatch(/bootstrapDesktopBody/);
+    expect(extensionRuntimeSource).toMatch(/createExtensionRuntime/);
+    expect(extensionRuntimeSource).not.toMatch(/data-control-area="settings-full"/);
   });
 
   it("verifies Growth Profile affects Gateway and Work Growth behavior", () => {

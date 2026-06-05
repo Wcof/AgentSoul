@@ -146,4 +146,69 @@ describe("Layered Memory", () => {
       store.close();
     }
   });
+
+  it("写入后触发语义索引，但索引失败不阻塞记忆存储", () => {
+    const indexed: Array<{ sourceType: string; sourceId: string; text: string }> = [];
+    const store = createMemoryStore({
+      dbPath,
+      semanticIndex: {
+        addEntry(sourceType, sourceId, text) {
+          indexed.push({ sourceType, sourceId, text });
+          throw new Error("embedding unavailable");
+        },
+      },
+    });
+
+    try {
+      const entry = store.write({
+        layer: "topic",
+        content: "Embedding service temporarily unavailable",
+        priority: "high",
+        tags: ["semantic"],
+      });
+
+      expect(entry.id).toBeDefined();
+      expect(store.get(entry.id)?.content).toBe("Embedding service temporarily unavailable");
+      expect(indexed).toEqual([
+        {
+          sourceType: "memory",
+          sourceId: entry.id,
+          text: "Embedding service temporarily unavailable",
+        },
+      ]);
+      expect(store.getLastIndexingFailure()?.memoryId).toBe(entry.id);
+      expect(store.getLastIndexingFailure()?.message).toContain("embedding unavailable");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("更新记忆内容后刷新语义索引，但索引失败不回滚记忆更新", () => {
+    const indexed: Array<{ sourceType: string; sourceId: string; text: string }> = [];
+    const store = createMemoryStore({
+      dbPath,
+      semanticIndex: {
+        addEntry(sourceType, sourceId, text) {
+          indexed.push({ sourceType, sourceId, text });
+          if (text === "更新后语义内容") throw new Error("semantic index update failed");
+        },
+      },
+    });
+
+    try {
+      const entry = store.write({ layer: "topic", content: "原始语义内容", priority: "medium", tags: ["semantic"] });
+
+      store.update(entry.id, { content: "更新后语义内容" });
+
+      expect(store.get(entry.id)?.content).toBe("更新后语义内容");
+      expect(indexed).toEqual([
+        { sourceType: "memory", sourceId: entry.id, text: "原始语义内容" },
+        { sourceType: "memory", sourceId: entry.id, text: "更新后语义内容" },
+      ]);
+      expect(store.getLastIndexingFailure()?.memoryId).toBe(entry.id);
+      expect(store.getLastIndexingFailure()?.message).toContain("semantic index update failed");
+    } finally {
+      store.close();
+    }
+  });
 });
