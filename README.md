@@ -6,21 +6,18 @@
 
 ## 📖 项目介绍
 
-**AgentSoul v2** 是一个本地优先的 AI Agent 伴侣框架，使用 TypeScript + Tauri 构建。它提供了一个可拖拽、自动吸附的桌面宠物伴侣，以及一个功能完整的控制中心界面。
+**AgentSoul v2** 是一个本地优先的 AI Agent 伴侣框架，使用 TypeScript + Tauri 构建。项目基于 **Desktop Body-first** 设计理念，提供了一个可拖拽、自动吸附的原生桌面宠物伴侣悬浮窗，集成了分层记忆与情感行为系统，支持高度扩展。
 
 ### 核心特性
 
-- 🐾 **桌面伴侣** — Canvas 2D 精灵动画桌面宠物，支持拖拽和屏幕边缘自动吸附
-- ⚡ **控制中心** — Tab 导航的全功能配置界面（伴侣、网关、技能、会话、安全、设置等）
-- 🔌 **本地网关** — HTTP 服务端，支持频道路由、成本追踪、审计记录、Agent Loop
-- 🧠 **分层记忆** — 日/周/月/年时间切片 + 主题记忆 + 核心记忆 + 实体记忆 + 语义搜索
-- ❤️ **PAD 情感模型** — 三维情感空间（愉悦度/唤醒度/支配度），驱动伴侣自主行为
-- 🔒 **安全策略** — 三级安全模型（PUBLIC/PROTECTED/SEALED）+ 审批流程 + 风险通知
-- 🌐 **双语支持** — 中文/英文界面动态切换
-- 🔌 **MCP 适配** — Model Context Protocol 集成
-- 💬 **伴侣对话** — 内置聊天控制器，支持上下文压缩和自主循环
-- 🐾 **宠物资源包** — 可切换的形象包系统，支持本地/远程资源加载
-- 🏠 **Tauri 原生集成** — IPC 通信、本地资产加载、原生窗口管理
+- 🐾 **桌面伴侣 (Desktop Body)** — Canvas 2D 精灵动画桌面宠物，支持拖拽和屏幕边缘自动吸附（30px 阈值）。
+- 🧠 **决策核心 (Agent Mind)** — 统一负责交互回合 (Interaction Turn)、提示词层级构建、自主行为循环与输出策略决策。
+- 💾 **分层记忆 (Memory)** — 日/周/月/年时间切片 + 主题记忆 + 核心记忆 + 实体记忆 + 语义搜索。
+- ❤️ **PAD 情感模型** — 三维情感空间（愉悦度/唤醒度/支配度），驱动伴侣在桌面的状态演化。
+- 🔌 **扩展运行时 (Extension Runtime)** — 唯一的外部能力装载口，支持动态加载扩展清单、功能注册与调用。
+- 🔒 **内嵌安全确认 (Inline Safety)** — 在悬浮窗交互中直接提供轻量化的审批与授权通知。
+- 🌐 **双语支持** — 中文/英文界面动态切换。
+- 🏠 **Tauri 原生集成** — 进程间通信、本地资产加载、原生透明窗口管理。
 
 ---
 
@@ -43,21 +40,17 @@ npm install
 npm run dev
 ```
 
-这会启动 Tauri 原生桌面端，并打开两个原生窗口：
-- **Desktop Companion** — 280×320 悬浮宠物窗口
-- **Control Center** — 1100×760 控制中心窗口
+这会启动 Tauri 原生桌面端，打开桌面伴侣悬浮窗窗口：
+- **Desktop Companion** — 透明无边框总是置顶的宠物窗口。
 
 ### 浏览器开发模式
 
 ```bash
 # 仅启动 Vite 开发服务器
 npm run v2:dev
-
-# 或者同时启动 Gateway 侧车
-cd apps/desktop-v2 && npm run launch
 ```
 
-### Tauri 原生桌面模式
+### Tauri 原生桌面开发模式
 
 ```bash
 npm run v2:tauri dev
@@ -68,38 +61,33 @@ npm run v2:tauri dev
 ## 🧪 测试
 
 ```bash
-# 运行所有 v2 契约测试
+# 运行所有 v2 契约测试与前端测试
 npm run v2:test
 
-# 运行特定包测试
-npm run companion:test      # 伴侣运行时 + 灵魂 + 提示词 + PAD
-npm run gateway:test        # 网关服务 + Agent Loop + 直调
-npm run safety:test         # 安全策略引擎
-npm run skills:test         # 技能包管理
-npm run sessions:test       # 会话管理
-npm run persistence:test    # SQLite 持久化层
-npm run provider:test       # 提供商配置 + 凭证存储
-npm run mcp-adapter:test    # MCP 协议适配
-npm run export:test         # 数据导出
+# 运行特定模块测试
+npm run companion:test      # 伴侣运行时 + 灵魂 + 提示词 + PAD 情感
 npm run memory:test         # 分层记忆 + 实体 + 语义
+npm run provider:test       # 提供商配置 + 凭证存储
+npm run persistence:test    # SQLite 持久化层
+npm run export:test         # 数据导出
 
 # 运行前端测试
 npx vitest run apps/desktop-v2/tests/
 
-# 运行所有包测试
-vitest run
+# 运行全量 Vitest 测试
+npx vitest run
 ```
 
 ### 类型检查
 
 ```bash
 npm run v2:typecheck       # 前端类型检查
-npm run domain:typecheck   # 领域类型
+npm run domain:typecheck   # 领域层类型检查
 npm run companion:typecheck
-npm run gateway:typecheck
-npm run safety:typecheck
 npm run memory:typecheck
-# ... 各包均有 :typecheck 命令
+npm run provider:typecheck
+npm run persistence:typecheck
+npm run export:typecheck
 ```
 
 ---
@@ -110,107 +98,80 @@ npm run memory:typecheck
 AgentSoul/
 ├── apps/
 │   └── desktop-v2/                # Tauri 桌面应用
-│       ├── src/                   # 前端 (TypeScript)
-│       │   ├── main.ts            # 入口，启动引导
-│       │   ├── renderers.ts       # HTML 渲染函数
-│       │   ├── controller.ts      # 事件绑定与交互逻辑
-│       │   ├── canvas-renderer.ts # Canvas 2D 精灵动画
-│       │   ├── chat-controller.ts # 伴侣聊天控制器
-│       │   ├── chat-renderer.ts   # 聊天界面渲染
-│       │   ├── styles.css         # 全部 CSS + Tab 路由
-│       │   ├── types.ts           # TypeScript 接口定义
-│       │   ├── areas/             # 控制中心各功能区域
-│       │   │   ├── companion/     # 伴侣配置区
-│       │   │   ├── conversations/ # 对话区
-│       │   │   ├── costs/         # 成本统计区
-│       │   │   ├── gateway/       # 网关配置区
-│       │   │   ├── mcp/           # MCP 适配区
-│       │   │   ├── prompts/       # 提示词管理区
-│       │   │   ├── safety/        # 安全策略区
-│       │   │   ├── sessions/      # 会话区
-│       │   │   ├── sessions-mgr/  # 会话管理区
-│       │   │   ├── settings/      # 设置区
-│       │   │   ├── settings-full/ # 完整设置区
-│       │   │   └── skills/        # 技能区
-│       │   ├── shared/            # 共享 UI 组件
-│       │   ├── i18n/              # 双语 (zh/en) 国际化
-│       │   └── utils/             # 工具：弹窗、右键菜单、窗口吸附
-│       ├── src-tauri/             # Rust 后端 (Tauri v2)
-│       │   └── src/lib.rs         # Tauri 命令，资产加载
-│       └── tests/                 # 前端测试
+│       ├── src/                   # 前端 TypeScript 源码
+│       │   ├── main.ts            # 入口引导
+│       │   ├── renderers.ts       # 全局渲染映射
+│       │   ├── controller.ts      # 事件绑定控制器
+│       │   ├── types.ts           # 共享前端类型
+│       │   ├── styles.css         # 悬浮窗样式与过渡动画
+│       │   ├── chat-controller.ts # 内置聊天控制器
+│       │   ├── chat-renderer.ts   # 内置聊天界面渲染
+│       │   ├── desktop-body/      # [Desktop Body] 模块 (身体、动画、悬浮窗渲染、交互)
+│       │   │   ├── animation.ts   # Canvas 2D 精灵动画引擎
+│       │   │   ├── surface.ts     # 桌面宠物主体 DOM 渲染与事件绑定
+│       │   │   ├── menu.ts        # 快速交互气泡与内嵌对话表单
+│       │   │   ├── window.ts      # Tauri 原生窗口交互（拖拽、隐藏、刷新）
+│       │   │   ├── appearance-pack.ts # 皮肤资产包解析与动态导入
+│       │   │   ├── embedded-panels.ts # 未来内嵌扩展板卡槽
+│       │   │   ├── status-actions.ts # 状态小气泡呈现
+│       │   │   ├── bootstrap.ts   # 本地运行时引导与状态合并
+│       │   │   └── index.ts       # 身体模块 Barrel 导出
+│       │   ├── agent-mind/        # [Agent Mind] 模块 (大脑决策、提示词架构、自主行为)
+│       │   │   ├── interaction-turn.ts # 交互回合并行构建与 LLM 负载准备
+│       │   │   ├── autonomy-loop.ts   # 自主唤醒与行动循环投影
+│       │   │   ├── output-strategy.ts # 根据用户状态与紧迫度计算输出模式
+│       │   │   ├── prompt-layers.ts   # 三层 Hermes 提示词组装层
+│       │   │   └── index.ts           # 决策模块 Barrel 导出
+│       │   ├── memory/            # [Memory] 模块 (状态载体、主人画像修正)
+│       │   │   ├── soul-document.ts   # 伴侣自身性格核心
+│       │   │   ├── master-model.ts    # 用户特征认知模型
+│       │   │   ├── memory-store.ts    # 分层长期记忆存取
+│       │   │   ├── correction.ts      # 观察学习与主人画像纠正
+│       │   │   └── index.ts           # 记忆模块 Barrel 导出
+│       │   ├── extension-runtime/ # [Extension Runtime] 模块 (能力注册、外部适配)
+│       │   │   ├── manifest.ts        # 扩展声明清单规范
+│       │   │   ├── registry.ts        # 运行时扩展与功能注册表
+│       │   │   ├── adapter.ts         # 能力适配层与历史遗留项
+│       │   │   ├── events.ts          # 执行期总线事件流
+│       │   │   └── index.ts           # 扩展模块 Barrel 导出
+│       │   ├── shared/            # 共享样式与实用程序
+│       │   ├── utils/             # 本地存储、窗口吸附、Tauri IPC 封装
+│       │   └── i18n/              # 中英双语翻译包
+│       ├── src-tauri/             # Rust 原生后端 (Tauri v2)
+│       └── tests/                 # 前端单元测试与冒烟测试
 ├── packages/
-│   ├── domain/                    # 共享领域类型（纯类型，无依赖）
-│   ├── companion/                 # 核心：运行时、PAD、健康、配置、灵魂、自主行为
-│   ├── gateway/                   # 本地 HTTP 网关（频道、成本、审计、Agent Loop）
-│   ├── persistence/               # SQLite 初始化、迁移、ControlPlaneStore
-│   ├── sessions/                  # 会话管理 + SessionRepository
-│   ├── provider/                  # 提供商配置 + 凭证存储
-│   ├── safety/                    # 安全策略引擎 + 审批流程
-│   ├── skills/                    # 技能包管理
-│   ├── memory/                    # 统一：分层记忆 + 实体 + 语义搜索
-│   ├── mcp-adapter/               # MCP 协议适配（协议转换）
-│   └── export/                    # 数据导出
+│   ├── domain/                    # 领域共享基础类型（无依赖）
+│   ├── companion/                 # 伴侣实体、情绪模型与成长系统
+│   ├── persistence/               # 基础数据库初始化与迁移
+│   ├── provider/                  # 提供商激活与本地凭证桥接
+│   ├── memory/                    # 时间切片分层与语义实体记忆存储
+│   └── export/                    # 便携式数据确认与数据导出
 ├── tests/
-│   └── v2/                        # 跨包契约测试
+│   └── v2/                        # 跨包集成契约测试 (Contract Tests)
 ├── docs/
 │   ├── adr/                       # 架构决策记录 (ADR)
-│   └── v2/                        # v2 文档（PRD、TDD 计划）
+│   └── v2/                        # 项目设计说明与 PRD 文档
 └── data/
-    └── desktop-v2/                # SQLite 数据库 + 宠物资源
+    └── desktop-v2/                # 初始数据库定义与测试资源包
 ```
 
 ---
 
-## 🏗️ 架构
+## 🏗️ 架构与设计理念
 
-### 桌面伴侣
+### 1. Body-first (身体优先)
+新版架构彻底删除了旧版页面式的控制中心。整个应用仅保留桌面悬浮窗，所有的配置、状态检查、更换皮肤、甚至是敏感操作确认，全部通过悬浮窗内的交互式 DOM 面板（小面板）、动态对话气泡与微型气泡输入框完成。
 
-- Canvas 2D 精灵动画，支持多形象包切换
-- 拖拽移动 + 屏幕边缘自动吸附（30px 阈值）
-- 右键上下文菜单（喂食、玩耍、抚摸、睡觉）
-- 双击切换形象包
-- 内置聊天界面，支持上下文压缩
+### 2. Mind-driven (大脑驱动)
+伴侣行为并非简单的 LLM 问答。
+- **三层提示词结构 (3-Layer Prompt)**：每次对话包含稳定层（魂魄文档）、上下文层（情绪与环境状态）、以及最易发生变化的会话层。
+- **输出策略引擎 (Output Strategy)**：计算用户的离线/忙碌状态，自适应地进行静默队列缓冲、通知栏打断或气泡渲染。
 
-### 控制中心
+### 3. Unified Memory (统一记忆)
+将过去碎片化的会话状态存储整合进统一的分层记忆（日/周/月/年）中，并基于 **Master Model** 自主发现主人习惯与特征，支持随时纠偏。
 
-- 基于 `data-active-tab` 属性的 CSS 路由
-- 12 个功能区域：伴侣、网关、技能、会话、对话、成本、安全、设置、MCP、提示词等
-- App 切换器支持多应用管理
-- 各区域独立模块，按需加载
-
-### 伴侣智能
-
-- **PAD 情感模型**：三维情感空间驱动伴侣行为
-- **自主循环**：基于情感状态生成自主行为
-- **灵魂系统**：持续演化的伴侣个性与记忆
-- **Agent Loop**：网关侧多轮对话编排
-- **上下文压缩**：自动压缩长对话上下文
-
-### 安全模型
-
-| 级别 | 说明 |
-|------|------|
-| PUBLIC | 可在对话中直接引用 |
-| PROTECTED | 仅内部使用 |
-| SEALED | 严格禁止输出（API 密钥等） |
-
----
-
-## 📝 架构决策记录
-
-| ADR | 标题 |
-|-----|------|
-| 0001 | 运行时状态归数据库所有 |
-| 0002 | 网关路由默认提供商激活 |
-| 0003 | 审计记录默认仅存元数据 |
-| 0004 | 审批超时拒绝高风险操作 |
-| 0005 | 本地优先的伴侣 |
-| 0006 | 使用 TypeScript + Tauri 重写 v2 |
-| 0007 | 双语策略 |
-| 0008 | 桌面伴侣 + 控制中心 |
-| 0009 | v2 技术栈 |
-| 0010 | 可停靠深色毛玻璃 UI |
-| 0011 | 伴侣智能架构 |
+### 4. Registry Extensibility (扩展运行时)
+所有未来添加的新功能（包括 MCP、自定义提示模板、特定网络请求）一律通过 **Extension Runtime** 声明为 capability，注册到运行时进行事件分发，不侵入主应用的 UI 和大脑逻辑。
 
 ---
 
