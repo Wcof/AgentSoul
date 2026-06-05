@@ -11,8 +11,8 @@ describe("desktop body-first architecture", () => {
     const memory = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "memory", "index.ts"), "utf8");
     const extensionRuntime = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "extension-runtime", "index.ts"), "utf8");
 
-    expect(desktopBody).toContain("desktop-companion-surface");
-    expect(agentMind).toContain("companion-interaction-turn");
+    expect(desktopBody).toContain("renderDesktopCompanionSurface");
+    expect(agentMind).toContain("runCompanionInteractionTurn");
     expect(memory).toContain("applyMasterModelEdit");
     expect(extensionRuntime).toContain("createExtensionRuntime");
   });
@@ -70,12 +70,12 @@ describe("desktop body-first architecture", () => {
     const productSources = [
       "desktop-body/bootstrap.ts",
       "desktop-body/interaction-actions.ts",
-      "desktop-body/pet-appearance-actions.ts",
+      "desktop-body/appearance-pack.ts",
       "desktop-body/status-actions.ts",
-      "desktop-companion-surface.ts",
-      "desktop-companion-experience.ts",
-      "companion-interaction-turn.ts",
-      "companion-autonomy-projection.ts",
+      "desktop-body/surface.ts",
+      "desktop-body/menu.ts",
+      "agent-mind/interaction-turn.ts",
+      "agent-mind/autonomy-loop.ts",
       "shared/utils.ts",
     ].map((file) => readFileSync(join(repoRoot, "apps", "desktop-v2", "src", ...file.split("/")), "utf8")).join("\n");
 

@@ -11,7 +11,7 @@ describe("AgentSoul v2 Desktop Companion rendering", () => {
       "utf8",
     );
     const surfaceSource = readFileSync(
-      join(root, "apps", "desktop-v2", "src", "desktop-companion-surface.ts"),
+      join(root, "apps", "desktop-v2", "src", "desktop-body", "surface.ts"),
       "utf8",
     );
     const tauriConfig = JSON.parse(

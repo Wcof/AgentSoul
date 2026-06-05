@@ -130,9 +130,10 @@ describe("extension runtime owns retired product surfaces", () => {
       "controller.ts",
       "desktop-body/index.ts",
       "desktop-body/bootstrap.ts",
-      "desktop-companion-surface.ts",
-      "desktop-companion-experience.ts",
+      "desktop-body/surface.ts",
+      "desktop-body/menu.ts",
       "extension-runtime/index.ts",
+      "extension-runtime/adapter.ts",
     ]
       .map((file) => readFileSync(join(appRoot, "src", ...file.split("/")), "utf8"))
       .join("\n");

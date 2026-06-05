@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildSnapshot } from "./helpers/snapshot.js";
-import { renderDesktopCompanionSurface } from "../src/desktop-companion-surface";
+import { renderDesktopCompanionSurface } from "../src/desktop-body";
 
 function createMockTarget() {
   return { innerHTML: "", classList: { contains: () => false, toggle: () => {}, remove: () => {}, add: () => {} }, querySelectorAll: () => [] };

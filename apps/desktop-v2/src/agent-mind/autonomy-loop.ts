@@ -1,5 +1,5 @@
-import type { DesktopBodySnapshot } from "./types";
-import { resolveVisualState } from "./shared/utils";
+import type { DesktopBodySnapshot } from "../types";
+import { resolveVisualState } from "../shared/utils";
 
 export function projectAutonomyRuntime(input: {
   snapshot: DesktopBodySnapshot;

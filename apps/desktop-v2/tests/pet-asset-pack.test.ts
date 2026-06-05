@@ -10,6 +10,7 @@ describe("pet asset pack normalization", () => {
         spritesheetPath: "spritesheet.webp",
         kind: "person",
         frame: { width: 128, height: 128, count: 32 },
+        fps: 8,
         states: {
           idle: { frames: [0, 1, 2], loop: true, fps: 8 },
           blink: { frames: [3, 4], loop: true, fps: 6 },
@@ -38,10 +39,28 @@ describe("pet asset pack normalization", () => {
       "/tmp/legacy.codex-pet",
     );
 
-    expect(normalized.validation.level).toBe("warning");
-    expect(normalized.states.idle.frames?.length).toBeGreaterThan(0);
-    expect(normalized.states.sleep.frames?.length).toBeGreaterThan(0);
+    expect(normalized.validation.level).toBe("error");
+    expect(normalized.states.idle.frames).toEqual([0]);
+    expect(normalized.states.sleep.frames).toEqual([0]);
+    expect(normalized.validation.messages.join(" ")).toMatch(/frame config missing/);
     expect(normalized.validation.messages.join(" ")).toMatch(/states missing/);
+  });
+
+  it("rejects thin codex-pet manifests instead of guessing frame grids", () => {
+    const normalized = normalizePetAssetPack(
+      {
+        id: "thin",
+        displayName: "Thin",
+        spritesheetPath: "spritesheet.webp",
+        kind: "person",
+      },
+      "/tmp/thin.codex-pet",
+    );
+
+    expect(normalized.validation.level).toBe("error");
+    expect(normalized.validation.messages).toContain("error: frame config missing in pet.json");
+    expect(normalized.validation.messages).toContain("error: states missing in pet.json");
+    expect(normalized.states.idle.frames).toEqual([0]);
   });
 
   it("accepts state supersets without treating custom states as validation noise", () => {
@@ -52,6 +71,7 @@ describe("pet asset pack normalization", () => {
         spritesheetPath: "spritesheet.webp",
         kind: "person",
         frame: { width: 128, height: 128, count: 8 },
+        fps: 8,
         states: {
           idle: { frames: [0], loop: true },
           blink: { frames: [1], loop: true },
@@ -70,7 +90,7 @@ describe("pet asset pack normalization", () => {
     expect(normalized.states.idle.frames).toEqual([0]);
   });
 
-  it("maps missing core states to default before guessed animation slices", () => {
+  it("rejects default-only manifests that do not declare every core state", () => {
     const normalized = normalizePetAssetPack(
       {
         id: "default-only",
@@ -78,6 +98,7 @@ describe("pet asset pack normalization", () => {
         spritesheetPath: "spritesheet.webp",
         kind: "person",
         frame: { width: 128, height: 128, count: 24 },
+        fps: 3,
         states: {
           default: { frames: [9], loop: true, fps: 3 },
         } as any,
@@ -85,32 +106,39 @@ describe("pet asset pack normalization", () => {
       "/tmp/default-only.codex-pet",
     );
 
-    expect(normalized.validation.level).toBe("warning");
-    expect(normalized.states.idle.frames).toEqual([9]);
-    expect(normalized.states.attention.frames).toEqual([9]);
+    expect(normalized.validation.level).toBe("error");
+    expect(normalized.states.idle.frames).toEqual([0]);
+    expect(normalized.states.attention.frames).toEqual([0]);
     expect(normalized.states.sleep.fps).toBe(3);
     expect(normalized.validation.messages.filter((message) => message.includes("missing"))).toEqual([
-      "warning: states idle, blink, happy, attention, sleep, degraded missing, fallback to default",
+      "error: states idle, blink, happy, attention, sleep, degraded missing in pet.json",
     ]);
   });
 
-  it("reports missing spritesheet paths while resolving to the stable default filename", () => {
+  it("rejects missing spritesheet paths while resolving to the stable default filename", () => {
     const normalized = normalizePetAssetPack(
       {
         id: "no-sprite",
         displayName: "No Sprite",
         kind: "person",
+        frame: { width: 128, height: 128, count: 1 },
+        fps: 8,
         states: {
           idle: { frames: [0], loop: true },
+          blink: { frames: [0], loop: true },
+          happy: { frames: [0], loop: true },
+          attention: { frames: [0], loop: true },
+          sleep: { frames: [0], loop: true },
+          degraded: { frames: [0], loop: true },
         },
       },
       "/tmp/no-sprite.codex-pet",
     );
 
-    expect(normalized.validation.level).toBe("warning");
+    expect(normalized.validation.level).toBe("error");
     expect(normalized.manifest.spritesheetPath).toBe("/tmp/no-sprite.codex-pet/spritesheet.webp");
     expect(normalized.validation.messages).toContain(
-      "warning: spritesheetPath missing in pet.json, using spritesheet.webp",
+      "error: spritesheetPath missing in pet.json",
     );
   });
 
@@ -121,8 +149,15 @@ describe("pet asset pack normalization", () => {
         displayName: "Relative",
         spritesheetPath: "sprites/main sheet.webp",
         kind: "person",
+        frame: { width: 128, height: 128, count: 1 },
+        fps: 8,
         states: {
           idle: { frames: [0], loop: true },
+          blink: { frames: [0], loop: true },
+          happy: { frames: [0], loop: true },
+          attention: { frames: [0], loop: true },
+          sleep: { frames: [0], loop: true },
+          degraded: { frames: [0], loop: true },
         },
       },
       "/tmp/relative.codex-pet",

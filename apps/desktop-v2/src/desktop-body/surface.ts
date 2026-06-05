@@ -1,11 +1,11 @@
-import type { CompanionInteractionKind, DesktopBodySnapshot } from "./types";
-import { buildDesktopCompanionExperience, renderDesktopCompanionInlineExperience } from "./desktop-companion-experience";
-import { projectAutonomyRuntime } from "./companion-autonomy-projection";
-import { submitDesktopBodyInlineChat } from "./desktop-body/interaction-actions";
-import { switchPetAssetPackInteractively } from "./desktop-body/pet-appearance-actions";
-import { showDesktopBodyStatus } from "./desktop-body/status-actions";
-import { hideDesktopBodyWindow, refreshDesktopBodyRuntime, startDesktopBodyWindowDrag } from "./desktop-body/window-actions";
-import { escapeHtml } from "./shared/utils";
+import type { CompanionInteractionKind, DesktopBodySnapshot } from "../types";
+import { buildDesktopCompanionExperience, renderDesktopCompanionInlineExperience } from "./menu";
+import { projectAutonomyRuntime } from "../agent-mind/autonomy-loop";
+import { submitDesktopBodyInlineChat } from "./interaction-actions";
+import { switchPetAssetPackInteractively } from "./appearance-pack";
+import { showDesktopBodyStatus } from "./status-actions";
+import { hideDesktopBodyWindow, refreshDesktopBodyRuntime, startDesktopBodyWindowDrag } from "./window";
+import { escapeHtml } from "../shared/utils";
 
 export function renderDesktopCompanionSurface(input: {
   target: HTMLElement;

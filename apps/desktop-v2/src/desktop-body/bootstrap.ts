@@ -1,8 +1,8 @@
 import type { DesktopBodySnapshot, NativeCompanionRuntimeState } from "../types";
-import { createCanvasRenderer, startAnimationLoop } from "../canvas-renderer";
-import { normalizeAutonomySnapshot } from "../companion-autonomy-projection";
+import { createCanvasRenderer, startAnimationLoop } from "./animation";
+import { normalizeAutonomySnapshot } from "../agent-mind/autonomy-loop";
 import { defaultCompanionSnapshot } from "../data/defaultSnapshot";
-import { renderDesktopCompanionSurface, bindDesktopCompanionSurface } from "../desktop-companion-surface";
+import { renderDesktopCompanionSurface, bindDesktopCompanionSurface } from "./surface";
 import i18n from "../i18n";
 import { resolveVisualState } from "../shared/utils";
 import { tauriInvoke } from "../utils/tauriIpc";

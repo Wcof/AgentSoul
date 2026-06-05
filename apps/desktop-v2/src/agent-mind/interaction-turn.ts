@@ -1,5 +1,5 @@
-import type { ChatMessage, DesktopBodySnapshot } from "./types";
-import { sendMessage, type SendMessageResult } from "./chat-controller";
+import type { ChatMessage, DesktopBodySnapshot } from "../types";
+import { sendMessage, type SendMessageResult } from "../chat-controller";
 
 export async function runCompanionInteractionTurn<TSnapshot extends DesktopBodySnapshot>(input: {
   message: string;

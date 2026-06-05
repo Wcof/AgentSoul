@@ -1,5 +1,5 @@
 import type { CompanionInteractionKind, DesktopBodySnapshot } from "../types";
-import { runCompanionInteractionTurn } from "../companion-interaction-turn";
+import { runCompanionInteractionTurn } from "../agent-mind/interaction-turn";
 
 export function applyDesktopBodyInteraction<TSnapshot extends DesktopBodySnapshot>(
   snapshot: TSnapshot,

@@ -3,7 +3,7 @@ import {
 } from "@agentsoul/companion/soul";
 import type { MasterModel, MasterModelLearningStage } from "@agentsoul/companion/soul";
 import { applyMasterModelCommand as applyPureMasterModelCommand } from "@agentsoul/memory";
-import type { DesktopBodySnapshot } from "./types";
+import type { DesktopBodySnapshot } from "../types";
 
 export type MasterModelEditAction =
   | { kind: "record"; claim: string; evidence: string[]; confidence: number }

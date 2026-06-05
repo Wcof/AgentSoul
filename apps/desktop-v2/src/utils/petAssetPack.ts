@@ -77,13 +77,27 @@ function normalizeManifest(
   };
 
   if (!raw?.states) {
-    messages.push("warning: states missing in pet.json, using fallback state map");
+    messages.push("error: states missing in pet.json");
   }
   if (!nonEmpty(raw?.spritesheetPath)) {
-    messages.push("warning: spritesheetPath missing in pet.json, using spritesheet.webp");
+    messages.push("error: spritesheetPath missing in pet.json");
   }
   if (!raw?.frame) {
-    messages.push("warning: frame config missing in pet.json, using guessed frame grid");
+    messages.push("error: frame config missing in pet.json");
+  } else {
+    if (!Number.isFinite(raw.frame.width) || raw.frame.width <= 0) {
+      messages.push("error: frame.width missing or invalid in pet.json");
+    }
+    if (!Number.isFinite(raw.frame.height) || raw.frame.height <= 0) {
+      messages.push("error: frame.height missing or invalid in pet.json");
+    }
+    const frameCount = raw.frame.count;
+    if (typeof frameCount !== "number" || !Number.isFinite(frameCount) || !Number.isInteger(frameCount) || frameCount <= 0) {
+      messages.push("error: frame.count missing or invalid in pet.json");
+    }
+  }
+  if (!(typeof raw?.fps === "number" && raw.fps > 0)) {
+    messages.push("error: fps missing or invalid in pet.json");
   }
   return manifest;
 }
@@ -92,10 +106,8 @@ function normalizeStates(
   manifest: PetAssetPackManifest,
   messages: string[],
 ): Record<PetStateName, FrameSequence> {
-  const guessedStates = guessStates(manifest.frame);
   const normalized = {} as Record<PetStateName, FrameSequence>;
   const declaredStates = manifest.states as Record<string, FrameSequence> | undefined;
-  const defaultSource = declaredStates?.idle ?? declaredStates?.default;
   const missingStates: PetStateName[] = [];
 
   for (const state of REQUIRED_STATES) {
@@ -105,14 +117,11 @@ function normalizeStates(
       continue;
     }
     missingStates.push(state);
-    normalized[state] = defaultSource
-      ? normalizeSequence(defaultSource, manifest.fps ?? 8, messages, state)
-      : guessedStates[state];
+    normalized[state] = { frames: [0], loop: true, fps: manifest.fps ?? 8 };
   }
 
-  if (missingStates.length > 0 && declaredStates) {
-    const fallbackName = declaredStates?.idle ? "idle" : declaredStates?.default ? "default" : "guessed frame grid";
-    messages.push(`warning: states ${missingStates.join(", ")} missing, fallback to ${fallbackName}`);
+  if (missingStates.length > 0) {
+    messages.push(`error: states ${missingStates.join(", ")} missing in pet.json`);
   }
 
   return normalized;
@@ -146,24 +155,6 @@ function normalizeSequence(
     frames: dedupePositiveInts(source.frames ?? [0]),
     loop: source.loop !== false,
     fps: source.fps && source.fps > 0 ? source.fps : defaultFps,
-  };
-}
-
-function guessStates(frame: PetAssetPackManifest["frame"]): Record<PetStateName, FrameSequence> {
-  const frameCount = Math.max(24, frame?.count ?? 48);
-  const slice = (start: number, end: number): number[] => {
-    const list: number[] = [];
-    for (let i = start; i < end && i < frameCount; i += 1) list.push(i);
-    return list.length > 0 ? list : [0];
-  };
-
-  return {
-    idle: { frames: slice(0, 6), loop: true, fps: 8 },
-    blink: { frames: slice(6, 8), loop: true, fps: 6 },
-    happy: { frames: slice(8, 14), loop: true, fps: 10 },
-    attention: { frames: slice(14, 20), loop: true, fps: 9 },
-    sleep: { frames: slice(20, 24), loop: true, fps: 5 },
-    degraded: { frames: slice(0, 4), loop: true, fps: 4 },
   };
 }
 

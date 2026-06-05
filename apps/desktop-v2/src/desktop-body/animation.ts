@@ -1,6 +1,6 @@
 // Canvas 2D 动画引擎
-import type { CompanionVisualState, FrameRect, PetAppearanceSnapshot, PetAssetPackManifest, PetStateName } from "./types";
-import { normalizePetAssetPack, resolveRenderableSpriteSrc } from "./utils/petAssetPack";
+import type { CompanionVisualState, FrameRect, PetAppearanceSnapshot, PetAssetPackManifest, PetStateName } from "../types";
+import { normalizePetAssetPack, resolveRenderableSpriteSrc } from "../utils/petAssetPack";
 
 export interface CanvasRenderer {
   canvas: HTMLCanvasElement;

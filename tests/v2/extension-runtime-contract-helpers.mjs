@@ -11,7 +11,10 @@ const root = process.cwd();
 export { createExtensionRuntime, retiredControlAreaCapabilityDeclarations };
 
 export function readExtensionRuntimeSource() {
-  return readFileSync(join(root, "apps", "desktop-v2", "src", "extension-runtime", "index.ts"), "utf8");
+  const files = ["index.ts", "adapter.ts", "manifest.ts", "registry.ts", "events.ts"];
+  return files
+    .map((file) => readFileSync(join(root, "apps", "desktop-v2", "src", "extension-runtime", file), "utf8"))
+    .join("\n");
 }
 
 export function expectExtensionRuntimeAdapterSurface() {

@@ -1,11 +1,11 @@
-import type { ChatCompanionContext } from "./chat-controller";
-import type { CompanionInteractionKind, DesktopBodySnapshot, PetAppearanceSnapshot } from "./types";
+import type { ChatCompanionContext } from "../chat-controller";
+import type { CompanionInteractionKind, DesktopBodySnapshot, PetAppearanceSnapshot } from "../types";
 import { buildSystemPrompt } from "@agentsoul/companion/prompt";
 import type { PromptPADState } from "@agentsoul/companion/prompt";
 import { getDefaultSoul } from "@agentsoul/companion/soul";
-import { escapeHtml } from "./shared/utils";
-import { projectAutonomyRuntime } from "./companion-autonomy-projection";
-import { buildCompanionChatPayload } from "./companion-interaction-turn";
+import { escapeHtml } from "../shared/utils";
+import { projectAutonomyRuntime } from "../agent-mind/autonomy-loop";
+import { buildCompanionChatPayload } from "../agent-mind/interaction-turn";
 
 export interface DesktopCompanionPromptLayers {
   stable: string;

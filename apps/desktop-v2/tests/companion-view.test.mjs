@@ -13,11 +13,11 @@ function readDesktopBodySources() {
     "types.ts",
     "desktop-body/index.ts",
     "desktop-body/bootstrap.ts",
-    "desktop-companion-surface.ts",
-    "desktop-companion-experience.ts",
-    "companion-interaction-turn.ts",
-    "companion-autonomy-projection.ts",
-    "master-model-editing.ts",
+    "desktop-body/surface.ts",
+    "desktop-body/menu.ts",
+    "agent-mind/interaction-turn.ts",
+    "agent-mind/autonomy-loop.ts",
+    "memory/correction.ts",
     "memory/index.ts",
     "agent-mind/index.ts",
     "extension-runtime/index.ts",
@@ -36,11 +36,11 @@ function readDesktopBodyImplementationSources() {
     "controller.ts",
     "desktop-body/index.ts",
     "desktop-body/bootstrap.ts",
-    "desktop-companion-surface.ts",
-    "desktop-companion-experience.ts",
-    "companion-interaction-turn.ts",
-    "companion-autonomy-projection.ts",
-    "master-model-editing.ts",
+    "desktop-body/surface.ts",
+    "desktop-body/menu.ts",
+    "agent-mind/interaction-turn.ts",
+    "agent-mind/autonomy-loop.ts",
+    "memory/correction.ts",
     "memory/index.ts",
     "agent-mind/index.ts",
     "extension-runtime/index.ts",
@@ -138,7 +138,7 @@ describe("Desktop Body-first core modules", () => {
 
 describe("Canvas 2D animation engine", () => {
   it("exports Canvas renderer and animation loop functions", () => {
-    const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
+    const canvasSource = readFileSync(join(appRoot, "src", "desktop-body", "animation.ts"), "utf8");
 
     expect(canvasSource).toMatch(/Canvas 2D 动画引擎/);
     expect(canvasSource).toMatch(/createCanvasRenderer/);
@@ -150,7 +150,7 @@ describe("Canvas 2D animation engine", () => {
   });
 
   it("uses codex-pet asset packs as the primary desktop pet renderer", () => {
-    const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
+    const canvasSource = readFileSync(join(appRoot, "src", "desktop-body", "animation.ts"), "utf8");
     const assetSource = readFileSync(join(appRoot, "src", "utils", "petAssetPack.ts"), "utf8");
     const typesSource = readFileSync(join(appRoot, "src", "types.ts"), "utf8");
 
@@ -166,8 +166,8 @@ describe("Canvas 2D animation engine", () => {
   });
 
   it("keeps codex-pet desktop rendering faithful without extra motion effects", () => {
-    const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
-    const surfaceSource = readFileSync(join(appRoot, "src", "desktop-companion-surface.ts"), "utf8");
+    const canvasSource = readFileSync(join(appRoot, "src", "desktop-body", "animation.ts"), "utf8");
+    const surfaceSource = readFileSync(join(appRoot, "src", "desktop-body", "surface.ts"), "utf8");
     const stylesSource = readFileSync(join(appRoot, "src", "styles.css"), "utf8");
 
     expect(canvasSource).not.toMatch(/bounce/);
@@ -178,7 +178,7 @@ describe("Canvas 2D animation engine", () => {
   });
 
   it("supports slime and cat appearance rendering", () => {
-    const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
+    const canvasSource = readFileSync(join(appRoot, "src", "desktop-body", "animation.ts"), "utf8");
     const typesSource = readFileSync(join(appRoot, "src", "types.ts"), "utf8");
 
     expect(canvasSource).toMatch(/slime/);
@@ -188,7 +188,7 @@ describe("Canvas 2D animation engine", () => {
   });
 
   it("renders status bubbles for all visual states", () => {
-    const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
+    const canvasSource = readFileSync(join(appRoot, "src", "desktop-body", "animation.ts"), "utf8");
 
     expect(canvasSource).toMatch(/idle/);
     expect(canvasSource).toMatch(/positive/);
@@ -198,7 +198,7 @@ describe("Canvas 2D animation engine", () => {
   });
 
   it("includes interaction button rendering", () => {
-    const canvasSource = readFileSync(join(appRoot, "src", "canvas-renderer.ts"), "utf8");
+    const canvasSource = readFileSync(join(appRoot, "src", "desktop-body", "animation.ts"), "utf8");
 
     expect(canvasSource).toMatch(/Feed/);
     expect(canvasSource).toMatch(/Play/);
@@ -211,7 +211,7 @@ describe("Codex-like desktop pet window", () => {
   it("declares Desktop Body as the only transparent frameless always-on-top product window", () => {
     const config = JSON.parse(readFileSync(join(appRoot, "src-tauri", "tauri.conf.json"), "utf8"));
     const companionWindow = config.app.windows.find((window) => window.label === "desktop-companion");
-    const surfaceSource = readFileSync(join(appRoot, "src", "desktop-companion-surface.ts"), "utf8");
+    const surfaceSource = readFileSync(join(appRoot, "src", "desktop-body", "surface.ts"), "utf8");
 
     expect(companionWindow).toMatchObject({
       alwaysOnTop: true,

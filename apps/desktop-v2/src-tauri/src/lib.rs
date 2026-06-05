@@ -1,9 +1,11 @@
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, PhysicalPosition};
+
+const REQUIRED_PET_STATES: [&str; 6] = ["idle", "blink", "happy", "attention", "sleep", "degraded"];
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -119,8 +121,20 @@ fn get_companion_runtime_state() -> CompanionRuntimeState {
     let asset_pack_path_str = asset_pack_path.to_string_lossy().to_string();
     let asset_result = read_asset_pack(&asset_pack_path_str);
     let (asset_manifest, asset_validation) = match asset_result {
-        Ok(ok) => (Some(ok), AssetValidationState { level: "ok", messages: vec![] }),
-        Err(errs) => (None, AssetValidationState { level: "error", messages: errs }),
+        Ok(ok) => (
+            Some(ok),
+            AssetValidationState {
+                level: "ok",
+                messages: vec![],
+            },
+        ),
+        Err(errs) => (
+            None,
+            AssetValidationState {
+                level: "error",
+                messages: errs,
+            },
+        ),
     };
     let (health_state, mood, activity_state, summary) = if asset_manifest.is_some() {
         (
@@ -212,19 +226,30 @@ fn get_companion_runtime_state() -> CompanionRuntimeState {
 }
 
 fn resolve_active_pet_asset_pack_path() -> PathBuf {
-    let current = resolve_project_root()
+    let project_root = resolve_project_root();
+    let bundled_default = PathBuf::from("/Users/ldh/Downloads/yuanqi-mianmian.codex-pet");
+    resolve_active_pet_asset_pack_path_from_root(&project_root, &bundled_default)
+}
+
+fn resolve_active_pet_asset_pack_path_from_root(
+    project_root: &Path,
+    bundled_default: &Path,
+) -> PathBuf {
+    let current = project_root
         .join("data")
         .join("desktop-v2")
         .join("pets")
         .join("current.codex-pet");
+    if read_asset_pack(&current.to_string_lossy()).is_ok() {
+        return current;
+    }
+    if read_asset_pack(&bundled_default.to_string_lossy()).is_ok() {
+        return bundled_default.to_path_buf();
+    }
     if current.join("pet.json").exists() {
         return current;
     }
-    let bundled_default = PathBuf::from("/Users/ldh/Downloads/yuanqi-mianmian.codex-pet");
-    if bundled_default.join("pet.json").exists() {
-        return bundled_default;
-    }
-    current
+    bundled_default.to_path_buf()
 }
 
 fn iso_timestamp_now() -> String {
@@ -289,7 +314,8 @@ fn read_asset_pack(asset_pack_path: &str) -> Result<PetAssetManifestState, Vec<S
     };
     let id = str_field(&parsed, "id").unwrap_or_else(|| "unknown-pack".to_string());
     let display_name = str_field(&parsed, "displayName").unwrap_or_else(|| id.clone());
-    let spritesheet_rel = str_field(&parsed, "spritesheetPath").unwrap_or_else(|| "spritesheet.webp".to_string());
+    let spritesheet_rel =
+        str_field(&parsed, "spritesheetPath").unwrap_or_else(|| "spritesheet.webp".to_string());
     let spritesheet_full = if spritesheet_rel.starts_with('/') {
         spritesheet_rel.clone()
     } else {
@@ -301,24 +327,35 @@ fn read_asset_pack(asset_pack_path: &str) -> Result<PetAssetManifestState, Vec<S
     if !Path::new(&spritesheet_full).exists() {
         errors.push(format!("error: spritesheet missing at {spritesheet_full}"));
     }
-    let spritesheet_data_url = read_spritesheet_data_url(&spritesheet_full)
-        .map_err(|error| vec![format!("error: failed encoding spritesheet: {error}")])?;
+    validate_pet_asset_manifest(&parsed, &mut errors);
+    let spritesheet_data_url = if Path::new(&spritesheet_full).exists() {
+        match read_spritesheet_data_url(&spritesheet_full) {
+            Ok(data_url) => Some(data_url),
+            Err(error) => {
+                errors.push(format!("error: failed encoding spritesheet: {error}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
     let frame = parsed
         .get("frame")
         .and_then(|value| serde_json::from_value::<FrameConfigState>(value.clone()).ok());
     let anchor = parsed
         .get("anchor")
         .and_then(|value| serde_json::from_value::<AnchorState>(value.clone()).ok());
+    let states = repair_known_pet_states(&id, parsed.get("states").cloned());
     let manifest = PetAssetManifestState {
         id,
         display_name,
         description: str_field(&parsed, "description"),
         spritesheet_path: spritesheet_full,
-        spritesheet_data_url: Some(spritesheet_data_url),
+        spritesheet_data_url,
         kind: str_field(&parsed, "kind").unwrap_or_else(|| "custom".to_string()),
         version: str_field(&parsed, "version"),
         frame,
-        states: parsed.get("states").cloned(),
+        states,
         fps: parsed.get("fps").and_then(Value::as_f64),
         chroma_key: str_field(&parsed, "chromaKey"),
         anchor,
@@ -328,6 +365,94 @@ fn read_asset_pack(asset_pack_path: &str) -> Result<PetAssetManifestState, Vec<S
     } else {
         Err(errors)
     }
+}
+
+fn validate_pet_asset_manifest(parsed: &Value, errors: &mut Vec<String>) {
+    for field in ["id", "displayName", "spritesheetPath"] {
+        if str_field(parsed, field)
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true)
+        {
+            errors.push(format!("error: {field} missing in pet.json"));
+        }
+    }
+    match parsed.get("frame") {
+        Some(frame) => {
+            validate_positive_u64(frame, "width", "frame.width", errors);
+            validate_positive_u64(frame, "height", "frame.height", errors);
+            validate_positive_u64(frame, "count", "frame.count", errors);
+        }
+        None => errors.push("error: frame config missing in pet.json".to_string()),
+    }
+    if !parsed
+        .get("fps")
+        .and_then(Value::as_f64)
+        .map(|fps| fps > 0.0)
+        .unwrap_or(false)
+    {
+        errors.push("error: fps missing or invalid in pet.json".to_string());
+    }
+    let states = match parsed.get("states").and_then(Value::as_object) {
+        Some(states) => states,
+        None => {
+            errors.push("error: states missing in pet.json".to_string());
+            return;
+        }
+    };
+    let mut missing = Vec::<&str>::new();
+    for state_name in REQUIRED_PET_STATES {
+        match states.get(state_name) {
+            Some(state) if has_non_empty_frame_sequence(state) => {}
+            Some(_) => errors.push(format!(
+                "error: state '{state_name}' has empty frame sequence"
+            )),
+            None => missing.push(state_name),
+        }
+    }
+    if !missing.is_empty() {
+        errors.push(format!(
+            "error: states {} missing in pet.json",
+            missing.join(", ")
+        ));
+    }
+}
+
+fn validate_positive_u64(root: &Value, key: &str, label: &str, errors: &mut Vec<String>) {
+    if !root
+        .get(key)
+        .and_then(Value::as_u64)
+        .map(|value| value > 0)
+        .unwrap_or(false)
+    {
+        errors.push(format!("error: {label} missing or invalid in pet.json"));
+    }
+}
+
+fn has_non_empty_frame_sequence(state: &Value) -> bool {
+    state
+        .get("frames")
+        .and_then(Value::as_array)
+        .map(|frames| !frames.is_empty() && frames.iter().all(Value::is_u64))
+        .unwrap_or(false)
+        || state
+            .get("rects")
+            .and_then(Value::as_array)
+            .map(|rects| !rects.is_empty())
+            .unwrap_or(false)
+}
+
+fn repair_known_pet_states(id: &str, states: Option<Value>) -> Option<Value> {
+    if id != "yuanqi-mianmian" {
+        return states;
+    }
+    Some(serde_json::json!({
+        "idle": {"frames": [0, 1, 2, 3], "loop": true, "fps": 5},
+        "blink": {"frames": [0, 2, 3], "loop": true, "fps": 5},
+        "happy": {"frames": [18, 19, 20], "loop": true, "fps": 6},
+        "attention": {"frames": [0, 1, 2, 3], "loop": true, "fps": 5},
+        "sleep": {"frames": [30, 31, 32, 33, 34, 35], "loop": true, "fps": 5},
+        "degraded": {"frames": [48, 49, 50, 51], "loop": true, "fps": 5}
+    }))
 }
 
 fn read_spritesheet_data_url(path: &str) -> Result<String, std::io::Error> {
@@ -344,11 +469,16 @@ fn read_spritesheet_data_url(path: &str) -> Result<String, std::io::Error> {
         Some("webp") => "image/webp",
         _ => "application/octet-stream",
     };
-    Ok(format!("data:{mime};base64,{}", BASE64_STANDARD.encode(bytes)))
+    Ok(format!(
+        "data:{mime};base64,{}",
+        BASE64_STANDARD.encode(bytes)
+    ))
 }
 
 fn str_field(root: &Value, key: &str) -> Option<String> {
-    root.get(key).and_then(Value::as_str).map(|value| value.to_string())
+    root.get(key)
+        .and_then(Value::as_str)
+        .map(|value| value.to_string())
 }
 
 #[tauri::command]
@@ -363,12 +493,17 @@ fn pick_pet_asset_pack_folder() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn import_pet_asset_pack(source_asset_pack_path: String) -> Result<PetAssetPackImportResult, String> {
+fn import_pet_asset_pack(
+    source_asset_pack_path: String,
+) -> Result<PetAssetPackImportResult, String> {
     let source = PathBuf::from(source_asset_pack_path.trim());
     import_pet_asset_pack_into_root(&source, &resolve_project_root())
 }
 
-fn import_pet_asset_pack_into_root(source: &Path, project_root: &Path) -> Result<PetAssetPackImportResult, String> {
+fn import_pet_asset_pack_into_root(
+    source: &Path,
+    project_root: &Path,
+) -> Result<PetAssetPackImportResult, String> {
     if !source.exists() || !source.is_dir() {
         return Err("source folder not found".to_string());
     }
@@ -378,10 +513,13 @@ fn import_pet_asset_pack_into_root(source: &Path, project_root: &Path) -> Result
     }
 
     let pets_root = project_root.join("data").join("desktop-v2").join("pets");
-    fs::create_dir_all(&pets_root).map_err(|error| format!("failed creating pets folder: {error}"))?;
+    fs::create_dir_all(&pets_root)
+        .map_err(|error| format!("failed creating pets folder: {error}"))?;
 
     let target = pets_root.join("current.codex-pet");
-    let source_canonical = source.canonicalize().unwrap_or_else(|_| source.to_path_buf());
+    let source_canonical = source
+        .canonicalize()
+        .unwrap_or_else(|_| source.to_path_buf());
     let target_canonical = target.canonicalize().unwrap_or_else(|_| target.clone());
 
     if source_canonical == target_canonical {
@@ -408,11 +546,16 @@ fn import_pet_asset_pack_into_root(source: &Path, project_root: &Path) -> Result
         };
     }
 
-    let temp_target = pets_root.join(format!(".import-{}.codex-pet", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+    let temp_target = pets_root.join(format!(
+        ".import-{}.codex-pet",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+    ));
     if temp_target.exists() {
-        fs::remove_dir_all(&temp_target).map_err(|error| format!("failed clearing temp asset pack: {error}"))?;
+        fs::remove_dir_all(&temp_target)
+            .map_err(|error| format!("failed clearing temp asset pack: {error}"))?;
     }
-    copy_dir_recursive(source, &temp_target).map_err(|error| format!("failed copying asset pack: {error}"))?;
+    copy_dir_recursive(source, &temp_target)
+        .map_err(|error| format!("failed copying asset pack: {error}"))?;
     let temp_path = temp_target.to_string_lossy().to_string();
     if let Err(messages) = read_asset_pack(&temp_path) {
         let _ = fs::remove_dir_all(&temp_target);
@@ -427,7 +570,10 @@ fn import_pet_asset_pack_into_root(source: &Path, project_root: &Path) -> Result
         });
     };
 
-    let backup_target = pets_root.join(format!(".previous-{}.codex-pet", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+    let backup_target = pets_root.join(format!(
+        ".previous-{}.codex-pet",
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+    ));
     let had_existing_target = target.exists();
     if had_existing_target {
         fs::rename(&target, &backup_target)
@@ -445,8 +591,12 @@ fn import_pet_asset_pack_into_root(source: &Path, project_root: &Path) -> Result
     clear_other_pet_packs(&pets_root, "current.codex-pet")
         .map_err(|error| format!("failed clearing old asset packs: {error}"))?;
     let target_path = target.to_string_lossy().to_string();
-    let manifest = read_asset_pack(&target_path)
-        .map_err(|messages| format!("imported asset pack failed validation after activation: {}", messages.join("; ")))?;
+    let manifest = read_asset_pack(&target_path).map_err(|messages| {
+        format!(
+            "imported asset pack failed validation after activation: {}",
+            messages.join("; ")
+        )
+    })?;
 
     Ok(PetAssetPackImportResult {
         source_asset_pack_path: source.to_string_lossy().to_string(),
@@ -618,8 +768,17 @@ mod tests {
                     "displayName": "{id}",
                     "spritesheetPath": "{spritesheet_name}",
                     "kind": "person",
-                    "frame": {{"width": 1, "height": 1, "count": 1}},
-                    "states": {{"idle": {{"frames": [0], "loop": true}}}}
+                    "version": "codex-pet-v1",
+                    "frame": {{"width": 1, "height": 1, "count": 6}},
+                    "fps": 6,
+                    "states": {{
+                        "idle": {{"frames": [0], "loop": true, "fps": 6}},
+                        "blink": {{"frames": [1], "loop": true, "fps": 6}},
+                        "happy": {{"frames": [2], "loop": true, "fps": 6}},
+                        "attention": {{"frames": [3], "loop": true, "fps": 6}},
+                        "sleep": {{"frames": [4], "loop": true, "fps": 6}},
+                        "degraded": {{"frames": [5], "loop": true, "fps": 6}}
+                    }}
                 }}"#
             ),
         )
@@ -633,10 +792,100 @@ mod tests {
         }
     }
 
-    fn write_asset_pack(root: &Path, name: &str, spritesheet_name: &str, write_sprite: bool) -> PathBuf {
+    fn write_asset_pack(
+        root: &Path,
+        name: &str,
+        spritesheet_name: &str,
+        write_sprite: bool,
+    ) -> PathBuf {
         let pack = root.join(name);
         write_asset_pack_at(&pack, name, spritesheet_name, write_sprite);
         pack
+    }
+
+    fn write_thin_asset_pack_at(pack: &Path, id: &str) {
+        fs::create_dir_all(pack).expect("asset pack folder should be writable");
+        fs::write(
+            pack.join("pet.json"),
+            format!(
+                r#"{{
+                    "id": "{id}",
+                    "displayName": "{id}",
+                    "spritesheetPath": "spritesheet.webp",
+                    "kind": "person"
+                }}"#
+            ),
+        )
+        .expect("pet.json should be writable");
+        fs::write(pack.join("spritesheet.webp"), [0_u8, 1, 2, 3])
+            .expect("spritesheet should be writable");
+    }
+
+    fn write_yuanqi_manifest_with_original_state_rows(pack: &Path) {
+        fs::create_dir_all(pack).expect("asset pack folder should be writable");
+        fs::write(
+            pack.join("pet.json"),
+            r#"{
+                "id": "yuanqi-mianmian",
+                "displayName": "元气眠眠",
+                "spritesheetPath": "spritesheet.webp",
+                "kind": "person",
+                "version": "codex-pet-v1",
+                "frame": {"width": 256, "height": 208, "count": 54},
+                "fps": 6,
+                "states": {
+                    "idle": {"frames": [0, 1, 2, 3, 4, 5], "loop": true, "fps": 5},
+                    "blink": {"frames": [0, 2, 3, 4, 5], "loop": true, "fps": 5},
+                    "happy": {"frames": [18, 19, 20, 21], "loop": true, "fps": 6},
+                    "attention": {"frames": [0, 1, 4, 5], "loop": true, "fps": 5},
+                    "sleep": {"frames": [30, 31, 32, 33, 34, 35], "loop": true, "fps": 5},
+                    "degraded": {"frames": [48, 49, 50, 51, 52, 53], "loop": true, "fps": 5}
+                }
+            }"#,
+        )
+        .expect("pet.json should be writable");
+        fs::write(pack.join("spritesheet.webp"), [0_u8, 1, 2, 3])
+            .expect("spritesheet should be writable");
+    }
+
+    #[test]
+    fn read_asset_pack_repairs_known_yuanqi_state_rows() {
+        let project_root = unique_temp_dir("yuanqi-repair");
+        let pack = project_root.join("yuanqi.codex-pet");
+        write_yuanqi_manifest_with_original_state_rows(&pack);
+
+        let manifest =
+            read_asset_pack(&pack.to_string_lossy()).expect("known yuanqi pack should be readable");
+        let states = manifest.states.expect("known yuanqi pack should keep states");
+
+        assert_eq!(states["idle"]["frames"], serde_json::json!([0, 1, 2, 3]));
+        assert_eq!(states["happy"]["frames"], serde_json::json!([18, 19, 20]));
+        assert_eq!(
+            states["attention"]["frames"],
+            serde_json::json!([0, 1, 2, 3])
+        );
+        assert_eq!(
+            states["degraded"]["frames"],
+            serde_json::json!([48, 49, 50, 51])
+        );
+    }
+
+    #[test]
+    fn resolve_active_pet_asset_pack_path_falls_back_when_current_manifest_is_incomplete() {
+        let project_root = unique_temp_dir("invalid-current-fallback");
+        let current = project_root
+            .join("data")
+            .join("desktop-v2")
+            .join("pets")
+            .join("current.codex-pet");
+        let bundled_default = project_root.join("default.codex-pet");
+        write_thin_asset_pack_at(&current, "thin-current");
+        write_asset_pack_at(&bundled_default, "default", "spritesheet.webp", true);
+
+        let resolved =
+            resolve_active_pet_asset_pack_path_from_root(&project_root, &bundled_default);
+
+        assert_eq!(resolved, bundled_default);
     }
 
     #[test]
@@ -657,7 +906,36 @@ mod tests {
 
         assert_eq!(result.validation.level, "error");
         assert!(current.join("spritesheet.webp").exists());
-        let current_manifest = fs::read_to_string(current.join("pet.json")).expect("current manifest should remain");
+        let current_manifest =
+            fs::read_to_string(current.join("pet.json")).expect("current manifest should remain");
+        assert!(current_manifest.contains("\"id\": \"current\""));
+    }
+
+    #[test]
+    fn import_pet_asset_pack_rejects_incomplete_manifest_without_replacing_current() {
+        let project_root = unique_temp_dir("thin-import");
+        let source_root = project_root.join("sources");
+        let current = project_root
+            .join("data")
+            .join("desktop-v2")
+            .join("pets")
+            .join("current.codex-pet");
+        let thin_source = source_root.join("thin.codex-pet");
+        fs::create_dir_all(&source_root).expect("source root should be writable");
+        write_asset_pack_at(&current, "current", "spritesheet.webp", true);
+        write_thin_asset_pack_at(&thin_source, "thin");
+
+        let result = import_pet_asset_pack_into_root(&thin_source, &project_root)
+            .expect("invalid imports should return validation, not throw");
+
+        assert_eq!(result.validation.level, "error");
+        assert!(result
+            .validation
+            .messages
+            .join(" ")
+            .contains("frame config missing"));
+        let current_manifest =
+            fs::read_to_string(current.join("pet.json")).expect("current manifest should remain");
         assert!(current_manifest.contains("\"id\": \"current\""));
     }
 

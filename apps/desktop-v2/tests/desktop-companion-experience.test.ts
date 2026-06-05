@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { defaultCompanionSnapshot } from "../src/data/defaultSnapshot";
-import { buildDesktopCompanionExperience } from "../src/desktop-companion-experience";
-import { projectAutonomyRuntime } from "../src/companion-autonomy-projection";
-import { runCompanionInteractionTurn } from "../src/companion-interaction-turn";
-import { bindDesktopCompanionSurface, renderDesktopCompanionSurface } from "../src/desktop-companion-surface";
-import { applyMasterModelEdit } from "../src/master-model-editing";
+import { buildDesktopCompanionExperience } from "../src/desktop-body";
+import { projectAutonomyRuntime } from "../src/agent-mind";
+import { runCompanionInteractionTurn } from "../src/agent-mind";
+import { bindDesktopCompanionSurface, renderDesktopCompanionSurface } from "../src/desktop-body";
+import { applyMasterModelEdit } from "../src/memory";
 
 const repoRoot = join(new URL("../../..", import.meta.url).pathname);
 
@@ -19,11 +19,24 @@ describe("desktop companion experience", () => {
     expect(experience.appearance.assetPackId).toBe("yuanqi-mianmian");
   });
 
+  it("keeps the default yuanqi-mianmian fallback manifest aligned with the real asset pack", () => {
+    const manifest = JSON.parse(readFileSync("/Users/ldh/Downloads/yuanqi-mianmian.codex-pet/pet.json", "utf8"));
+    const fallback = defaultCompanionSnapshot.companion.petAppearance.assetManifest;
+
+    expect(fallback?.frame).toEqual(manifest.frame);
+    expect(fallback?.fps).toBe(manifest.fps);
+    expect(fallback?.states?.idle?.frames).toEqual([0, 1, 2, 3]);
+    expect(fallback?.states?.happy?.frames).toEqual([18, 19, 20]);
+    expect(fallback?.states?.attention?.frames).toEqual([0, 1, 2, 3]);
+    expect(fallback?.states?.degraded?.frames).toEqual([48, 49, 50, 51]);
+    expect(defaultCompanionSnapshot.companion.petAppearance.assetValidation?.level).toBe("ok");
+  });
+
   it("uses embedded spritesheet data URLs for native pet rendering without reintroducing a control-center shortcut", () => {
     const typesSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "types.ts"), "utf8");
-    const canvasSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "canvas-renderer.ts"), "utf8");
+    const canvasSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-body", "animation.ts"), "utf8");
     const rustSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src-tauri", "src", "lib.rs"), "utf8");
-    const surfaceSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-companion-surface.ts"), "utf8");
+    const surfaceSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-body", "surface.ts"), "utf8");
 
     expect(typesSource).toContain("spritesheetDataUrl");
     expect(canvasSource).toMatch(/spritesheetDataUrl[\s\S]*resolveRenderableSpriteSrc/);
@@ -50,7 +63,7 @@ describe("desktop companion experience", () => {
   });
 
   it("uses browser-safe companion prompt imports in the desktop bundle", () => {
-    const source = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-companion-experience.ts"), "utf8");
+    const source = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-body", "menu.ts"), "utf8");
     const companionPackage = JSON.parse(readFileSync(join(repoRoot, "packages", "companion", "package.json"), "utf8"));
 
     expect(source).toContain("@agentsoul/companion/prompt");
@@ -61,17 +74,17 @@ describe("desktop companion experience", () => {
   });
 
   it("keeps desktop surface rendering separate from Desktop Body runtime actions", () => {
-    const surfaceSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-companion-surface.ts"), "utf8");
+    const surfaceSource = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-body", "surface.ts"), "utf8");
     const desktopBodyIndex = readFileSync(join(repoRoot, "apps", "desktop-v2", "src", "desktop-body", "index.ts"), "utf8");
 
-    expect(desktopBodyIndex).toContain("./pet-appearance-actions");
-    expect(desktopBodyIndex).toContain("./window-actions");
+    expect(desktopBodyIndex).toContain("./appearance-pack");
+    expect(desktopBodyIndex).toContain("./window");
     expect(desktopBodyIndex).toContain("./status-actions");
     expect(desktopBodyIndex).toContain("./interaction-actions");
-    expect(surfaceSource).toContain("./desktop-body/pet-appearance-actions");
-    expect(surfaceSource).toContain("./desktop-body/window-actions");
-    expect(surfaceSource).toContain("./desktop-body/status-actions");
-    expect(surfaceSource).toContain("./desktop-body/interaction-actions");
+    expect(surfaceSource).toContain("./appearance-pack");
+    expect(surfaceSource).toContain("./window");
+    expect(surfaceSource).toContain("./status-actions");
+    expect(surfaceSource).toContain("./interaction-actions");
     expect(surfaceSource).not.toContain("./utils/tauriIpc");
     expect(surfaceSource).not.toContain("./utils/modal");
     expect(surfaceSource).not.toContain("./companion-interaction-turn");

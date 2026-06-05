@@ -1,9 +1,12 @@
-export { renderDesktopCompanionSurface, bindDesktopCompanionSurface } from "../desktop-companion-surface";
+export { renderDesktopCompanionSurface, bindDesktopCompanionSurface } from "./surface";
 export { bootstrapDesktopBody, loadDesktopBodySnapshot, mergeDesktopBodyNativeState } from "./bootstrap";
 export { applyDesktopBodyInteraction, submitDesktopBodyInlineChat } from "./interaction-actions";
-export { importAndApplyPetAssetPack, loadPetAssetPackToSnapshot, pickPetAssetPackFolderPath, switchPetAssetPackInteractively } from "./pet-appearance-actions";
+export { importAndApplyPetAssetPack, loadPetAssetPackToSnapshot, pickPetAssetPackFolderPath, switchPetAssetPackInteractively } from "./appearance-pack";
 export { showDesktopBodyStatus } from "./status-actions";
-export { hideDesktopBodyWindow, refreshDesktopBodyRuntime, startDesktopBodyWindowDrag } from "./window-actions";
-export { createCanvasRenderer, startAnimationLoop } from "../canvas-renderer";
+export { hideDesktopBodyWindow, refreshDesktopBodyRuntime, startDesktopBodyWindowDrag } from "./window";
+export { createCanvasRenderer, startAnimationLoop } from "./animation";
+export { buildDesktopCompanionExperience, renderDesktopCompanionInlineExperience } from "./menu";
+export { listEmbeddedPanels } from "./embedded-panels";
+export type { EmbeddedPanelDescriptor } from "./embedded-panels";
 export { normalizePetAssetPack, resolveRenderableSpriteSrc } from "../utils/petAssetPack";
 export { initWindowSnap, saveWindowPosition, restoreWindowPosition } from "../utils/windowSnap";
