@@ -25,10 +25,10 @@ describe("desktop companion experience", () => {
 
     expect(fallback?.frame).toEqual(manifest.frame);
     expect(fallback?.fps).toBe(manifest.fps);
-    expect(fallback?.states?.idle?.frames).toEqual([0, 1, 2, 3]);
-    expect(fallback?.states?.happy?.frames).toEqual([18, 19, 20]);
-    expect(fallback?.states?.attention?.frames).toEqual([0, 1, 2, 3]);
-    expect(fallback?.states?.degraded?.frames).toEqual([48, 49, 50, 51]);
+    expect(fallback?.states?.idle?.frames).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(fallback?.states?.happy?.frames).toEqual([24, 25, 26]);
+    expect(fallback?.states?.attention?.frames).toEqual([0, 1, 4, 5]);
+    expect(fallback?.states?.degraded?.frames).toEqual([64, 65, 66, 67]);
     expect(defaultCompanionSnapshot.companion.petAppearance.assetValidation?.level).toBe("ok");
   });
 

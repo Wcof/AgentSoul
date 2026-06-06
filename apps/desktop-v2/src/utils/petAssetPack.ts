@@ -20,7 +20,44 @@ export function normalizePetAssetPack(
   assetPackPath: string,
 ): NormalizedAssetPack {
   const messages: string[] = [];
-  const manifest = normalizeManifest(raw, assetPackPath, messages);
+
+  // yuanqi-mianmian grid layout correction (from 256px to 192px / 8 columns)
+  let adjustedRaw = raw;
+  if (raw?.id === "yuanqi-mianmian") {
+    const originalWidth = raw.frame?.width ?? 256;
+    const needsConversion = originalWidth === 256;
+
+    adjustedRaw = {
+      ...raw,
+      frame: raw.frame ? {
+        ...raw.frame,
+        width: 192,
+        count: 72,
+      } : undefined,
+    };
+
+    if (needsConversion && raw.states) {
+      const convertedStates = {} as any;
+      for (const [stateName, seq] of Object.entries(raw.states)) {
+        if (seq && Array.isArray(seq.frames)) {
+          convertedStates[stateName] = {
+            ...seq,
+            frames: seq.frames.map((f) => {
+              const row = Math.floor(f / 6);
+              const col = f % 6;
+              return row * 8 + col;
+            }),
+          };
+        } else {
+          convertedStates[stateName] = seq;
+        }
+      }
+      adjustedRaw.states = convertedStates;
+      messages.push("info: corrected spritesheet grid to 192x208 (8 columns) and remapped state frame indices for yuanqi-mianmian");
+    }
+  }
+
+  const manifest = normalizeManifest(adjustedRaw, assetPackPath, messages);
   const states = normalizeStates(manifest, messages);
   const level: AssetValidationSnapshot["level"] = messages.length === 0
     ? "ok"
