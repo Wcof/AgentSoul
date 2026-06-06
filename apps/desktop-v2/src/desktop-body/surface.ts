@@ -74,6 +74,12 @@ export function bindDesktopCompanionSurface<TSnapshot extends DesktopBodySnapsho
       document.removeEventListener("keydown", targetEl.__menuKeyDownHandler);
       targetEl.__menuKeyDownHandler = null;
     }
+    if (targetEl.__menuBlurHandler) {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("blur", targetEl.__menuBlurHandler);
+      }
+      targetEl.__menuBlurHandler = null;
+    }
 
     const hasMenu = !!input.target.querySelector("[data-pet-context-panel]");
     if (hasMenu) {
@@ -110,6 +116,10 @@ export function bindDesktopCompanionSurface<TSnapshot extends DesktopBodySnapsho
         if (currentHasMenu) {
           document.addEventListener("click", handleOutsideClick);
           document.addEventListener("keydown", handleKeyDown);
+          if (typeof window !== "undefined") {
+            window.addEventListener("blur", closeMenu);
+            targetEl.__menuBlurHandler = closeMenu;
+          }
           targetEl.__menuClickOutsideHandler = handleOutsideClick;
           targetEl.__menuKeyDownHandler = handleKeyDown;
         }

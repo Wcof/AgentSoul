@@ -334,8 +334,9 @@ describe("desktop companion experience", () => {
     expect(forgotten.companion.masterModel?.learningState.verifiedFacts).toHaveLength(0);
   });
 
-  it("closes the companion menu on outside click or Escape keydown", async () => {
+  it("closes the companion menu on outside click, Escape keydown, or window blur", async () => {
     const originalDocument = (globalThis as any).document;
+    const originalWindow = (globalThis as any).window;
 
     const listeners: Record<string, Function> = {};
     const mockDocument = {
@@ -349,7 +350,22 @@ describe("desktop companion experience", () => {
       },
     };
 
+    let windowBlurCallback: Function | undefined;
+    const mockWindow = {
+      addEventListener: (type: string, callback: any) => {
+        if (type === "blur") {
+          windowBlurCallback = callback;
+        }
+      },
+      removeEventListener: (type: string, callback: any) => {
+        if (type === "blur" && windowBlurCallback === callback) {
+          windowBlurCallback = undefined;
+        }
+      },
+    };
+
     (globalThis as any).document = mockDocument;
+    (globalThis as any).window = mockWindow;
 
     try {
       let classRemoved = false;
@@ -390,6 +406,7 @@ describe("desktop companion experience", () => {
 
       expect(listeners["click"]).toBeDefined();
       expect(listeners["keydown"]).toBeDefined();
+      expect(windowBlurCallback).toBeDefined();
 
       listeners["keydown"]({ key: "Escape" });
       expect(classRemoved).toBe(true);
@@ -418,9 +435,32 @@ describe("desktop companion experience", () => {
       expect(classRemoved).toBe(true);
       expect(menuOpen).toBe(false);
 
+      // Test window blur close behavior
+      menuOpen = true;
+      classRemoved = false;
+
+      bindDesktopCompanionSurface({
+        target,
+        controller: { performInteraction: async () => {} },
+        getSnapshot: () => defaultCompanionSnapshot,
+        applySnapshot: () => {},
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(windowBlurCallback).toBeDefined();
+
+      windowBlurCallback!();
+      expect(classRemoved).toBe(true);
+      expect(menuOpen).toBe(false);
+
       await new Promise((resolve) => setTimeout(resolve, 5));
 
     } finally {
+      if (originalWindow === undefined) {
+        delete (globalThis as any).window;
+      } else {
+        (globalThis as any).window = originalWindow;
+      }
       if (originalDocument === undefined) {
         delete (globalThis as any).document;
       } else {
