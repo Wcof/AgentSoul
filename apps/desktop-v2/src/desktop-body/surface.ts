@@ -63,6 +63,55 @@ export function bindDesktopCompanionSurface<TSnapshot extends DesktopBodySnapsho
   getSnapshot: () => TSnapshot;
   applySnapshot: (snapshot: TSnapshot, status: string) => void;
 }): void {
+  if (typeof document !== "undefined") {
+    const targetEl = input.target as any;
+    if (targetEl.__menuClickOutsideHandler) {
+      document.removeEventListener("click", targetEl.__menuClickOutsideHandler);
+      targetEl.__menuClickOutsideHandler = null;
+    }
+    if (targetEl.__menuKeyDownHandler) {
+      document.removeEventListener("keydown", targetEl.__menuKeyDownHandler);
+      targetEl.__menuKeyDownHandler = null;
+    }
+
+    const hasMenu = !!input.target.querySelector("[data-pet-context-panel]");
+    if (hasMenu) {
+      const closeMenu = () => {
+        if (input.target.classList.contains("pet-widget-menu-open")) {
+          input.target.classList.remove("pet-widget-menu-open");
+        }
+        renderDesktopCompanionSurface({ target: input.target, snapshot: input.getSnapshot(), menuOpen: false });
+        bindDesktopCompanionSurface(input);
+      };
+
+      const handleOutsideClick = (event: MouseEvent) => {
+        const eventTarget = event.target as HTMLElement | null;
+        if (!eventTarget) return;
+        const inCharacter = eventTarget.closest("[data-pet-widget-trigger]");
+        const inMenu = eventTarget.closest("[data-pet-context-panel]");
+        if (!inCharacter && !inMenu) {
+          closeMenu();
+        }
+      };
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape" || event.key === "Esc") {
+          closeMenu();
+        }
+      };
+
+      setTimeout(() => {
+        const currentHasMenu = !!input.target.querySelector("[data-pet-context-panel]");
+        if (currentHasMenu) {
+          document.addEventListener("click", handleOutsideClick);
+          document.addEventListener("keydown", handleKeyDown);
+          targetEl.__menuClickOutsideHandler = handleOutsideClick;
+          targetEl.__menuKeyDownHandler = handleKeyDown;
+        }
+      }, 0);
+    }
+  }
+
   input.target.querySelectorAll<HTMLElement>("[data-pet-widget-trigger]").forEach((el) => {
     el.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.detail > 1) return;

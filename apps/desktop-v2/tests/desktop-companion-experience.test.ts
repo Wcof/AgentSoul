@@ -333,4 +333,99 @@ describe("desktop companion experience", () => {
 
     expect(forgotten.companion.masterModel?.learningState.verifiedFacts).toHaveLength(0);
   });
+
+  it("closes the companion menu on outside click or Escape keydown", async () => {
+    const originalDocument = (globalThis as any).document;
+
+    const listeners: Record<string, Function> = {};
+    const mockDocument = {
+      addEventListener: (type: string, callback: Function) => {
+        listeners[type] = callback;
+      },
+      removeEventListener: (type: string, callback: Function) => {
+        if (listeners[type] === callback) {
+          delete listeners[type];
+        }
+      },
+    };
+
+    (globalThis as any).document = mockDocument;
+
+    try {
+      let classRemoved = false;
+      let menuOpen = true;
+
+      const classList = {
+        contains: (cls: string) => cls === "pet-widget-menu-open" && menuOpen,
+        toggle: () => {},
+        remove: (cls: string) => {
+          if (cls === "pet-widget-menu-open") {
+            classRemoved = true;
+            menuOpen = false;
+          }
+        },
+        add: () => {},
+      };
+
+      const target = {
+        innerHTML: "",
+        classList,
+        querySelector: (selector: string) => {
+          if (selector === "[data-pet-context-panel]" && menuOpen) {
+            return {};
+          }
+          return null;
+        },
+        querySelectorAll: () => [],
+      } as unknown as HTMLElement;
+
+      bindDesktopCompanionSurface({
+        target,
+        controller: { performInteraction: async () => {} },
+        getSnapshot: () => defaultCompanionSnapshot,
+        applySnapshot: () => {},
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      expect(listeners["click"]).toBeDefined();
+      expect(listeners["keydown"]).toBeDefined();
+
+      listeners["keydown"]({ key: "Escape" });
+      expect(classRemoved).toBe(true);
+      expect(menuOpen).toBe(false);
+
+      menuOpen = true;
+      classRemoved = false;
+
+      bindDesktopCompanionSurface({
+        target,
+        controller: { performInteraction: async () => {} },
+        getSnapshot: () => defaultCompanionSnapshot,
+        applySnapshot: () => {},
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+      const mockEvent = {
+        target: {
+          closest: (selector: string) => {
+            return null;
+          },
+        },
+      };
+      listeners["click"](mockEvent);
+      expect(classRemoved).toBe(true);
+      expect(menuOpen).toBe(false);
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+
+    } finally {
+      if (originalDocument === undefined) {
+        delete (globalThis as any).document;
+      } else {
+        (globalThis as any).document = originalDocument;
+      }
+    }
+  });
 });
