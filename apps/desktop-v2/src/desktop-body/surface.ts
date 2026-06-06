@@ -62,6 +62,7 @@ export function bindDesktopCompanionSurface<TSnapshot extends DesktopBodySnapsho
   };
   getSnapshot: () => TSnapshot;
   applySnapshot: (snapshot: TSnapshot, status: string) => void;
+  onToggleMenu?: (open: boolean) => void;
 }): void {
   if (typeof document !== "undefined") {
     const targetEl = input.target as any;
@@ -80,8 +81,12 @@ export function bindDesktopCompanionSurface<TSnapshot extends DesktopBodySnapsho
         if (input.target.classList.contains("pet-widget-menu-open")) {
           input.target.classList.remove("pet-widget-menu-open");
         }
-        renderDesktopCompanionSurface({ target: input.target, snapshot: input.getSnapshot(), menuOpen: false });
-        bindDesktopCompanionSurface(input);
+        if (input.onToggleMenu) {
+          input.onToggleMenu(false);
+        } else {
+          renderDesktopCompanionSurface({ target: input.target, snapshot: input.getSnapshot(), menuOpen: false });
+          bindDesktopCompanionSurface(input);
+        }
       };
 
       const handleOutsideClick = (event: MouseEvent) => {
@@ -131,9 +136,13 @@ export function bindDesktopCompanionSurface<TSnapshot extends DesktopBodySnapsho
       event.preventDefault();
       const nextOpen = !input.target.classList.contains("pet-widget-menu-open");
       input.target.classList.toggle("pet-widget-menu-open", nextOpen);
-      renderDesktopCompanionSurface({ target: input.target, snapshot: input.getSnapshot(), menuOpen: nextOpen });
-      input.target.classList.toggle("pet-widget-menu-open", nextOpen);
-      bindDesktopCompanionSurface(input);
+      if (input.onToggleMenu) {
+        input.onToggleMenu(nextOpen);
+      } else {
+        renderDesktopCompanionSurface({ target: input.target, snapshot: input.getSnapshot(), menuOpen: nextOpen });
+        input.target.classList.toggle("pet-widget-menu-open", nextOpen);
+        bindDesktopCompanionSurface(input);
+      }
     });
   });
 

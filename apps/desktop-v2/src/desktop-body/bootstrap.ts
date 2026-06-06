@@ -20,6 +20,7 @@ export async function bootstrapDesktopBody(target: HTMLElement): Promise<void> {
   }
 
   let cancelAnimation: (() => void) | undefined;
+  let menuOpen = false;
   const render = (nextSnapshot = snapshot, status?: string) => {
     if (cancelAnimation) {
       cancelAnimation();
@@ -27,7 +28,7 @@ export async function bootstrapDesktopBody(target: HTMLElement): Promise<void> {
     }
 
     snapshot = nextSnapshot;
-    renderDesktopCompanionSurface({ target, snapshot, status });
+    renderDesktopCompanionSurface({ target, snapshot, status, menuOpen });
 
     const canvas = target.querySelector<HTMLCanvasElement>(".companion-canvas");
     if (canvas) {
@@ -49,6 +50,10 @@ export async function bootstrapDesktopBody(target: HTMLElement): Promise<void> {
       },
       getSnapshot: () => snapshot,
       applySnapshot: (appliedSnapshot, statusMessage) => render(appliedSnapshot, statusMessage),
+      onToggleMenu: (open) => {
+        menuOpen = open;
+        render(snapshot);
+      },
     });
   };
 
