@@ -40,8 +40,8 @@ input {
 
 .pet-widget__character {
   position: relative;
-  width: min(100vw, 44px);
-  height: min(100vh, 44px);
+  width: min(100vw, 66px);
+  height: min(100vh, 66px);
   display: grid;
   place-items: center;
   border-radius: 32px;
