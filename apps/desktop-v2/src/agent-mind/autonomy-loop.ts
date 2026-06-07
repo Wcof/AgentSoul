@@ -55,7 +55,7 @@ function buildProjectedBubbleText(
   }
   if (autonomy.companionMode === "THINKING") return "我在想这件事，马上回来。";
   if (autonomy.companionMode === "SLEEPING" || companion.mood === "sleeping") return "我先眯一会儿，有事轻轻叫我。";
-  if (companion.summary && companion.summary !== "Local runtime pending") return companion.summary;
+  if (companion.summary && companion.summary !== "Local runtime pending" && !companion.summary.startsWith("desktop-body:")) return companion.summary;
   if (companion.vitals.companionEnergy < 25) return "能量有点低，适合摸摸或休息。";
   return "我在桌面陪着你，可以直接和我说话。";
 }
