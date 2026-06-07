@@ -37,6 +37,7 @@ export async function bootstrapDesktopBody(target: HTMLElement): Promise<void> {
         renderer,
         () => snapshot.companion.petAppearance,
         () => resolveVisualState(snapshot),
+        () => snapshot.companion.lastUpdatedAt,
       );
     }
 

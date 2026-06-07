@@ -5,7 +5,7 @@ import { normalizePetAssetPack, resolveRenderableSpriteSrc } from "../utils/petA
 export interface CanvasRenderer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-  draw(appearance: PetAppearanceSnapshot, state: CompanionVisualState): void;
+  draw(appearance: PetAppearanceSnapshot, state: CompanionVisualState, lastUpdatedAt?: string): void;
 }
 
 const FAILED_IMAGE_SENTINEL = "__failed__";
@@ -20,15 +20,17 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): CanvasRenderer 
   const startTime = performance.now();
 
   let lastState: CompanionVisualState | undefined;
+  let lastUpdated: string | undefined;
   let stateStartTime = performance.now();
 
   return {
     canvas,
     ctx,
-    draw(appearance, state) {
+    draw(appearance, state, currentLastUpdated) {
       const now = performance.now();
-      if (state !== lastState) {
+      if (state !== lastState || currentLastUpdated !== lastUpdated) {
         lastState = state;
+        lastUpdated = currentLastUpdated;
         stateStartTime = now;
       }
       const stateDuration = now - stateStartTime;
@@ -232,11 +234,12 @@ export function startAnimationLoop(
   renderer: CanvasRenderer,
   getAppearance: () => PetAppearanceSnapshot,
   getVisualState: () => CompanionVisualState,
+  getLastUpdated?: () => string | undefined,
 ): () => void {
   let frameId: number;
 
   function tick() {
-    renderer.draw(getAppearance(), getVisualState());
+    renderer.draw(getAppearance(), getVisualState(), getLastUpdated?.());
     frameId = requestAnimationFrame(tick);
   }
 
