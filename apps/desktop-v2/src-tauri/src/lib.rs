@@ -4,6 +4,8 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, PhysicalPosition};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
 
 const REQUIRED_PET_STATES: [&str; 6] = ["idle", "blink", "happy", "attention", "sleep", "degraded"];
 
@@ -978,6 +980,45 @@ pub fn run() {
             get_window_info,
             set_window_position
         ])
+        .setup(|app| {
+            let show_item = MenuItem::with_id(app, "show", "显示桌面宠物", true, None::<&str>)?;
+            let hide_item = MenuItem::with_id(app, "hide", "隐藏桌面宠物", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &hide_item, &quit_item])?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().cloned().unwrap_or_else(|| {
+                    tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png")).unwrap()
+                }))
+                .menu(&menu)
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            let _ = show_window(app, "desktop-companion");
+                        }
+                        "hide" => {
+                            if let Some(window) = app.get_webview_window("desktop-companion") {
+                                let _ = window.hide();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
+                        if button == tauri::tray::MouseButton::Left {
+                            let app = tray.app_handle();
+                            let _ = show_window(app, "desktop-companion");
+                        }
+                    }
+                })
+                .build(app)?;
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("failed to run AgentSoul v2 Tauri shell");
 }
