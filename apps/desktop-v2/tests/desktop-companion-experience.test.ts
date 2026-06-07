@@ -117,8 +117,8 @@ describe("desktop companion experience", () => {
 
     expect(companionWindow.width).toBeLessThanOrEqual(280);
     expect(companionWindow.height).toBeLessThanOrEqual(280);
-    expect(companionWindow.minWidth).toBeGreaterThanOrEqual(216);
-    expect(companionWindow.minHeight).toBeGreaterThanOrEqual(216);
+    expect(companionWindow.minWidth).toBeGreaterThanOrEqual(240);
+    expect(companionWindow.minHeight).toBeGreaterThanOrEqual(240);
     expect(companionWindow.transparent).toBe(true);
     expect(companionWindow.decorations).toBe(false);
     expect(companionWindow.alwaysOnTop).toBe(true);
