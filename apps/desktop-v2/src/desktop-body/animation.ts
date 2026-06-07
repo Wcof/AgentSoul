@@ -19,11 +19,30 @@ export function createCanvasRenderer(canvas: HTMLCanvasElement): CanvasRenderer 
   const chromaProcessed = new Map<string, HTMLCanvasElement>();
   const startTime = performance.now();
 
+  let lastState: CompanionVisualState | undefined;
+  let stateStartTime = performance.now();
+
   return {
     canvas,
     ctx,
     draw(appearance, state) {
-      const assetDraw = drawFromAssetPack(ctx, canvas, appearance, state, loadedImages, chromaProcessed, startTime);
+      const now = performance.now();
+      if (state !== lastState) {
+        lastState = state;
+        stateStartTime = now;
+      }
+      const stateDuration = now - stateStartTime;
+
+      const assetDraw = drawFromAssetPack(
+        ctx,
+        canvas,
+        appearance,
+        state,
+        stateDuration,
+        loadedImages,
+        chromaProcessed,
+        startTime,
+      );
       if (assetDraw !== "unavailable") {
         return;
       }
@@ -52,6 +71,7 @@ function drawFromAssetPack(
   canvas: HTMLCanvasElement,
   appearance: PetAppearanceSnapshot,
   state: CompanionVisualState,
+  stateDuration: number,
   loadedImages: Map<string, HTMLImageElement>,
   chromaProcessed: Map<string, HTMLCanvasElement>,
   startTime: number,
@@ -84,7 +104,7 @@ function drawFromAssetPack(
     return image.complete ? "unavailable" : "loading";
   }
 
-  const stateName = toPetState(state);
+  const stateName = toPetState(state, performance.now(), stateDuration);
   const sequence = normalized.states[stateName] ?? normalized.states.idle;
   const frameRect = pickFrameRect(normalized.manifest.frame, sequence, image, startTime);
   const maxWidth = canvas.width * 0.9;
@@ -105,11 +125,17 @@ function drawFromAssetPack(
   return "drawn";
 }
 
-function toPetState(state: CompanionVisualState): PetStateName {
-  if (state === "positive") return "happy";
+function toPetState(state: CompanionVisualState, time: number, stateDuration: number): PetStateName {
+  if (state === "positive" && stateDuration < 3000) return "happy";
   if (state === "fatigue") return "degraded";
   if (state === "sleep") return "sleep";
   if (state === "attention") return "attention";
+
+  // Periodically blink when idle (blink for 600ms every 5 seconds)
+  const timeInCycle = time % 5000;
+  if (timeInCycle < 600) {
+    return "blink";
+  }
   return "idle";
 }
 
